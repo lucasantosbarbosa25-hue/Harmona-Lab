@@ -47,6 +47,9 @@ _PITCH_CLASS_RE = re.compile(r"^([A-Ga-g])([#♯bB♭x𝄪𝄫♮]*)$")
 _LIST_SPLIT_RE = re.compile(r"[\s,;|–—]+")
 
 
+_INVALID_NOTE = "Nota inválida: use nomes como C4, F#2, Eb3 ou números MIDI (0–127)."
+
+
 class NoteParseError(ValueError):
     """Texto que não pôde ser lido como nota."""
 
@@ -113,8 +116,12 @@ def _parse_accidentals(text: str, original: str) -> int:
 def parse_note(token: str | int, middle_c: str = DEFAULT_MIDDLE_C) -> Note:
     """Lê "C4", "Eb3", "F#2", "Bb-1", "B♭3" ou um número MIDI ("60" ou 60)."""
     check_middle_c(middle_c)
-    if isinstance(token, bool):
-        raise NoteParseError(f"Nota inválida: {token!r}")
+    if isinstance(token, bool) or not isinstance(token, (str, int, float)):
+        raise NoteParseError(_INVALID_NOTE)
+    if isinstance(token, float):
+        if not token.is_integer():
+            raise NoteParseError(f"Número MIDI precisa ser inteiro (recebido {token:g}).")
+        token = int(token)
     if isinstance(token, int):
         return Note(token)
     original = str(token)
@@ -163,17 +170,17 @@ def split_note_list(value: str | int | Iterable[str | int] | None) -> list[str |
     """Divide um texto de notas em fichas; listas passam direto."""
     if value is None:
         return []
-    if isinstance(value, (int, str)) and not isinstance(value, bool):
-        if isinstance(value, int):
-            return [value]
+    if isinstance(value, str):
         return [t for t in _LIST_SPLIT_RE.split(value.strip()) if t and t != "-"]
-    tokens: list[str | int] = []
-    for item in value:
-        if isinstance(item, str):
-            tokens.extend(split_note_list(item))
-        else:
-            tokens.append(item)
-    return tokens
+    if isinstance(value, (list, tuple)):
+        tokens: list = []
+        for item in value:
+            if isinstance(item, str):
+                tokens.extend(split_note_list(item))
+            else:
+                tokens.append(item)
+        return tokens
+    return [value]  # número ou valor inesperado: vira uma ficha (e um erro claro, se não for nota)
 
 
 def parse_note_list(
@@ -208,7 +215,8 @@ def rename_note_text(value, from_middle_c: str, to_middle_c: str):
     check_middle_c(to_middle_c)
 
     def convert(token):
-        if isinstance(token, int) or (isinstance(token, str) and _MIDI_RE.match(token.strip())):
+        is_number = isinstance(token, (int, float)) and not isinstance(token, bool)
+        if is_number or (isinstance(token, str) and _MIDI_RE.match(token.strip())):
             return token
         try:
             return parse_note(token, from_middle_c).name(to_middle_c)
@@ -219,6 +227,6 @@ def rename_note_text(value, from_middle_c: str, to_middle_c: str):
         return None
     if isinstance(value, str):
         return " ".join(str(convert(t)) for t in split_note_list(value))
-    if isinstance(value, int):
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
         return value
     return [convert(t) for t in split_note_list(value)]

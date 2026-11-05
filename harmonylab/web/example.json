@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "title": "Resolução B7alt para Em com F# no soprano",
+  "tempo": 80,
+  "time_signature": "4/4",
+  "middle_c": "C4",
+  "default_velocity": 80,
+  "comment": "B7alt vem de C menor melódica (7º modo: B C D Eb F G A). O 3º acorde adia a resolução mantendo F# no topo.",
+  "chords": [
+    {
+      "symbol": "F#m7(b5)",
+      "duration_beats": 4,
+      "left_hand": ["F#2", "C3"],
+      "right_hand": ["E3", "A3", "C4", "E4"],
+      "top_note": "E4",
+      "velocity": 78
+    },
+    {
+      "symbol": "B7alt",
+      "duration_beats": 4,
+      "left_hand": ["B2", "A3"],
+      "right_hand": ["D4", "Eb4", "G4", "C5"],
+      "top_note": "C5",
+      "velocity": 82,
+      "comment": "Sobre B: b9 (C), #9 (D), 3 (Eb = D#), b13 (G), b7 (A)."
+    },
+    {
+      "symbol": "Fmaj7(#11) + F#",
+      "duration_beats": 4,
+      "left_hand": ["F2", "E3"],
+      "right_hand": ["A3", "B3", "C4", "F#4"],
+      "top_note": "F#4",
+      "velocity": 84,
+      "comment": "Estrutura experimental F E A C B F#: cluster B–C embaixo do F#. Baixo F desce cromaticamente para E."
+    },
+    {
+      "symbol": "Em9",
+      "duration_beats": 4,
+      "left_hand": ["E2", "B2", "D3"],
+      "right_hand": ["G3", "F#4"],
+      "top_note": "F#4",
+      "velocity": 76
+    }
+  ]
+}

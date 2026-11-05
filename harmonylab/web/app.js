@@ -1,7 +1,11 @@
-// Harmony Lab — interface. Toda a teoria/validação/MIDI fica no Python;
-// aqui só editamos o modelo (JSON) e mostramos o que o servidor analisou.
+// Harmony Lab — interface. Edita o modelo (JSON) e mostra o que o motor analisou.
+// O motor (engine/) roda aqui mesmo no navegador: o app funciona offline, sem servidor,
+// e gera os mesmos bytes de MIDI que a versão em Python (há teste comparando).
 
 import { Player } from "./audio.js";
+import { analyzeData } from "./engine/analysis.js";
+import { midiBytes } from "./engine/midi.js";
+import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 
 const DRAFT_KEY = "harmonylab:draft:v1";
@@ -29,6 +33,7 @@ const ICONS = {
   save: '<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
   file: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/>',
+  install: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><rect x="4" y="18" width="16" height="3" rx="1"/>',
   paste: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3"/>',
   note: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
   error: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V13"/><circle class="fill" cx="12" cy="16.5" r="1.1"/>',
@@ -73,8 +78,6 @@ const state = {
   project: null, // modelo editável (notas como texto)
   report: null, // última análise do servidor
   byId: new Map(), // id do acorde → { chord, issues }
-  seq: 0,
-  serverDown: false,
   playing: false,
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
@@ -148,13 +151,7 @@ function toPayload(project = state.project) {
   return { ...rest, chords: chords.map(({ id, ...chord }) => chord) };
 }
 
-// ---------------------------------------------------------------- servidor
-async function postJSON(url, body) {
-  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!res.ok && res.status !== 400) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
-
+// ---------------------------------------------------------------- análise (motor local)
 let validateTimer = null;
 function scheduleValidate() {
   clearTimeout(validateTimer);
@@ -162,14 +159,11 @@ function scheduleValidate() {
   saveDraftSoon();
 }
 
-async function validateNow() {
+function validateNow() {
   clearTimeout(validateTimer);
-  const seq = ++state.seq;
   const ids = state.project.chords.map((c) => c.id);
   try {
-    const report = await postJSON("/api/validate", toPayload());
-    if (seq !== state.seq) return;
-    state.serverDown = false;
+    const report = analyzeData(toPayload());
     state.report = report;
     state.byId = new Map(ids.map((id, i) => [id, { chord: report.chords[i], issues: [] }]));
     for (const issue of report.issues) {
@@ -177,9 +171,8 @@ async function validateNow() {
     }
     renderAnalysis();
   } catch (err) {
-    if (seq !== state.seq) return;
-    if (!state.serverDown) toast("Não consegui falar com o servidor local. Ele está rodando? (python -m harmonylab)", { error: true, timeout: 8000 });
-    state.serverDown = true;
+    console.error(err);
+    toast(`Erro inesperado na análise: ${err.message}`, { error: true, timeout: 8000 });
   }
 }
 
@@ -244,12 +237,12 @@ function bindSettings() {
   $("#middle-c").addEventListener("change", changeConvention);
 }
 
-async function changeConvention(e) {
+function changeConvention(e) {
   const to = e.target.value;
   const from = state.project.middle_c;
   if (to === from) return;
   try {
-    const converted = await postJSON("/api/convention", { project: toPayload(), to });
+    const converted = renameProjectNotes(toPayload(), to);
     const ids = state.project.chords.map((c) => c.id);
     state.project = toEditable(converted);
     state.project.chords.forEach((c, i) => { if (ids[i]) c.id = ids[i]; });
@@ -679,25 +672,35 @@ async function saveFile(blob, filename, description, mime, ext) {
 }
 
 async function exportMidi() {
-  await validateNow();
-  if (state.serverDown) return;
+  validateNow();
   if (!state.report?.ok) {
     const n = state.report.issues.filter((i) => i.level === "error").length;
     toast(n === 1 ? "Há 1 erro para corrigir antes de gerar o MIDI." : `Há ${n} erros para corrigir antes de gerar o MIDI.`, { error: true });
     focusFirstError();
     return;
   }
-  const res = await fetch("/api/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toPayload()) });
-  if (!res.ok) { toast("O servidor recusou a exportação. Confira os avisos em vermelho.", { error: true }); return; }
-  const blob = await res.blob();
-  const filename = res.headers.get("X-Filename") || `${slugify(state.project.title)}.mid`;
-  const saved = await saveFile(blob, filename, "Arquivo MIDI", "audio/midi", ".mid");
+  const { project } = readProject(toPayload());
+  const bytes = midiBytes(project);
+  const filename = `${slugify(state.project.title)}.mid`;
+  const saved = await saveFile(new Blob([bytes], { type: "audio/midi" }), filename, "Arquivo MIDI", "audio/midi", ".mid");
   if (!saved) return;
-  toast(saved.picked ? `${saved.name} salvo. Arraste para a sua DAW.` : `${saved.name} baixado. Arraste da pasta de downloads para a sua DAW.`);
+  if (saved.picked) {
+    toast(`${saved.name} salvo. Arraste para a sua DAW.`);
+    return;
+  }
+  // No celular: se o sistema deixar, oferece mandar o arquivo direto (Drive, WhatsApp, e-mail…).
+  const file = new File([bytes], filename, { type: "audio/midi" });
+  let canShare = false;
+  try { canShare = Boolean(navigator.canShare?.({ files: [file] })); } catch { /* sem suporte */ }
+  if (canShare) {
+    toast(`${filename} baixado.`, { action: { label: "Enviar", run: () => navigator.share({ files: [file], title: filename }).catch(() => {}) } });
+  } else {
+    toast(`${filename} baixado. Arraste da pasta de downloads para a sua DAW.`);
+  }
 }
 
 async function saveProject() {
-  await validateNow();
+  validateNow();
   const data = state.report?.ok ? state.report.project : toPayload();
   const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], { type: "application/json" });
   const saved = await saveFile(blob, `${slugify(state.project.title)}.json`, "Projeto Harmony Lab", "application/json", ".json");
@@ -748,7 +751,7 @@ async function openFile(file) {
 
 async function loadExample() {
   try {
-    const res = await fetch("/api/example");
+    const res = await fetch("./example.json");
     if (!res.ok) throw new Error();
     loadProject(await res.json(), "Exemplo carregado.");
   } catch {
@@ -785,6 +788,7 @@ function bindUi() {
     else if (action === "save") saveProject();
     else if (action === "example") loadExample();
     else if (action === "new") newProject();
+    else if (action === "install") installApp();
   });
   const paste = $("#paste-dialog");
   $("#paste-load").addEventListener("click", (e) => {
@@ -806,14 +810,42 @@ function bindUi() {
   bindSettings();
 }
 
+// ---------------------------------------------------------------- app instalável (PWA)
+let installPrompt = null;
+
+function setupInstall() {
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault(); // o convite aparece no menu ⋯, sem barra insistente
+    installPrompt = e;
+    $("#install-item").hidden = false;
+  });
+  window.addEventListener("appinstalled", () => {
+    installPrompt = null;
+    $("#install-item").hidden = true;
+    toast("Harmony Lab instalado. Ele abre pelo ícone e funciona offline.");
+  });
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register("./sw.js").catch(() => { /* sem offline, o resto funciona */ });
+  }
+}
+
+async function installApp() {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice.catch(() => null);
+  installPrompt = null;
+  $("#install-item").hidden = true;
+}
+
 async function init() {
   bindUi();
+  setupInstall();
   let data = loadDraft();
   if (!data) {
     try {
-      const res = await fetch("/api/example");
+      const res = await fetch("./example.json");
       if (res.ok) data = await res.json();
-    } catch { /* servidor fora do ar: começa vazio */ }
+    } catch { /* sem exemplo: começa vazio */ }
   }
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();

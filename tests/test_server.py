@@ -1,12 +1,15 @@
 import json
+import re
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
-from harmonylab.midi_io import load_midi, summarize_midi
-from harmonylab.server import make_server, slugify
+from harmonylab.server import WEB_DIR, make_server
+
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
 @pytest.fixture(scope="module")
@@ -24,74 +27,54 @@ def get(url):
         return r.status, r.headers, r.read()
 
 
-def post(url, payload):
-    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req) as r:
-            return r.status, r.headers, r.read()
-    except urllib.error.HTTPError as e:
-        return e.code, e.headers, e.read()
+@pytest.mark.parametrize("path, content_type", [
+    ("/", "text/html"),
+    ("/index.html", "text/html"),
+    ("/app.js", "text/javascript"),
+    ("/engine/midi.js", "text/javascript"),
+    ("/styles.css", "text/css"),
+    ("/manifest.webmanifest", "application/manifest+json"),
+    ("/sw.js", "text/javascript"),
+    ("/icons/icon-192.png", "image/png"),
+    ("/example.json", "application/json"),
+])
+def test_serve_o_app(base_url, path, content_type):
+    status, headers, body = get(base_url + path)
+    assert status == 200 and body
+    assert headers["Content-Type"].startswith(content_type)
 
 
-def test_interface_e_arquivos_estaticos(base_url):
-    status, headers, body = get(base_url + "/")
-    assert status == 200 and b"Harmony Lab" in body
-    for name in ("styles.css", "app.js", "audio.js", "keyboard.js"):
-        status, _, _ = get(f"{base_url}/static/{name}")
-        assert status == 200
-
-
-@pytest.mark.parametrize("path", ["/static/../server.py", "/static/%2e%2e/server.py", "/static/.hidden", "/nada"])
+@pytest.mark.parametrize("path", [
+    "/../server.py", "/%2e%2e/server.py", "/engine/../../server.py", "/engine/%2e%2e/%2e%2e/cli.py",
+    "/.hidden", "/nada", "/engine/", "//etc/passwd",
+])
 def test_nao_serve_fora_da_pasta_web(base_url, path):
     with pytest.raises(urllib.error.HTTPError) as exc:
         get(base_url + path)
     assert exc.value.code == 404
 
 
-def test_exemplo(base_url):
-    _, _, body = get(base_url + "/api/example")
-    data = json.loads(body)
-    assert data["chords"][1]["symbol"] == "B7alt"
+def test_exemplo_do_app_e_o_mesmo_da_pasta_examples():
+    web = json.loads((WEB_DIR / "example.json").read_text(encoding="utf-8"))
+    original = json.loads((EXAMPLES / "resolucao_em_fsharp_soprano.json").read_text(encoding="utf-8"))
+    assert web == original
 
 
-def test_validate(base_url):
-    status, _, body = post(base_url + "/api/validate", {"chords": [{"left_hand": "B2 A3", "right_hand": "D4 Eb4 G4 C5"}]})
-    report = json.loads(body)
-    assert status == 200 and report["ok"]
-    assert [n["midi"] for n in report["chords"][0]["notes"]] == [47, 57, 62, 63, 67, 72]
-    assert report["project"]["chords"][0]["right_hand"] == ["D4", "Eb4", "G4", "C5"]
+def test_arquivos_do_modo_offline_existem():
+    shell = re.findall(r'"\./([^"]*)"', (WEB_DIR / "sw.js").read_text(encoding="utf-8"))
+    assert "app.js" in shell and "engine/midi.js" in shell
+    for name in shell:
+        assert (WEB_DIR / (name or "index.html")).is_file(), name
+    # todo módulo JS do app precisa estar no cache offline
+    modules = {p.relative_to(WEB_DIR).as_posix() for p in WEB_DIR.rglob("*.js") if p.name != "sw.js"}
+    assert modules <= set(shell)
 
 
-def test_export_devolve_mid(base_url):
-    payload = {"title": "Teste Ação", "tempo": 96, "chords": [{"right_hand": "C4 Eb4 G4", "velocity": 70}]}
-    status, headers, body = post(base_url + "/api/export", payload)
-    assert status == 200
-    assert headers["Content-Type"] == "audio/midi"
-    assert headers["X-Filename"] == "teste-acao.mid"
-    summary = summarize_midi(load_midi(body))
-    assert [(n.pitch, n.velocity, n.start, n.end) for n in summary.notes] == [(60, 70, 0, 1920), (63, 70, 0, 1920), (67, 70, 0, 1920)]
-    assert summary.tempo_bpm == pytest.approx(96)
-
-
-def test_export_com_erro_nao_gera(base_url):
-    status, _, body = post(base_url + "/api/export", {"chords": [{"right_hand": "C4 H4"}]})
-    assert status == 400
-    assert json.loads(body)["report"]["ok"] is False
-
-
-def test_json_invalido(base_url):
-    req = urllib.request.Request(base_url + "/api/validate", data=b"{oops", headers={"Content-Type": "application/json"})
-    with pytest.raises(urllib.error.HTTPError) as exc:
-        urllib.request.urlopen(req)
-    assert exc.value.code == 400
-
-
-def test_trocar_convencao(base_url):
-    status, _, body = post(base_url + "/api/convention", {"to": "C3", "project": {"middle_c": "C4", "chords": [{"left_hand": "F#2 C3"}]}})
-    assert status == 200
-    assert json.loads(body)["chords"][0]["left_hand"] == "F#1 C2"
-
-
-def test_slugify():
-    assert slugify("Resolução B7alt → Em (F# soprano)") == "resolucao-b7alt-em-f-soprano"
-    assert slugify("   ") == "progressao"
+def test_manifesto_instalavel():
+    manifest = json.loads((WEB_DIR / "manifest.webmanifest").read_text(encoding="utf-8"))
+    assert manifest["display"] == "standalone" and manifest["start_url"] == "./"
+    sizes = {i["sizes"] for i in manifest["icons"]}
+    assert {"192x192", "512x512"} <= sizes
+    assert any(i.get("purpose") == "maskable" for i in manifest["icons"])
+    for icon in manifest["icons"]:
+        assert (WEB_DIR / icon["src"]).is_file()

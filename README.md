@@ -1,15 +1,57 @@
 # Harmony Lab
 
-Laboratório local de **voicings, reharmonização e condução de vozes** que transforma exatamente as notas que você
+Laboratório de **voicings, reharmonização e condução de vozes** que transforma exatamente as notas que você
 discutiu — mão esquerda, mão direita, oitavas, soprano — num arquivo **`.mid`** para arrastar em qualquer DAW
 (Studio One, Ableton, Logic, Reaper…) e tocar com qualquer VST (Pianoteq, Kontakt, Rhodes, strings, synth).
 
 > Foco desta primeira versão (MVP): **os voicings exatos que surgem nas conversas de harmonia viram MIDI, sem
 > surpresas** — notas, oitavas, durações, BPM e ordem iguais ao que foi digitado.
 
+É um **app web instalável** (PWA): abre no navegador, instala no celular ou no computador como um app, funciona
+**sem internet** e **sem login**. Tudo roda no próprio aparelho — nada é enviado para servidor nenhum.
+
 ---
 
-## Início rápido
+## Publicar e instalar no celular
+
+O app é só um conjunto de arquivos estáticos (`harmonylab/web/`). Para ter um endereço `https://` (exigência do
+celular para instalar), publique na Cloudflare, na mesma conta do CRM — grátis e sem login para quem usa.
+
+**Uma vez só, no painel da Cloudflare** (*Workers & Pages → Create → Import a repository*):
+
+| Campo | Valor |
+|---|---|
+| Repositório | `crm-canais-bx2` |
+| Nome do projeto | `harmony-lab` |
+| Branch de produção | `main` |
+| Root directory (pasta raiz) | `harmony-lab` |
+| Build command | *(vazio)* |
+| Deploy command | `npx wrangler deploy` |
+| Build watch paths → Include | `harmony-lab/*` |
+
+O `harmony-lab/wrangler.jsonc` já diz o que publicar. Daí em diante, todo `git push` na `main` que mexer em
+`harmony-lab/` publica sozinho. O endereço fica como `https://harmony-lab.<subdomínio-da-conta>.workers.dev` — na
+conta do CRM, provavelmente **https://harmony-lab.crm-canais-bx2.workers.dev**. Não ligue o *Access* (login) neste
+Worker. Dica: no Worker do CRM, acrescente `harmony-lab/*` em *Build watch paths → Exclude* para que mudanças no
+Harmony Lab não republiquem o CRM.
+
+Sem painel, dá para publicar à mão: `cd harmony-lab && npx wrangler login && npx wrangler deploy`.
+
+**Instalar:** abra o endereço no celular.
+- **Android (Chrome):** menu ⋯ do app → *Instalar como app* (ou menu do Chrome → *Instalar app*).
+- **iPhone (Safari):** botão Compartilhar → *Adicionar à Tela de Início*.
+- **Computador (Chrome/Edge):** ícone de instalar na barra de endereço.
+
+Depois disso ele abre pelo ícone, em tela cheia, e funciona offline. Atualizações chegam sozinhas: a versão nova
+aparece na próxima vez que o app for aberto com internet.
+
+**E um APK?** Não é necessário: o app instalado já tem ícone, tela cheia e modo offline. Se um dia quiser um APK
+(por exemplo, para a Play Store), o [PWABuilder](https://www.pwabuilder.com) gera um a partir do endereço publicado,
+sem reescrever nada.
+
+---
+
+## Usar no computador sem publicar
 
 Precisa de **Python 3.10+**. A única dependência é o [`mido`](https://mido.readthedocs.io).
 
@@ -29,14 +71,9 @@ python -m harmonylab            # abre http://127.0.0.1:8765 no navegador
 
 Para encerrar: `Ctrl+C` no terminal.
 
-### Usar pelo celular (mesma rede Wi‑Fi)
-
-```bash
-python -m harmonylab serve --host 0.0.0.0
-```
-
-O terminal mostra o endereço (ex.: `http://192.168.0.12:8765`). Por padrão o servidor só aceita conexões da
-própria máquina.
+O servidor local só entrega os arquivos do app (a lógica roda no navegador). Com
+`python -m harmonylab serve --host 0.0.0.0` dá para abrir pelo celular na mesma rede Wi‑Fi, mas sem `https` o
+celular não instala o app — para isso, publique (seção acima).
 
 ---
 
@@ -61,7 +98,11 @@ Outras coisas na tela:
 | **Duplicar / mover / remover** | Remover e trocar de projeto têm **Desfazer**. |
 | **Menu ⋯** | Abrir/salvar projeto `.json`, **colar JSON** (ex.: resposta do ChatGPT), exemplo, projeto novo. |
 
-O trabalho fica salvo automaticamente no navegador (rascunho); para guardar de verdade, use **Salvar projeto**.
+O trabalho fica salvo automaticamente no aparelho (rascunho); para guardar de verdade ou levar para outro aparelho,
+use **Salvar projeto**.
+
+**Do celular para a DAW:** o `.mid` vai para a pasta Downloads; mande para o computador como preferir (Drive,
+WhatsApp, e‑mail, cabo). Quando o sistema permite compartilhar o arquivo, aparece o botão **Enviar** logo após gerar.
 
 ### Erros e avisos
 
@@ -163,7 +204,7 @@ Depois use **⋯ → Colar JSON**: o app aceita o JSON puro ou dentro de um bloc
 ## Linha de comando
 
 ```bash
-python -m harmonylab                              # interface web (igual a "serve")
+python -m harmonylab                              # abre o app no navegador (igual a "serve")
 python -m harmonylab serve --port 9000 --no-browser
 python -m harmonylab export projeto.json          # gera projeto.mid (ou -o outro.mid)
 python -m harmonylab check projeto.json           # mostra notas grave→agudo, MIDI, soprano, baixo e avisos
@@ -178,30 +219,37 @@ python -m harmonylab inspect arquivo.mid          # lista as notas de qualquer .
  linguagem natural / ChatGPT   (futuro: parser de texto livre — Fase 5)
               │
               ▼
-   JSON do projeto  ◄────────────  interface web (web/)   ·   linha de comando (cli.py)
-              │                         ▲
-              ▼                         │ análise (notas, soprano, avisos)
-   model.py  Project → ChordEvent ──► analysis.py
-              │  (notas como objetos Note)
-              ▼
-   pitch.py  Note = número MIDI + grafia original        voicing.py  geradores automáticos (Fase 3)
-              │
-              ▼
-   midi_io.py  Project → .mid (mido)  ·  .mid → notas (conferência)
+   JSON do projeto  ◄──── interface web (web/app.js)        linha de comando (cli.py)
+              │                                                     │
+   ┌──────────┴─────── motor (mesmas camadas nos dois lados) ───────┴──────────┐
+   │  model      projeto → acordes (notas concretas), leitura com lista de erros │
+   │  analysis   soprano, baixo, espaçamento, avisos                             │
+   │  pitch      nota = número MIDI + grafia original                            │
+   │  midi       projeto → bytes do .mid                                         │
+   └──────────────────────────────────────────────────────────────────────────────┘
+      web/engine/*.js  (roda no navegador:            harmonylab/*.py  (referência, CLI
+      app offline, sem servidor)          ◄── teste ──►  e testes; usa o mido)
+                                          de paridade
 ```
 
 Cada camada só conhece as de baixo. O gerador MIDI **não sabe nada** de interface, de texto livre nem de nomes de
-acordes: recebe um `Project` com notas concretas. Por isso dá para trocar a interface ou acrescentar um parser de
+acordes: recebe um projeto com notas concretas. Por isso dá para trocar a interface ou acrescentar um parser de
 linguagem natural sem tocar no motor MIDI.
+
+**Dois motores, um resultado.** O app roda o motor em JavaScript (`web/engine/`) para funcionar no celular, offline
+e sem servidor. O motor em Python (`harmonylab/*.py`, com `mido`) continua sendo a referência testada e a base da
+linha de comando. O teste `tests/test_js_parity.py` roda o motor JS no Node e exige, em dezenas de casos (inclusive
+erros e casos de borda), **a mesma análise, as mesmas mensagens e os mesmos bytes de `.mid`** que o Python.
 
 ### Decisões e por quê
 
 | Decisão | Motivo |
 |---|---|
 | **`mido`** para MIDI | Maduro, puro Python, controle direto de ticks e mensagens. O `pretty_midi` trabalha em segundos (ponto flutuante) e puxa `numpy`; aqui a fonte da verdade é o tempo musical. |
-| **Servidor da biblioteca padrão** (`http.server`) | Um usuário, na própria máquina: não precisa de Flask/FastAPI, banco de dados nem login. |
-| **Interface em HTML/CSS/JS puros** (sem build, sem npm) | Abre direto do Python, funciona offline, celular primeiro, tema claro/escuro automático. |
-| **Toda a lógica musical no Python** | A interface só edita o JSON e mostra o que o servidor analisou — uma única fonte da verdade, testada. |
+| **App web instalável (PWA)** em vez de APK | Mesmo código no celular e no computador, instala pelo navegador, atualiza sozinho, sem loja e sem login. |
+| **Motor também em JavaScript**, conferido byte a byte com o Python | Funciona offline e sem servidor; o teste de paridade impede que as duas versões divirjam. |
+| **HTML/CSS/JS puros** (sem build, sem npm) | Arquivos estáticos publicáveis em qualquer lugar; celular primeiro, tema claro/escuro automático. |
+| **Servidor da biblioteca padrão** (`http.server`) | Só para usar no computador sem publicar: não precisa de Flask/FastAPI, banco de dados nem login. |
 | **MIDI tipo 0, 480 ticks/♩, posições em ticks inteiros** | Importa igual em qualquer DAW; somar ticks inteiros evita deriva (4 tempos = 1920 ticks em qualquer BPM). |
 | **Número MIDI canônico + grafia guardada à parte** | `C#4`/`Db4` soam igual mas aparecem como você escreveu. |
 
@@ -215,24 +263,21 @@ harmony-lab/
 │   ├── analysis.py     soprano, baixo, espaçamento, dobras, avisos musicais
 │   ├── midi_io.py      gera .mid e lê de volta (conferência/testes)
 │   ├── voicing.py      geradores automáticos — hoje: voicing fechado sob soprano travado
-│   ├── server.py       servidor local + API JSON
+│   ├── server.py       servidor local que entrega o app (uso no computador)
 │   ├── cli.py          linha de comando
-│   └── web/            index.html, styles.css, app.js, keyboard.js, audio.js, icon.svg
+│   └── web/            o app publicado (arquivos estáticos)
+│       ├── index.html, styles.css, app.js   interface
+│       ├── keyboard.js, audio.js            teclado visual e pré‑escuta
+│       ├── engine/     motor em JS: pitch, model, analysis, midi (espelho do Python)
+│       ├── manifest.webmanifest, sw.js, icons/   instalação e modo offline
+│       └── example.json                    exemplo (cópia de examples/, conferida por teste)
 ├── examples/           projeto de exemplo (.json) e o .mid gerado
-├── tests/              testes automatizados (pytest)
+├── tests/              testes automatizados (pytest) + js_engine_runner.mjs (paridade)
+├── wrangler.jsonc      publicação na Cloudflare (só estáticos)
 ├── iniciar-windows.bat / iniciar-mac-linux.sh
 ├── requirements.txt    mido
 └── requirements-dev.txt  + pytest
 ```
-
-### API local
-
-| Rota | Uso |
-|---|---|
-| `POST /api/validate` | Projeto → análise por acorde (notas, MIDI, soprano, baixo, erros/avisos, totais). |
-| `POST /api/export` | Projeto → `audio/midi` (ou 400 com os erros). |
-| `POST /api/convention` | `{project, to: "C3"}` → mesmo projeto com nomes reescritos (alturas iguais). |
-| `GET /api/example` | Projeto de exemplo. |
 
 ---
 
@@ -248,11 +293,16 @@ leitura tolerante do JSON (todos os erros de uma vez); **top note**: com soprano
 automaticamente passa de `F#5` (testado em todas as combinações de até 6 classes de altura); **duração**: 4 tempos em
 4/4 = exatamente 1 compasso em vários BPMs, e outras fórmulas (3/4, 6/8, 5/4, 7/8); **MIDI relido do disco**:
 pitches, note on/off, velocity, duração, ordem temporal, tempo, compasso, marcadores, nota comum re‑articulada,
-pausas; API HTTP e linha de comando.
+pausas; **paridade JS × Python** (análise, mensagens e bytes do `.mid`, se houver Node.js instalado; sem Node o
+teste é pulado); servidor local (inclusive bloqueio de caminhos fora da pasta do app); arquivos do modo offline e do
+manifesto; linha de comando.
 
 ---
 
 ## Próximas fases (onde cada coisa se encaixa)
+
+Regra geral: recursos que o app usa entram no motor JS (`web/engine/`); o que também fizer sentido na linha de
+comando entra no Python, e o teste de paridade ganha casos novos. Os nomes de arquivo abaixo valem para os dois lados.
 
 **Fase 2 — projetos e comparação.** Abrir/salvar `.json` já existe. Falta: **comparação A/B** (função em `midi_io` ou
 um módulo `arrange.py` que monta `contexto → alternativa → pausa`, repetindo N vezes, a partir de vários
@@ -282,3 +332,5 @@ cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes*
 - Uma faixa MIDI única (sem separar mãos em faixas).
 - A pré‑escuta do navegador é um timbre simples; o objetivo dela é só conferir notas.
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").
+- Os projetos ficam no aparelho (rascunho automático) ou em arquivos `.json`; não há sincronização entre aparelhos.
+- No Android, o Chrome costuma não permitir compartilhar `.mid` direto (sem botão "Enviar"); o arquivo vai para Downloads.

@@ -35,7 +35,8 @@ PART_LABELS = {
 }
 
 VALID_DENOMINATORS = (1, 2, 4, 8, 16, 32)
-TEMPO_MIN, TEMPO_MAX = 1.0, 999.0
+# Abaixo de ~3,6 BPM o tempo não cabe nos 3 bytes do MIDI; 10 já é bem mais lento que qualquer balada.
+TEMPO_MIN, TEMPO_MAX = 10.0, 999.0
 MAX_DURATION_BEATS = 1024.0
 
 
@@ -246,16 +247,17 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
     if isinstance(middle_c, str) and middle_c in MIDDLE_C_OFFSETS:
         project.middle_c = middle_c
     else:
-        issues.append(Issue("error", f'Convenção de oitava desconhecida: "{middle_c}". Use "C4" ou "C3".', None, "middle_c"))
+        shown = f': "{middle_c}"' if isinstance(middle_c, str) else ""
+        issues.append(Issue("error", f'Convenção de oitava desconhecida{shown}. Use "C4" ou "C3".', None, "middle_c"))
 
-    if "tempo" in data:
+    if data.get("tempo") is not None:
         tempo = _to_number(data["tempo"])
         if tempo is None or not TEMPO_MIN <= tempo <= TEMPO_MAX:
-            issues.append(Issue("error", f'BPM deve ser um número entre 1 e 999 (recebido "{data["tempo"]}").', None, "tempo"))
+            issues.append(Issue("error", f'BPM deve ser um número entre 10 e 999 (recebido "{data["tempo"]}").', None, "tempo"))
         else:
             project.tempo = tempo
 
-    if "time_signature" in data:
+    if data.get("time_signature") is not None:
         try:
             project.time_signature = parse_time_signature(data["time_signature"])
         except ValueError as exc:
@@ -266,7 +268,9 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         if vel is not None:
             project.default_velocity = vel
 
-    raw_chords = data.get("chords", [])
+    raw_chords = data.get("chords")
+    if raw_chords is None:
+        raw_chords = []
     if not isinstance(raw_chords, list):
         issues.append(Issue("error", 'O campo "chords" deve ser uma lista de acordes.', None, "chords"))
         raw_chords = []
@@ -304,13 +308,13 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
             issues.append(Issue("error", message, index, part))
 
     top = raw.get("top_note")
-    if top not in (None, ""):
+    if top is not None and top != "":
         try:
             chord.top_note = parse_note(top.strip() if isinstance(top, str) else top, project.middle_c)
         except NoteParseError as exc:
             issues.append(Issue("error", f"Soprano: {exc}", index, "top_note"))
 
-    if raw.get("velocity") not in (None, ""):
+    if raw.get("velocity") is not None and raw.get("velocity") != "":
         chord.velocity = _velocity(raw["velocity"], issues, index, "velocity")
 
     omitted = raw.get("omitted")
@@ -328,8 +332,11 @@ def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, An
     from_middle_c = data.get("middle_c") or DEFAULT_MIDDLE_C
     out = dict(data)
     out["middle_c"] = to_middle_c
+    # Sem convenção de origem válida não há o que converter: só adota a nova.
+    if not isinstance(data.get("chords"), list) or not (isinstance(from_middle_c, str) and from_middle_c in MIDDLE_C_OFFSETS):
+        return out
     chords = []
-    for raw in data.get("chords") or []:
+    for raw in data["chords"]:
         if not isinstance(raw, dict):
             chords.append(raw)
             continue

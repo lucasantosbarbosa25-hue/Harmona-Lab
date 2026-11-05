@@ -6,15 +6,22 @@
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
   <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Laboratório de voicings e reharmonização que gera MIDI exato para a sua DAW.">
   <title>Harmony Lab</title>
-  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="/static/styles.css">
-  <script type="module" src="/static/app.js"></script>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Harmony Lab">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="modulepreload" href="engine/analysis.js">
+  <script type="module" src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
-      <img src="/static/icon.svg" alt="" width="36" height="36">
+      <img src="icon.svg" alt="" width="36" height="36">
       <div>
         <h1>Harmony Lab</h1>
         <p>Voicings exatos → MIDI</p>
@@ -76,6 +83,8 @@
         <p><strong>Como escrever notas.</strong> Letra + acidente + oitava: <code>C4</code>, <code>F#2</code>, <code>Eb3</code>, <code>Bb3</code>, <code>C##4</code>. Também vale o número MIDI (<code>60</code>). Separe por espaço, vírgula ou travessão: <code>F#2 – C3</code>.</p>
         <p><strong>Convenção de oitava.</strong> Internamente tudo é número MIDI. Por padrão, <strong>MIDI 60 = C4</strong> (dó central, padrão científico). Ableton Live e Studio One costumam chamar essa mesma tecla de <strong>C3</strong>: é a mesma nota, só muda o nome. Se preferir ver os nomes como na sua DAW, troque “Dó central” para C3 — as teclas exportadas continuam idênticas.</p>
         <p><strong>Na DAW.</strong> Arraste o <code>.mid</code> para uma faixa de instrumento. Algumas DAWs não trocam o BPM do projeto ao importar: as notas já estão em tempos musicais, então ficam certas em compassos; ajuste o BPM do projeto se quiser o andamento do arquivo.</p>
+        <p><strong>Instalar no celular.</strong> No Android (Chrome): menu ⋯ deste app → <em>Instalar como app</em>, ou menu do Chrome → <em>Instalar app</em>. No iPhone (Safari): botão Compartilhar → <em>Adicionar à Tela de Início</em>. Depois ele abre pelo ícone, em tela cheia, e funciona sem internet. Os projetos ficam só neste aparelho; use <em>Salvar projeto</em> para levar para outro.</p>
+        <p><strong>Do celular para a DAW.</strong> O <code>.mid</code> vai para a pasta Downloads. Mande para o computador como preferir (Drive, WhatsApp, e-mail, cabo) e arraste para a DAW. Quando o sistema permite, aparece o botão <em>Enviar</em> logo após gerar.</p>
         <p><strong>O nome do acorde é só um rótulo.</strong> O MIDI usa exatamente as notas digitadas. O nome vai como marcador no arquivo.</p>
       </div>
     </details>
@@ -94,6 +103,7 @@
   <dialog id="menu" class="sheet" aria-label="Menu do projeto">
     <form method="dialog" class="sheet-body">
       <p class="sheet-title">Projeto</p>
+      <button class="menu-item highlight" value="install" data-icon="install" id="install-item" hidden>Instalar como app</button>
       <button class="menu-item" value="open" data-icon="folder">Abrir projeto (.json)</button>
       <button class="menu-item" value="paste" data-icon="paste">Colar JSON (ex.: do ChatGPT)</button>
       <button class="menu-item" value="save" data-icon="save">Salvar projeto (.json)</button>

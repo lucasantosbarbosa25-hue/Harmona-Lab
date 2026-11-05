@@ -1,0 +1,10 @@
+// Publicação do Harmony Lab na Cloudflare (Workers, plano grátis).
+// Só arquivos estáticos (o app inteiro roda no navegador), sem login e sem segredos.
+// Veja "Publicar e instalar no celular" no README.
+{
+  "name": "harmony-lab",
+  "compatibility_date": "2026-09-15",
+  "assets": {
+    "directory": "./harmonylab/web"
+  }
+}

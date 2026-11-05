@@ -20,7 +20,7 @@ harmonylab = "harmonylab.cli:main"
 packages = ["harmonylab"]
 
 [tool.setuptools.package-data]
-harmonylab = ["web/*"]
+harmonylab = ["web/*", "web/engine/*", "web/icons/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
