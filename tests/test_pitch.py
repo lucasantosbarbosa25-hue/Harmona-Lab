@@ -1,6 +1,6 @@
 import pytest
 
-from harmonylab.pitch import (
+from harmonalab.pitch import (
     Note,
     NoteParseError,
     midi_to_name,

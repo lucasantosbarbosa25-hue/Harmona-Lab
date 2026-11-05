@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from harmonylab.model import Project, ProjectError, load_project, rename_project_notes
+from harmonalab.model import Project, ProjectError, load_project, rename_project_notes
 
 # Exatamente o formato da seção 21 do pedido.
 EXEMPLO_PEDIDO = {

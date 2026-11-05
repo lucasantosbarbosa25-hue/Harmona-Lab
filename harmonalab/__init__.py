@@ -1,4 +1,4 @@
-"""Harmony Lab — laboratório de voicings, reharmonização e condução de vozes → MIDI.
+"""Harmona Lab — laboratório de voicings, reharmonização e condução de vozes → MIDI.
 
 Camadas (cada uma só conhece as de baixo):
 

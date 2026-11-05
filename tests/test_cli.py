@@ -1,7 +1,7 @@
 import json
 
-from harmonylab.cli import main
-from harmonylab.midi_io import load_midi, summarize_midi
+from harmonalab.cli import main
+from harmonalab.midi_io import load_midi, summarize_midi
 
 
 def test_export_e_inspect(tmp_path, capsys):

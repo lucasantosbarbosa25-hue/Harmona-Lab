@@ -1,4 +1,4 @@
-# Harmony Lab
+# Harmona Lab
 
 Laboratório de **voicings, reharmonização e condução de vozes** que transforma exatamente as notas que você
 discutiu — mão esquerda, mão direita, oitavas, soprano — num arquivo **`.mid`** para arrastar em qualquer DAW
@@ -14,7 +14,7 @@ discutiu — mão esquerda, mão direita, oitavas, soprano — num arquivo **`.m
 
 ## Publicar e instalar no celular
 
-O app é só um conjunto de arquivos estáticos (`harmonylab/web/`). Para ter um endereço `https://` (exigência do
+O app é só um conjunto de arquivos estáticos (`harmonalab/web/`). Para ter um endereço `https://` (exigência do
 celular para instalar), publique na Cloudflare — grátis e sem login para quem usa.
 
 **Uma vez só, no painel da Cloudflare** (*Workers & Pages → Create → Import a repository*):
@@ -22,7 +22,7 @@ celular para instalar), publique na Cloudflare — grátis e sem login para quem
 | Campo | Valor |
 |---|---|
 | Repositório | `harmona-lab` |
-| Nome do projeto | `harmony-lab` |
+| Nome do projeto | `harmona-lab` |
 | Branch de produção | `main` |
 | Root directory (pasta raiz) | *(vazio — a raiz do repositório)* |
 | Build command | *(vazio)* |
@@ -31,9 +31,9 @@ celular para instalar), publique na Cloudflare — grátis e sem login para quem
 Se o repositório não aparecer na lista, o app do GitHub da Cloudflare ainda não tem acesso a ele: o próprio painel
 oferece o link para liberar este repositório (*Configure GitHub* / *Add repository*).
 
-O `wrangler.jsonc` já diz o que publicar (só a pasta `harmonylab/web`). Daí em diante, todo `git push` na `main`
-publica sozinho. O endereço fica como `https://harmony-lab.<subdomínio-da-conta>.workers.dev` — na conta que já
-hospeda o CRM, provavelmente **https://harmony-lab.crm-canais-bx2.workers.dev**. Não ligue o *Access* (login) neste
+O `wrangler.jsonc` já diz o que publicar (só a pasta `harmonalab/web`). Daí em diante, todo `git push` na `main`
+publica sozinho. O endereço fica como `https://harmona-lab.<subdomínio-da-conta>.workers.dev` — na conta que já
+hospeda o CRM, provavelmente **https://harmona-lab.crm-canais-bx2.workers.dev**. Não ligue o *Access* (login) neste
 Worker.
 
 Sem painel, dá para publicar à mão, na pasta do projeto: `npx wrangler login && npx wrangler deploy`.
@@ -68,13 +68,13 @@ cd harmona-lab
 python -m venv .venv
 # Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-python -m harmonylab            # abre http://127.0.0.1:8765 no navegador
+python -m harmonalab            # abre http://127.0.0.1:8765 no navegador
 ```
 
 Para encerrar: `Ctrl+C` no terminal.
 
 O servidor local só entrega os arquivos do app (a lógica roda no navegador). Com
-`python -m harmonylab serve --host 0.0.0.0` dá para abrir pelo celular na mesma rede Wi‑Fi, mas sem `https` o
+`python -m harmonalab serve --host 0.0.0.0` dá para abrir pelo celular na mesma rede Wi‑Fi, mas sem `https` o
 celular não instala o app — para isso, publique (seção acima).
 
 ---
@@ -144,7 +144,7 @@ Também valem `B#3` (= C4), `Cb4` (= B3), dobrados (`C##4`, `Cx4`, `Dbb4`), sím
   re‑articulada (o *note off* vem antes do *note on* no mesmo instante — nada fica cortado ou pendurado).
 - **BPM:** algumas DAWs não mudam o andamento do projeto ao importar um `.mid`. As notas estão em tempos musicais,
   então ficam certas nos compassos; ajuste o BPM do projeto se quiser o andamento do arquivo.
-- Para conferir um `.mid` sem abrir a DAW: `python -m harmonylab inspect arquivo.mid` (use `--middle-c C3` para ver
+- Para conferir um `.mid` sem abrir a DAW: `python -m harmonalab inspect arquivo.mid` (use `--middle-c C3` para ver
   os nomes como no Ableton/Studio One).
 
 ---
@@ -193,9 +193,9 @@ pronto para arrastar na DAW).
 
 ### Usando com o ChatGPT
 
-Peça a resposta já no formato do Harmony Lab, por exemplo:
+Peça a resposta já no formato do Harmona Lab, por exemplo:
 
-> Responda só com um bloco JSON no formato Harmony Lab: `tempo`, `time_signature`, `middle_c: "C4"` e uma lista
+> Responda só com um bloco JSON no formato Harmona Lab: `tempo`, `time_signature`, `middle_c: "C4"` e uma lista
 > `chords`, cada um com `symbol`, `duration_beats`, `left_hand`, `right_hand` (notas com oitava, MIDI 60 = C4),
 > `top_note` e `comment`.
 
@@ -206,11 +206,11 @@ Depois use **⋯ → Colar JSON**: o app aceita o JSON puro ou dentro de um bloc
 ## Linha de comando
 
 ```bash
-python -m harmonylab                              # abre o app no navegador (igual a "serve")
-python -m harmonylab serve --port 9000 --no-browser
-python -m harmonylab export projeto.json          # gera projeto.mid (ou -o outro.mid)
-python -m harmonylab check projeto.json           # mostra notas grave→agudo, MIDI, soprano, baixo e avisos
-python -m harmonylab inspect arquivo.mid          # lista as notas de qualquer .mid
+python -m harmonalab                              # abre o app no navegador (igual a "serve")
+python -m harmonalab serve --port 9000 --no-browser
+python -m harmonalab export projeto.json          # gera projeto.mid (ou -o outro.mid)
+python -m harmonalab check projeto.json           # mostra notas grave→agudo, MIDI, soprano, baixo e avisos
+python -m harmonalab inspect arquivo.mid          # lista as notas de qualquer .mid
 ```
 
 ---
@@ -229,7 +229,7 @@ python -m harmonylab inspect arquivo.mid          # lista as notas de qualquer .
    │  pitch      nota = número MIDI + grafia original                            │
    │  midi       projeto → bytes do .mid                                         │
    └──────────────────────────────────────────────────────────────────────────────┘
-      web/engine/*.js  (roda no navegador:            harmonylab/*.py  (referência, CLI
+      web/engine/*.js  (roda no navegador:            harmonalab/*.py  (referência, CLI
       app offline, sem servidor)          ◄── teste ──►  e testes; usa o mido)
                                           de paridade
 ```
@@ -239,7 +239,7 @@ acordes: recebe um projeto com notas concretas. Por isso dá para trocar a inter
 linguagem natural sem tocar no motor MIDI.
 
 **Dois motores, um resultado.** O app roda o motor em JavaScript (`web/engine/`) para funcionar no celular, offline
-e sem servidor. O motor em Python (`harmonylab/*.py`, com `mido`) continua sendo a referência testada e a base da
+e sem servidor. O motor em Python (`harmonalab/*.py`, com `mido`) continua sendo a referência testada e a base da
 linha de comando. O teste `tests/test_js_parity.py` roda o motor JS no Node e exige, em dezenas de casos (inclusive
 erros e casos de borda), **a mesma análise, as mesmas mensagens e os mesmos bytes de `.mid`** que o Python.
 
@@ -259,7 +259,7 @@ erros e casos de borda), **a mesma análise, as mesmas mensagens e os mesmos byt
 
 ```
 harmona-lab/
-├── harmonylab/
+├── harmonalab/
 │   ├── pitch.py        notas ↔ MIDI, convenções de oitava, grafia enarmônica
 │   ├── model.py        Project / ChordEvent, leitura tolerante do JSON com lista de erros
 │   ├── analysis.py     soprano, baixo, espaçamento, dobras, avisos musicais

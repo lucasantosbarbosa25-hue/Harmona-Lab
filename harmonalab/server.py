@@ -1,8 +1,8 @@
 """Servidor local mínimo (só biblioteca padrão) que entrega o app web.
 
-O app (``harmonylab/web``) é estático: análise e geração do MIDI rodam no próprio
+O app (``harmonalab/web``) é estático: análise e geração do MIDI rodam no próprio
 navegador (``web/engine``). Este servidor existe para usar o app no computador sem
-hospedar nada — ``python -m harmonylab`` — e escuta só em 127.0.0.1 por padrão.
+hospedar nada — ``python -m harmonalab`` — e escuta só em 127.0.0.1 por padrão.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def resolve_web_file(url_path: str) -> Path | None:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "HarmonyLab/0.2"
+    server_version = "HarmonaLab/0.2"
 
     def log_message(self, fmt: str, *args: Any) -> None:  # silencioso
         if getattr(self.server, "verbose", False):

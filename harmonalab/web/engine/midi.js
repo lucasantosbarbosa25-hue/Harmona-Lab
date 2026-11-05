@@ -1,4 +1,4 @@
-// Projeto → bytes de um arquivo MIDI (.mid) — espelho de harmonylab/midi_io.py.
+// Projeto → bytes de um arquivo MIDI (.mid) — espelho de harmonalab/midi_io.py.
 // Gera exatamente os mesmos bytes que o mido gera no Python (há teste comparando).
 //
 // Tipo 0 (uma faixa), 480 ticks por semínima, canal 1, sem program change.
@@ -63,7 +63,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
 
   const tempo = roundHalfEven(((60 * 1e6) / project.tempo) * 4 / 4);
   const messages = [
-    [0, meta(0x03, metaTextBytes(project.title || "Harmony Lab"))],
+    [0, meta(0x03, metaTextBytes(project.title || "Harmona Lab"))],
     [0, meta(0x58, [num, Math.log2(den), 24, 8])],
     [0, meta(0x51, [(tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff])],
   ];

@@ -1,4 +1,4 @@
-// Modelo interno: projeto → acordes → voicings — espelho de harmonylab/model.py.
+// Modelo interno: projeto → acordes → voicings — espelho de harmonalab/model.py.
 // As notas explícitas mandam; o símbolo do acorde é só um rótulo.
 
 import { toNumber } from "./numbers.js";

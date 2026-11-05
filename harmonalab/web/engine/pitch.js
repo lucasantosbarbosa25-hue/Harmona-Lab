@@ -1,4 +1,4 @@
-// Notas, alturas MIDI e convenções de oitava — espelho de harmonylab/pitch.py.
+// Notas, alturas MIDI e convenções de oitava — espelho de harmonalab/pitch.py.
 // Representação canônica: número MIDI. A grafia original fica guardada à parte.
 
 import { fmtG } from "./numbers.js";

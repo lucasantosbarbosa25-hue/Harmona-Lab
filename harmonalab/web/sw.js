@@ -2,7 +2,7 @@
 // Estratégia "stale-while-revalidate": responde com a cópia guardada e, ao mesmo tempo,
 // busca a versão nova na rede — a atualização aparece na próxima vez que o app abrir.
 
-const CACHE = "harmony-lab-v1";
+const CACHE = "harmona-lab-v1";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./audio.js", "./keyboard.js",
   "./engine/analysis.js", "./engine/midi.js", "./engine/model.js", "./engine/numbers.js", "./engine/pitch.js",

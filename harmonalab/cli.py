@@ -1,10 +1,10 @@
 """Linha de comando.
 
-  python -m harmonylab                      abre a interface no navegador
-  python -m harmonylab serve [--port N]     idem, com opções
-  python -m harmonylab export proj.json     gera proj.mid (ou -o outro.mid)
-  python -m harmonylab check proj.json      mostra notas, soprano, baixo e avisos
-  python -m harmonylab inspect arquivo.mid  lista as notas de um .mid
+  python -m harmonalab                      abre a interface no navegador
+  python -m harmonalab serve [--port N]     idem, com opções
+  python -m harmonalab export proj.json     gera proj.mid (ou -o outro.mid)
+  python -m harmonalab check proj.json      mostra notas, soprano, baixo e avisos
+  python -m harmonalab inspect arquivo.mid  lista as notas de um .mid
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
     server = make_server(args.host, args.port, verbose=args.verbose)
     port = server.server_address[1]
     url = f"http://127.0.0.1:{port}/"
-    print(f"Harmony Lab rodando em {url}")
+    print(f"Harmona Lab rodando em {url}")
     if args.host == "0.0.0.0":
         ip = local_ip()
         if ip:
@@ -96,7 +96,7 @@ def cmd_inspect(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="harmonylab", description="Harmony Lab — voicings exatos → MIDI.")
+    parser = argparse.ArgumentParser(prog="harmonalab", description="Harmona Lab — voicings exatos → MIDI.")
     sub = parser.add_subparsers(dest="command")
 
     serve = sub.add_parser("serve", help="abre a interface web local")

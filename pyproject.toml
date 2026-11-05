@@ -3,7 +3,7 @@ requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "harmony-lab"
+name = "harmona-lab"
 version = "0.1.0"
 description = "Laboratório de voicings, reharmonização e condução de vozes que gera MIDI exato."
 readme = "README.md"
@@ -14,13 +14,13 @@ dependencies = ["mido>=1.3,<2"]
 dev = ["pytest>=7"]
 
 [project.scripts]
-harmonylab = "harmonylab.cli:main"
+harmonalab = "harmonalab.cli:main"
 
 [tool.setuptools]
-packages = ["harmonylab"]
+packages = ["harmonalab"]
 
 [tool.setuptools.package-data]
-harmonylab = ["web/*", "web/engine/*", "web/icons/*"]
+harmonalab = ["web/*", "web/engine/*", "web/icons/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

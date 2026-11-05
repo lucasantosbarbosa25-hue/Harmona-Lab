@@ -3,8 +3,8 @@
 import mido
 import pytest
 
-from harmonylab.midi_io import TICKS_PER_BEAT, build_midi, load_midi, midi_bytes, save_midi, summarize_midi
-from harmonylab.model import Project
+from harmonalab.midi_io import TICKS_PER_BEAT, build_midi, load_midi, midi_bytes, save_midi, summarize_midi
+from harmonalab.model import Project
 
 PPQ = TICKS_PER_BEAT
 

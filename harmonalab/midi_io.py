@@ -65,7 +65,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     events.sort(key=lambda e: (e[0], e[1], e[2]))
 
     track = mido.MidiTrack()
-    track.append(mido.MetaMessage("track_name", name=_meta_text(project.title or "Harmony Lab"), time=0))
+    track.append(mido.MetaMessage("track_name", name=_meta_text(project.title or "Harmona Lab"), time=0))
     track.append(mido.MetaMessage("time_signature", numerator=num, denominator=den,
                                   clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
     track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(project.tempo), time=0))

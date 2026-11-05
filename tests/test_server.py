@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from harmonylab.server import WEB_DIR, make_server
+from harmonalab.server import WEB_DIR, make_server
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 

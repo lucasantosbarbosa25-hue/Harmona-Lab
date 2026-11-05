@@ -1,4 +1,4 @@
-// Leitura do voicing: soprano, baixo, espaçamento e avisos — espelho de harmonylab/analysis.py.
+// Leitura do voicing: soprano, baixo, espaçamento e avisos — espelho de harmonalab/analysis.py.
 // Nada aqui altera notas; só "error" bloqueia a exportação.
 
 import { fmtG, roundHalfEven } from "./numbers.js";

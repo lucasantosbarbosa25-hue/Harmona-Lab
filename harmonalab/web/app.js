@@ -1,4 +1,4 @@
-// Harmony Lab — interface. Edita o modelo (JSON) e mostra o que o motor analisou.
+// Harmona Lab — interface. Edita o modelo (JSON) e mostra o que o motor analisou.
 // O motor (engine/) roda aqui mesmo no navegador: o app funciona offline, sem servidor,
 // e gera os mesmos bytes de MIDI que a versão em Python (há teste comparando).
 
@@ -8,7 +8,7 @@ import { midiBytes } from "./engine/midi.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 
-const DRAFT_KEY = "harmonylab:draft:v1";
+const DRAFT_KEY = "harmonalab:draft:v1";
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
@@ -703,7 +703,7 @@ async function saveProject() {
   validateNow();
   const data = state.report?.ok ? state.report.project : toPayload();
   const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], { type: "application/json" });
-  const saved = await saveFile(blob, `${slugify(state.project.title)}.json`, "Projeto Harmony Lab", "application/json", ".json");
+  const saved = await saveFile(blob, `${slugify(state.project.title)}.json`, "Projeto Harmona Lab", "application/json", ".json");
   if (saved) toast(`Projeto salvo: ${saved.name}`);
 }
 
@@ -822,7 +822,7 @@ function setupInstall() {
   window.addEventListener("appinstalled", () => {
     installPrompt = null;
     $("#install-item").hidden = true;
-    toast("Harmony Lab instalado. Ele abre pelo ícone e funciona offline.");
+    toast("Harmona Lab instalado. Ele abre pelo ícone e funciona offline.");
   });
   if ("serviceWorker" in navigator && window.isSecureContext) {
     navigator.serviceWorker.register("./sw.js").catch(() => { /* sem offline, o resto funciona */ });

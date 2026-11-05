@@ -1,4 +1,4 @@
-from harmonylab.analysis import analyze, analyze_data, describe
+from harmonalab.analysis import analyze, analyze_data, describe
 
 
 def levels(report, chord=None):

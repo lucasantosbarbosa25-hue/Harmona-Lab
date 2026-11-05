@@ -1,6 +1,6 @@
 """O motor do navegador (JavaScript) precisa dar exatamente o mesmo resultado que o Python.
 
-O app instalável roda sozinho no celular com harmonylab/web/engine/*.js. Este teste roda esse
+O app instalável roda sozinho no celular com harmonalab/web/engine/*.js. Este teste roda esse
 código no Node e compara, caso a caso, a análise, a troca de convenção e os BYTES do .mid.
 Sem Node.js instalado, o teste é pulado.
 """
@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from harmonylab.analysis import analyze_data
-from harmonylab.midi_io import midi_bytes
-from harmonylab.model import load_project, rename_project_notes
+from harmonalab.analysis import analyze_data
+from harmonalab.midi_io import midi_bytes
+from harmonalab.model import load_project, rename_project_notes
 
 from .test_midi_io import PROGRESSAO
 

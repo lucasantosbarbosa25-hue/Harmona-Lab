@@ -2,8 +2,8 @@ import itertools
 
 import pytest
 
-from harmonylab.pitch import name_to_midi
-from harmonylab.voicing import voice_under_top
+from harmonalab.pitch import name_to_midi
+from harmonalab.voicing import voice_under_top
 
 PCS = ["C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
 
