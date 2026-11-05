@@ -7,3 +7,5 @@ __pycache__/
 *.mid
 !examples/*.mid
 exports/
+.wrangler/
+node_modules/

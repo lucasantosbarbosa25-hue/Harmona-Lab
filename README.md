@@ -15,27 +15,28 @@ discutiu — mão esquerda, mão direita, oitavas, soprano — num arquivo **`.m
 ## Publicar e instalar no celular
 
 O app é só um conjunto de arquivos estáticos (`harmonylab/web/`). Para ter um endereço `https://` (exigência do
-celular para instalar), publique na Cloudflare, na mesma conta do CRM — grátis e sem login para quem usa.
+celular para instalar), publique na Cloudflare — grátis e sem login para quem usa.
 
 **Uma vez só, no painel da Cloudflare** (*Workers & Pages → Create → Import a repository*):
 
 | Campo | Valor |
 |---|---|
-| Repositório | `crm-canais-bx2` |
+| Repositório | `harmona-lab` |
 | Nome do projeto | `harmony-lab` |
 | Branch de produção | `main` |
-| Root directory (pasta raiz) | `harmony-lab` |
+| Root directory (pasta raiz) | *(vazio — a raiz do repositório)* |
 | Build command | *(vazio)* |
 | Deploy command | `npx wrangler deploy` |
-| Build watch paths → Include | `harmony-lab/*` |
 
-O `harmony-lab/wrangler.jsonc` já diz o que publicar. Daí em diante, todo `git push` na `main` que mexer em
-`harmony-lab/` publica sozinho. O endereço fica como `https://harmony-lab.<subdomínio-da-conta>.workers.dev` — na
-conta do CRM, provavelmente **https://harmony-lab.crm-canais-bx2.workers.dev**. Não ligue o *Access* (login) neste
-Worker. Dica: no Worker do CRM, acrescente `harmony-lab/*` em *Build watch paths → Exclude* para que mudanças no
-Harmony Lab não republiquem o CRM.
+Se o repositório não aparecer na lista, o app do GitHub da Cloudflare ainda não tem acesso a ele: o próprio painel
+oferece o link para liberar este repositório (*Configure GitHub* / *Add repository*).
 
-Sem painel, dá para publicar à mão: `cd harmony-lab && npx wrangler login && npx wrangler deploy`.
+O `wrangler.jsonc` já diz o que publicar (só a pasta `harmonylab/web`). Daí em diante, todo `git push` na `main`
+publica sozinho. O endereço fica como `https://harmony-lab.<subdomínio-da-conta>.workers.dev` — na conta que já
+hospeda o CRM, provavelmente **https://harmony-lab.crm-canais-bx2.workers.dev**. Não ligue o *Access* (login) neste
+Worker.
+
+Sem painel, dá para publicar à mão, na pasta do projeto: `npx wrangler login && npx wrangler deploy`.
 
 **Instalar:** abra o endereço no celular.
 - **Android (Chrome):** menu ⋯ do app → *Instalar como app* (ou menu do Chrome → *Instalar app*).
@@ -62,7 +63,8 @@ Na primeira vez o script cria um ambiente isolado (`.venv`) e instala o `mido`; 
 Se preferir fazer à mão:
 
 ```bash
-cd harmony-lab
+git clone https://github.com/lucasantosbarbosa25-hue/harmona-lab.git
+cd harmona-lab
 python -m venv .venv
 # Windows: .venv\Scripts\activate      macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
@@ -256,7 +258,7 @@ erros e casos de borda), **a mesma análise, as mesmas mensagens e os mesmos byt
 ### Estrutura de diretórios
 
 ```
-harmony-lab/
+harmona-lab/
 ├── harmonylab/
 │   ├── pitch.py        notas ↔ MIDI, convenções de oitava, grafia enarmônica
 │   ├── model.py        Project / ChordEvent, leitura tolerante do JSON com lista de erros
