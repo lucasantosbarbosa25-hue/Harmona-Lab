@@ -1,0 +1,822 @@
+// Harmony Lab — interface. Toda a teoria/validação/MIDI fica no Python;
+// aqui só editamos o modelo (JSON) e mostramos o que o servidor analisou.
+
+import { Player } from "./audio.js";
+import { keyboardRange, renderKeyboard } from "./keyboard.js";
+
+const DRAFT_KEY = "harmonylab:draft:v1";
+const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
+const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
+const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
+const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "omitted"];
+
+const $ = (selector) => document.querySelector(selector);
+
+// ---------------------------------------------------------------- ícones
+const ICONS = {
+  play: '<path class="fill" d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/>',
+  stop: '<rect class="fill" x="6" y="6" width="12" height="12" rx="2"/>',
+  download: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  up: '<path d="M12 19V5"/><path d="m6 11 6-6 6 6"/>',
+  down: '<path d="M12 5v14"/><path d="m6 13 6 6 6-6"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  trash: '<path d="M4 7h16"/><path d="M10 11v6M14 11v6"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M9 7V4h6v3"/>',
+  dots: '<circle class="fill" cx="5" cy="12" r="1.8"/><circle class="fill" cx="12" cy="12" r="1.8"/><circle class="fill" cx="19" cy="12" r="1.8"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  unlock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
+  folder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  save: '<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/>',
+  sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
+  file: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/>',
+  paste: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3"/>',
+  note: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  error: '<circle cx="12" cy="12" r="9"/><path d="M12 7.5V13"/><circle class="fill" cx="12" cy="16.5" r="1.1"/>',
+  warning: '<path d="M10.3 4.2 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0z"/><path d="M12 9.5v4"/><circle class="fill" cx="12" cy="17" r="1.1"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle class="fill" cx="12" cy="7.8" r="1.1"/>',
+};
+
+function icon(name) {
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "icon");
+  svg.setAttribute("aria-hidden", "true");
+  svg.innerHTML = ICONS[name];
+  return svg;
+}
+
+// ---------------------------------------------------------------- DOM
+function h(tag, props, ...children) {
+  const el = document.createElement(tag);
+  for (const [key, value] of Object.entries(props || {})) {
+    if (value == null) continue;
+    if (key === "class") el.className = value;
+    else if (key === "dataset") Object.assign(el.dataset, value);
+    else if (key.startsWith("on") && typeof value === "function") el.addEventListener(key.slice(2), value);
+    else if (typeof value === "boolean") {
+      if (key in el) el[key] = value;
+      else if (value) el.setAttribute(key, "");
+    } else if (key === "value") el.value = value;
+    else el.setAttribute(key, value);
+  }
+  for (const child of children.flat()) {
+    if (child == null || child === false) continue;
+    el.append(child instanceof Node ? child : String(child));
+  }
+  return el;
+}
+
+const noteInputProps = { type: "text", autocomplete: "off", autocapitalize: "off", autocorrect: "off", spellcheck: false };
+
+// ---------------------------------------------------------------- estado
+const state = {
+  project: null, // modelo editável (notas como texto)
+  report: null, // última análise do servidor
+  byId: new Map(), // id do acorde → { chord, issues }
+  seq: 0,
+  serverDown: false,
+  playing: false,
+};
+const refs = new WeakMap(); // acorde → elementos do cartão
+const player = new Player();
+let nextId = 1;
+
+const beatsPerBar = () => {
+  const [num, den] = String(state.project.time_signature).split("/").map(Number);
+  return num && den ? (num * 4) / den : 4;
+};
+const toNumber = (v) => (v === "" || v == null ? NaN : Number(String(v).replace(",", ".")));
+const fmt = (x) => (Number.isInteger(x) ? String(x) : String(+x.toFixed(3)).replace(".", ","));
+
+function barsText(beats) {
+  const bars = beats / beatsPerBar();
+  if (!Number.isFinite(bars) || bars <= 0) return "";
+  if (bars === 0.5) return "½ compasso";
+  if (bars === 1) return "1 compasso";
+  return Number.isInteger(bars) ? `${bars} compassos` : `${fmt(bars)} compasso`;
+}
+
+function slugify(text, fallback = "progressao") {
+  const slug = (text || "").normalize("NFKD").replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase().slice(0, 60);
+  return slug || fallback;
+}
+
+function blankChord(extra = {}) {
+  return {
+    id: nextId++, symbol: "", duration_beats: beatsPerBar(),
+    right_hand: "", left_hand: "", bass: "", notes: "",
+    top_note: "", velocity: "", omitted: "", comment: "", ...extra,
+  };
+}
+
+/** JSON do projeto → modelo editável (listas de notas viram texto). */
+function toEditable(data) {
+  const text = (v) => (Array.isArray(v) ? v.join(" ") : v == null ? "" : String(v));
+  const sig = Array.isArray(data.time_signature) ? data.time_signature.join("/") : data.time_signature || "4/4";
+  const [num, den] = String(sig).split("/").map(Number);
+  const bpb = num && den ? (num * 4) / den : 4;
+  const chords = (Array.isArray(data.chords) ? data.chords : []).map((c) => {
+    c = c && typeof c === "object" ? c : {};
+    let beats = c.duration_beats;
+    if (beats == null) beats = c.duration_bars != null ? c.duration_bars * bpb : bpb;
+    return {
+      id: nextId++,
+      symbol: text(c.symbol),
+      duration_beats: beats,
+      right_hand: text(c.right_hand), left_hand: text(c.left_hand),
+      bass: text(c.bass), notes: text(c.notes),
+      top_note: text(c.top_note), velocity: c.velocity ?? "",
+      omitted: text(c.omitted), comment: text(c.comment),
+    };
+  });
+  return {
+    schema_version: 1,
+    title: data.title ?? "Nova progressão",
+    tempo: data.tempo ?? 80,
+    time_signature: sig,
+    middle_c: data.middle_c || "C4",
+    default_velocity: data.default_velocity ?? 80,
+    comment: data.comment ?? "",
+    chords,
+  };
+}
+
+/** Modelo editável → JSON enviado ao servidor (sem ids internos). */
+function toPayload(project = state.project) {
+  const { chords, ...rest } = project;
+  return { ...rest, chords: chords.map(({ id, ...chord }) => chord) };
+}
+
+// ---------------------------------------------------------------- servidor
+async function postJSON(url, body) {
+  const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!res.ok && res.status !== 400) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+let validateTimer = null;
+function scheduleValidate() {
+  clearTimeout(validateTimer);
+  validateTimer = setTimeout(validateNow, 200);
+  saveDraftSoon();
+}
+
+async function validateNow() {
+  clearTimeout(validateTimer);
+  const seq = ++state.seq;
+  const ids = state.project.chords.map((c) => c.id);
+  try {
+    const report = await postJSON("/api/validate", toPayload());
+    if (seq !== state.seq) return;
+    state.serverDown = false;
+    state.report = report;
+    state.byId = new Map(ids.map((id, i) => [id, { chord: report.chords[i], issues: [] }]));
+    for (const issue of report.issues) {
+      if (issue.chord != null) state.byId.get(ids[issue.chord])?.issues.push(issue);
+    }
+    renderAnalysis();
+  } catch (err) {
+    if (seq !== state.seq) return;
+    if (!state.serverDown) toast("Não consegui falar com o servidor local. Ele está rodando? (python -m harmonylab)", { error: true, timeout: 8000 });
+    state.serverDown = true;
+  }
+}
+
+// ---------------------------------------------------------------- rascunho
+let draftTimer = null;
+function saveDraftSoon() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(toPayload())); } catch { /* sem armazenamento */ }
+  }, 400);
+}
+function loadDraft() {
+  try {
+    const data = JSON.parse(localStorage.getItem(DRAFT_KEY) || "null");
+    return data && Array.isArray(data.chords) ? data : null;
+  } catch { return null; }
+}
+
+// ---------------------------------------------------------------- avisos rápidos
+function toast(message, { error = false, action = null, timeout = 4500 } = {}) {
+  const box = $("#toasts");
+  const el = h("div", { class: `toast${error ? " error" : ""}` }, h("p", null, message));
+  if (action) el.append(h("button", { type: "button", onclick: () => { action.run(); el.remove(); } }, action.label));
+  box.append(el);
+  while (box.children.length > 3) box.firstElementChild.remove();
+  setTimeout(() => el.remove(), action ? Math.max(timeout, 7000) : timeout);
+}
+
+function snapshot() {
+  const saved = JSON.stringify(state.project);
+  return () => {
+    state.project = JSON.parse(saved);
+    renderAll();
+  };
+}
+
+// ---------------------------------------------------------------- configurações do projeto
+function renderSettings() {
+  const p = state.project;
+  $("#title").value = p.title;
+  $("#tempo").value = p.tempo;
+  $("#default-velocity").value = p.default_velocity;
+  $("#middle-c").value = p.middle_c;
+  const select = $("#time-signature");
+  const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
+  select.replaceChildren(...options.map((sig) => h("option", { value: sig }, sig)));
+  select.value = p.time_signature;
+}
+
+function bindSettings() {
+  const bind = (selector, key, after) => $(selector).addEventListener("input", (e) => {
+    state.project[key] = e.target.value;
+    after?.();
+    scheduleValidate();
+  });
+  bind("#title", "title");
+  bind("#tempo", "tempo");
+  bind("#default-velocity", "default_velocity", () => {
+    for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
+  });
+  bind("#time-signature", "time_signature", () => state.project.chords.forEach(updateDuration));
+  $("#middle-c").addEventListener("change", changeConvention);
+}
+
+async function changeConvention(e) {
+  const to = e.target.value;
+  const from = state.project.middle_c;
+  if (to === from) return;
+  try {
+    const converted = await postJSON("/api/convention", { project: toPayload(), to });
+    const ids = state.project.chords.map((c) => c.id);
+    state.project = toEditable(converted);
+    state.project.chords.forEach((c, i) => { if (ids[i]) c.id = ids[i]; });
+    renderAll();
+    toast(`Nomes reescritos com MIDI 60 = ${to}. As teclas exportadas não mudaram.`);
+  } catch {
+    e.target.value = from;
+    toast("Não foi possível trocar a convenção agora.", { error: true });
+  }
+}
+
+// ---------------------------------------------------------------- cartões de acorde
+function noteField(chord, r, part, placeholder) {
+  const id = `f-${chord.id}-${part}`;
+  r.inputs[part] = h("input", {
+    ...noteInputProps, id, class: "notes", value: chord[part], placeholder,
+    "aria-describedby": `${id}-msg`,
+    oninput: (e) => { chord[part] = e.target.value; scheduleValidate(); },
+  });
+  r.msgs[part] = h("span", { class: "field-msg", id: `${id}-msg` });
+  return h("label", { class: `field part-field ${PART_CLASS[part]}`, for: id },
+    h("span", { class: "label" }, PART_LABEL[part]), r.inputs[part], r.msgs[part]);
+}
+
+function chordCard(chord, index, total) {
+  const r = { inputs: {}, msgs: {} };
+  refs.set(chord, r);
+  const n = index + 1;
+
+  // Cabeçalho: número, nome, soprano e ▶
+  r.symbol = h("input", {
+    type: "text", class: "chord-symbol", value: chord.symbol, placeholder: "Nome do acorde",
+    autocomplete: "off", spellcheck: false, "aria-label": `Nome do acorde ${n}`,
+    oninput: (e) => { chord.symbol = e.target.value; scheduleValidate(); },
+  });
+  r.pos = h("span", { class: "chord-pos" });
+  r.badge = h("span", { class: "soprano-badge", title: "Soprano: a nota mais aguda" });
+  const head = h("div", { class: "chord-head" },
+    h("span", { class: "chord-index", "aria-hidden": "true" }, n),
+    h("div", { style: "flex:1;min-width:0" }, r.symbol, r.pos),
+    r.badge,
+    h("button", { type: "button", class: "btn ghost icon-only", "aria-label": `Ouvir acorde ${n}`, title: "Ouvir este acorde", onclick: () => playOne(chord) }, icon("play")),
+  );
+
+  // O que vai para o MIDI: teclado + notas do grave ao agudo
+  r.kb = h("div", { class: "kb", role: "img", "aria-label": "Teclas do voicing" });
+  r.chips = h("div", { class: "chips" });
+  r.spacing = h("p", { class: "spacing" });
+  const view = h("div", { class: "voicing-view" }, r.kb, r.chips, r.spacing);
+
+  const hands = h("div", { class: "hands" },
+    noteField(chord, r, "right_hand", "ex.: D4 Eb4 G4 C5"),
+    noteField(chord, r, "left_hand", "ex.: B2 A3"),
+  );
+
+  // Duração
+  r.segments = [0.5, 1, 2].map((factor) => h("button", {
+    type: "button", "aria-pressed": "false",
+    onclick: () => {
+      chord.duration_beats = beatsPerBar() * factor;
+      r.beats.value = chord.duration_beats;
+      updateDuration(chord);
+      scheduleValidate();
+    },
+  }, factor === 0.5 ? "½ comp." : `${factor} comp.`));
+  r.segments.forEach((b, i) => { b.dataset.factor = [0.5, 1, 2][i]; });
+  r.beats = h("input", {
+    type: "number", class: "beats-input", inputmode: "decimal", min: "0", step: "any",
+    value: chord.duration_beats, "aria-label": "Duração em tempos de semínima", title: "Tempos de semínima",
+    oninput: (e) => { chord.duration_beats = e.target.value; updateDuration(chord); scheduleValidate(); },
+  });
+  r.inputs.duration_beats = r.beats;
+  r.durHint = h("span", { class: "unit-hint" });
+  r.msgs.duration_beats = h("span", { class: "field-msg" });
+  const duration = h("div", { class: "field duration" },
+    h("span", { class: "label" }, "Duração"),
+    h("div", { class: "duration-row" }, h("div", { class: "segmented", role: "group", "aria-label": "Duração em compassos" }, r.segments), r.beats),
+    r.durHint, r.msgs.duration_beats);
+
+  // Velocity
+  const velId = `f-${chord.id}-vel`;
+  r.velocity = h("input", {
+    id: velId, type: "number", inputmode: "numeric", min: "1", max: "127", step: "1",
+    value: chord.velocity, placeholder: String(state.project.default_velocity || 80),
+    oninput: (e) => { chord.velocity = e.target.value; scheduleValidate(); },
+  });
+  r.inputs.velocity = r.velocity;
+  r.msgs.velocity = h("span", { class: "field-msg" });
+  const velocity = h("label", { class: "field", for: velId }, h("span", { class: "label" }, "Velocity"), r.velocity, r.msgs.velocity);
+
+  // Soprano travado
+  const topId = `f-${chord.id}-top`;
+  r.top = h("input", {
+    ...noteInputProps, id: topId, class: "notes", value: chord.top_note, placeholder: "auto",
+    oninput: (e) => { chord.top_note = e.target.value; updateLock(chord); scheduleValidate(); },
+  });
+  r.inputs.top_note = r.top;
+  r.lock = h("button", { type: "button", class: "btn secondary small", onclick: () => toggleLock(chord) });
+  r.msgs.top_note = h("span", { class: "field-msg" });
+  const soprano = h("div", { class: "field" },
+    h("label", { class: "label", for: topId }, "Soprano travado"),
+    h("div", { class: "with-button" }, r.top, r.lock), r.msgs.top_note);
+
+  const params = h("div", { class: "chord-params" }, duration, h("div", { class: "params-pair" }, velocity, soprano));
+
+  // Mais opções
+  r.omitted = h("input", {
+    type: "text", value: chord.omitted, placeholder: "ex.: 5, B", autocomplete: "off",
+    oninput: (e) => { chord.omitted = e.target.value; scheduleValidate(); },
+  });
+  r.inputs.omitted = r.omitted;
+  r.msgs.omitted = h("span", { class: "field-msg" });
+  r.comment = h("textarea", {
+    rows: "2", placeholder: "Ideia, origem da escala, o que testar…",
+    oninput: (e) => { chord.comment = e.target.value; saveDraftSoon(); },
+  });
+  r.comment.value = chord.comment;
+  const hasMore = Boolean(chord.bass || chord.notes || chord.omitted || chord.comment);
+  r.more = h("details", { class: "more", open: hasMore },
+    h("summary", null, "Mais: baixo/pedal e comentário"),
+    h("div", { class: "more-body" },
+      noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
+      noteField(chord, r, "notes", "ex.: G3 B3"),
+      h("label", { class: "field" }, h("span", { class: "label" }, "Notas omitidas (só anotação)"), r.omitted, r.msgs.omitted),
+      h("label", { class: "field" }, h("span", { class: "label" }, "Comentário"), r.comment),
+    ));
+
+  r.issues = h("ul", { class: "issues" });
+
+  const actions = h("div", { class: "chord-actions" },
+    h("button", { type: "button", class: "btn ghost small icon-only", "aria-label": `Mover acorde ${n} para cima`, title: "Mover para cima", disabled: index === 0, onclick: () => moveChord(chord, -1) }, icon("up")),
+    h("button", { type: "button", class: "btn ghost small icon-only", "aria-label": `Mover acorde ${n} para baixo`, title: "Mover para baixo", disabled: index === total - 1, onclick: () => moveChord(chord, 1) }, icon("down")),
+    h("span", { class: "spacer" }),
+    h("button", { type: "button", class: "btn ghost small", onclick: () => duplicateChord(chord) }, icon("copy"), "Duplicar"),
+    h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
+  );
+
+  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, view, hands, params, r.more, r.issues, actions);
+  updateDuration(chord);
+  updateLock(chord);
+  return r.card;
+}
+
+function updateDuration(chord) {
+  const r = refs.get(chord);
+  if (!r) return;
+  const beats = toNumber(chord.duration_beats);
+  const bpb = beatsPerBar();
+  r.segments.forEach((b) => b.setAttribute("aria-pressed", String(Math.abs(beats - bpb * Number(b.dataset.factor)) < 1e-9)));
+  const bars = barsText(beats);
+  r.durHint.textContent = bars ? `em tempos de semínima · = ${bars}` : "em tempos de semínima";
+}
+
+function updateLock(chord) {
+  const r = refs.get(chord);
+  const locked = Boolean(String(chord.top_note).trim());
+  r.lock.replaceChildren(icon(locked ? "unlock" : "lock"), locked ? "Soltar" : "Travar");
+  r.lock.title = locked ? "Voltar ao soprano automático" : "Travar a nota mais aguda atual";
+}
+
+function toggleLock(chord) {
+  const r = refs.get(chord);
+  if (String(chord.top_note).trim()) {
+    chord.top_note = "";
+  } else {
+    const top = state.byId.get(chord.id)?.chord?.top;
+    if (!top) { toast("Digite as notas do acorde antes de travar o soprano."); return; }
+    chord.top_note = top.name;
+  }
+  r.top.value = chord.top_note;
+  updateLock(chord);
+  scheduleValidate();
+}
+
+function renderChords() {
+  const chords = state.project.chords;
+  $("#chords").replaceChildren(...chords.map((c, i) => chordCard(c, i, chords.length)));
+  renderAnalysis();
+}
+
+function renderAll() {
+  renderSettings();
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+}
+
+// ---------------------------------------------------------------- análise na tela
+const ISSUE_ICON = { error: "error", warning: "warning", info: "info" };
+const issueItem = (issue) => h("li", { class: `issue ${issue.level}` }, icon(ISSUE_ICON[issue.level]), h("span", null, issue.message));
+
+function renderAnalysis() {
+  const p = state.project;
+  const report = state.report;
+  const middleC = report?.middle_c || p.middle_c;
+
+  // Mesma faixa de teclado em todos os cartões: fica fácil ver as vozes andando.
+  const all = [];
+  for (const chord of p.chords) for (const note of state.byId.get(chord.id)?.chord?.notes || []) all.push(note.midi);
+  const [low, high] = keyboardRange(all);
+
+  let start = 0;
+  const bpb = beatsPerBar();
+  p.chords.forEach((chord) => {
+    const r = refs.get(chord);
+    if (!r) return;
+    const entry = state.byId.get(chord.id);
+    const info = entry?.chord;
+    const issues = entry?.issues || [];
+
+    const bar = Math.floor(start / bpb + 1e-9) + 1;
+    const beatInBar = start - (bar - 1) * bpb + 1;
+    r.pos.textContent = Math.abs(beatInBar - 1) < 1e-9 ? `compasso ${bar}` : `compasso ${bar} · tempo ${fmt(beatInBar)}`;
+    const beats = toNumber(chord.duration_beats);
+    start += Number.isFinite(beats) && beats > 0 ? beats : 0;
+
+    renderKeyboard(r.kb, { low, high, notes: info?.notes || [], top: info?.top?.midi ?? null, middleC });
+    r.card.classList.toggle("is-rest", Boolean(info?.is_rest));
+
+    // Soprano
+    r.badge.replaceChildren();
+    if (info?.top) r.badge.append(icon(info.top_locked ? "lock" : "note"), info.top.name);
+    r.top.placeholder = info?.top ? `auto · ${info.top.name}` : "auto";
+
+    // Fichas
+    if (!info) {
+      r.chips.replaceChildren();
+      r.spacing.textContent = "";
+    } else if (info.is_rest) {
+      r.chips.replaceChildren(h("span", { class: "rest-note" }, `Pausa · silêncio de ${barsText(info.duration_beats) || `${fmt(info.duration_beats)} tempos`}`));
+      r.spacing.textContent = "";
+    } else {
+      const topMidi = info.top?.midi;
+      r.chips.replaceChildren(...info.notes.map((note) => h("span", {
+        class: `chip ${PART_CLASS[note.part]}${note.midi === topMidi ? " top" : ""}`,
+        title: `${PART_LABEL[note.part]} · MIDI ${note.midi}`,
+      }, h("b", null, note.name), h("small", null, note.midi === topMidi ? `${note.midi} · topo` : note.midi))));
+      const parts = ["grave → agudo"];
+      if (info.spacing.length) parts.push(`intervalos entre vozes: ${info.spacing.join(" · ")} semitons`);
+      if (info.doublings.length) parts.push(`dobras: ${info.doublings.join(", ")}`);
+      r.spacing.textContent = parts.join(" — ");
+    }
+
+    // Erros por campo; avisos e notas embaixo
+    let hasError = false;
+    for (const field of CHORD_FIELDS) {
+      const messages = issues.filter((i) => i.level === "error" && i.field === field).map((i) => i.message);
+      if (r.msgs[field]) r.msgs[field].textContent = messages.join(" ");
+      if (r.inputs[field]) r.inputs[field].setAttribute("aria-invalid", String(messages.length > 0));
+      if (messages.length) {
+        hasError = true;
+        if (field === "bass" || field === "notes" || field === "omitted") r.more.open = true;
+      }
+    }
+    const rest = issues.filter((i) => !(i.level === "error" && CHORD_FIELDS.includes(i.field)));
+    if (rest.some((i) => i.level === "error")) hasError = true;
+    r.issues.replaceChildren(...rest.map(issueItem));
+    r.card.classList.toggle("has-error", hasError);
+  });
+
+  // Problemas do projeto (BPM, compasso…)
+  const projectIssues = (report?.issues || []).filter((i) => i.chord == null);
+  $("#project-issues").replaceChildren(...projectIssues.map(issueItem));
+  for (const [selector, field] of [["#tempo", "tempo"], ["#time-signature", "time_signature"], ["#default-velocity", "default_velocity"]]) {
+    $(selector).setAttribute("aria-invalid", String(projectIssues.some((i) => i.field === field && i.level === "error")));
+  }
+
+  renderSummary();
+}
+
+function renderSummary() {
+  const report = state.report;
+  const errors = (report?.issues || []).filter((i) => i.level === "error").length;
+  const t = report?.totals;
+  if (t) {
+    const seconds = Math.round(t.seconds);
+    const time = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    const bars = t.bars === 1 ? "1 compasso" : `${fmt(t.bars)} compassos`;
+    const bpm = toNumber(state.project.tempo);
+    $("#summary").replaceChildren(
+      h("strong", null, bars),
+      `${t.chords} ${t.chords === 1 ? "acorde" : "acordes"} · ${time}${bpm > 0 ? ` · ${fmt(bpm)} BPM` : ""}`,
+    );
+  }
+  const exportBtn = $("#export");
+  exportBtn.replaceChildren(icon("download"), "Gerar MIDI");
+  if (errors) exportBtn.append(h("span", { class: "badge-count", title: `${errors} erro(s)` }, errors));
+}
+
+// ---------------------------------------------------------------- ações
+function addChord(extra = {}) {
+  const chord = blankChord(extra);
+  state.project.chords.push(chord);
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+  const r = refs.get(chord);
+  r.card.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!extra.symbol) r.symbol.focus({ preventScroll: true });
+}
+
+function moveChord(chord, delta) {
+  const list = state.project.chords;
+  const i = list.indexOf(chord);
+  const j = i + delta;
+  if (j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+  refs.get(chord).card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function duplicateChord(chord) {
+  const list = state.project.chords;
+  const copy = { ...chord, id: nextId++ };
+  list.splice(list.indexOf(chord) + 1, 0, copy);
+  const entry = state.byId.get(chord.id);
+  if (entry) state.byId.set(copy.id, { chord: entry.chord, issues: [] });
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+  refs.get(copy).card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function removeChord(chord) {
+  const undo = snapshot();
+  const list = state.project.chords;
+  const index = list.indexOf(chord);
+  list.splice(index, 1);
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+  toast(`Acorde ${index + 1}${chord.symbol ? ` (${chord.symbol})` : ""} removido.`, { action: { label: "Desfazer", run: undo } });
+}
+
+function chordsForPlayback(only = null) {
+  const bpb = beatsPerBar();
+  return state.project.chords
+    .filter((c) => !only || c === only)
+    .map((c) => {
+      const info = state.byId.get(c.id)?.chord;
+      return {
+        midis: info ? info.notes.map((n) => n.midi) : [],
+        velocity: info?.velocity ?? 80,
+        beats: info?.duration_beats ?? bpb,
+      };
+    });
+}
+
+function setPlaying(index) {
+  state.project.chords.forEach((c, i) => refs.get(c)?.card.classList.toggle("is-playing", i === index));
+}
+
+function renderPlayButton() {
+  const label = state.playing ? "Parar" : "Ouvir";
+  const button = $("#play-all");
+  button.replaceChildren(icon(state.playing ? "stop" : "play"), h("span", { class: "btn-text" }, label));
+  button.setAttribute("aria-label", state.playing ? "Parar a pré-escuta" : "Ouvir a progressão (pré-escuta simples)");
+}
+
+function stopPlayback() {
+  player.stop();
+  state.playing = false;
+  setPlaying(-1);
+  renderPlayButton();
+}
+
+async function playAll() {
+  if (state.playing) return stopPlayback();
+  await validateNow();
+  const bpm = toNumber(state.project.tempo);
+  state.playing = true;
+  renderPlayButton();
+  player.play(chordsForPlayback(), bpm > 0 ? bpm : 80, {
+    onStep: (i) => setPlaying(i),
+    onEnd: () => stopPlayback(),
+  });
+}
+
+async function playOne(chord) {
+  stopPlayback();
+  await validateNow();
+  const bpm = toNumber(state.project.tempo);
+  const [data] = chordsForPlayback(chord);
+  if (!data.midis.length) { toast("Este acorde ainda não tem notas válidas."); return; }
+  const index = state.project.chords.indexOf(chord);
+  data.beats = Math.min(data.beats, (bpm > 0 ? bpm : 80) / 60 * 4); // no máximo ~4 s
+  player.play([data], bpm > 0 ? bpm : 80, { onStep: () => setPlaying(index), onEnd: () => setPlaying(-1) });
+}
+
+function focusFirstError() {
+  for (const chord of state.project.chords) {
+    const r = refs.get(chord);
+    if (r?.card.classList.contains("has-error")) {
+      r.card.scrollIntoView({ behavior: "smooth", block: "center" });
+      r.card.querySelector('[aria-invalid="true"]')?.focus({ preventScroll: true });
+      return;
+    }
+  }
+  $(".project").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function saveFile(blob, filename, description, mime, ext) {
+  if ("showSaveFilePicker" in window) {
+    let handle;
+    try {
+      handle = await window.showSaveFilePicker({ suggestedName: filename, types: [{ description, accept: { [mime]: [ext] } }] });
+    } catch (err) {
+      if (err.name === "AbortError") return null;
+      handle = null; // sem permissão: cai para o download comum
+    }
+    if (handle) {
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return { name: handle.name, picked: true };
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = h("a", { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return { name: filename, picked: false };
+}
+
+async function exportMidi() {
+  await validateNow();
+  if (state.serverDown) return;
+  if (!state.report?.ok) {
+    const n = state.report.issues.filter((i) => i.level === "error").length;
+    toast(n === 1 ? "Há 1 erro para corrigir antes de gerar o MIDI." : `Há ${n} erros para corrigir antes de gerar o MIDI.`, { error: true });
+    focusFirstError();
+    return;
+  }
+  const res = await fetch("/api/export", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(toPayload()) });
+  if (!res.ok) { toast("O servidor recusou a exportação. Confira os avisos em vermelho.", { error: true }); return; }
+  const blob = await res.blob();
+  const filename = res.headers.get("X-Filename") || `${slugify(state.project.title)}.mid`;
+  const saved = await saveFile(blob, filename, "Arquivo MIDI", "audio/midi", ".mid");
+  if (!saved) return;
+  toast(saved.picked ? `${saved.name} salvo. Arraste para a sua DAW.` : `${saved.name} baixado. Arraste da pasta de downloads para a sua DAW.`);
+}
+
+async function saveProject() {
+  await validateNow();
+  const data = state.report?.ok ? state.report.project : toPayload();
+  const blob = new Blob([JSON.stringify(data, null, 2) + "\n"], { type: "application/json" });
+  const saved = await saveFile(blob, `${slugify(state.project.title)}.json`, "Projeto Harmony Lab", "application/json", ".json");
+  if (saved) toast(`Projeto salvo: ${saved.name}`);
+}
+
+function loadProject(data, message) {
+  const undo = snapshot();
+  stopPlayback();
+  state.project = toEditable(data);
+  state.byId = new Map();
+  renderAll();
+  toast(message, { action: { label: "Desfazer", run: undo } });
+}
+
+/** Aceita o JSON puro ou dentro de um bloco ```json … ``` (como o ChatGPT costuma responder). */
+function parseProjectText(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const source = fenced ? fenced[1] : text;
+  const start = source.indexOf("{");
+  const end = source.lastIndexOf("}");
+  if (start < 0 || end < start) throw new Error("Não encontrei um objeto JSON ({ … }) no texto.");
+  let data;
+  try {
+    data = JSON.parse(source.slice(start, end + 1));
+  } catch (err) {
+    throw new Error(`JSON inválido: ${err.message}`);
+  }
+  if (!Array.isArray(data.chords)) throw new Error('O JSON precisa ter a lista "chords".');
+  return data;
+}
+
+function openPaste() {
+  $("#paste-error").textContent = "";
+  $("#paste-dialog").showModal();
+  $("#paste-text").focus();
+}
+
+async function openFile(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    if (!data || typeof data !== "object" || Array.isArray(data)) throw new Error();
+    loadProject(data, `Projeto aberto: ${data.title || file.name}`);
+  } catch {
+    toast(`Não consegui ler ${file.name} como projeto JSON.`, { error: true });
+  }
+}
+
+async function loadExample() {
+  try {
+    const res = await fetch("/api/example");
+    if (!res.ok) throw new Error();
+    loadProject(await res.json(), "Exemplo carregado.");
+  } catch {
+    toast("Exemplo indisponível.", { error: true });
+  }
+}
+
+function newProject() {
+  loadProject({ title: "Nova progressão", tempo: state.project.tempo, time_signature: state.project.time_signature,
+    middle_c: state.project.middle_c, default_velocity: state.project.default_velocity, chords: [{}] }, "Projeto novo.");
+}
+
+// ---------------------------------------------------------------- início
+function bindUi() {
+  $("#menu-button").append(icon("dots"));
+  $("#add-chord").append(icon("plus"), "Acorde");
+  $("#add-rest").append(icon("plus"), "Pausa");
+  renderPlayButton();
+  document.querySelectorAll(".menu-item[data-icon]").forEach((b) => b.prepend(icon(b.dataset.icon)));
+
+  $("#add-chord").addEventListener("click", () => addChord());
+  $("#add-rest").addEventListener("click", () => addChord({ symbol: "Pausa" }));
+  $("#play-all").addEventListener("click", playAll);
+  $("#export").addEventListener("click", exportMidi);
+
+  const menu = $("#menu");
+  $("#menu-button").addEventListener("click", () => menu.showModal());
+  menu.addEventListener("click", (e) => { if (e.target === menu) menu.close("close"); });
+  menu.addEventListener("close", () => {
+    const action = menu.returnValue;
+    menu.returnValue = "";
+    if (action === "open") $("#file-input").click();
+    else if (action === "paste") openPaste();
+    else if (action === "save") saveProject();
+    else if (action === "example") loadExample();
+    else if (action === "new") newProject();
+  });
+  const paste = $("#paste-dialog");
+  $("#paste-load").addEventListener("click", (e) => {
+    const text = $("#paste-text").value.trim();
+    try {
+      const data = parseProjectText(text);
+      loadProject(data, `Projeto colado: ${data.title || "sem título"}`);
+    } catch (err) {
+      e.preventDefault(); // mantém o diálogo aberto
+      $("#paste-error").textContent = err.message;
+    }
+  });
+  paste.addEventListener("click", (e) => { if (e.target === paste) paste.close(); });
+  $("#file-input").addEventListener("change", (e) => {
+    const [file] = e.target.files;
+    if (file) openFile(file);
+    e.target.value = "";
+  });
+  bindSettings();
+}
+
+async function init() {
+  bindUi();
+  let data = loadDraft();
+  if (!data) {
+    try {
+      const res = await fetch("/api/example");
+      if (res.ok) data = await res.json();
+    } catch { /* servidor fora do ar: começa vazio */ }
+  }
+  state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
+  renderAll();
+}
+
+init();

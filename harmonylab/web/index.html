@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f4f0" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0e0f12" media="(prefers-color-scheme: dark)">
+  <title>Harmony Lab</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/styles.css">
+  <script type="module" src="/static/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="/static/icon.svg" alt="" width="36" height="36">
+      <div>
+        <h1>Harmony Lab</h1>
+        <p>Voicings exatos → MIDI</p>
+      </div>
+    </div>
+    <button class="btn ghost icon-only" id="menu-button" aria-haspopup="dialog" aria-label="Menu do projeto"></button>
+  </header>
+
+  <main id="main">
+    <section class="card project" aria-labelledby="project-heading">
+      <h2 id="project-heading" class="sr-only">Projeto</h2>
+      <label class="title-field">
+        <span class="sr-only">Título do projeto</span>
+        <input id="title" type="text" placeholder="Título da progressão" autocomplete="off">
+      </label>
+      <div class="settings">
+        <label class="field">
+          <span class="label">BPM</span>
+          <input id="tempo" type="number" inputmode="decimal" min="1" max="999" step="any">
+        </label>
+        <label class="field">
+          <span class="label">Compasso</span>
+          <select id="time-signature"></select>
+        </label>
+        <label class="field">
+          <span class="label">Velocity padrão</span>
+          <input id="default-velocity" type="number" inputmode="numeric" min="1" max="127" step="1">
+        </label>
+        <label class="field">
+          <span class="label">Dó central (MIDI 60)</span>
+          <select id="middle-c">
+            <option value="C4">C4 · científico</option>
+            <option value="C3">C3 · Ableton/Studio One</option>
+          </select>
+        </label>
+      </div>
+      <ul class="issues" id="project-issues" aria-live="polite"></ul>
+    </section>
+
+    <section aria-labelledby="progression-heading">
+      <div class="section-head">
+        <h2 id="progression-heading">Progressão</h2>
+        <span class="legend" aria-hidden="true">
+          <span class="dot rh"></span>Mão direita
+          <span class="dot lh"></span>Mão esquerda
+          <span class="dot bass"></span>Baixo
+        </span>
+      </div>
+      <ol class="chords" id="chords"></ol>
+      <div class="add-row">
+        <button class="btn outline" id="add-chord"></button>
+        <button class="btn ghost" id="add-rest"></button>
+      </div>
+    </section>
+
+    <details class="card help">
+      <summary>Oitavas, DAW e formato das notas</summary>
+      <div class="help-body">
+        <p><strong>Como escrever notas.</strong> Letra + acidente + oitava: <code>C4</code>, <code>F#2</code>, <code>Eb3</code>, <code>Bb3</code>, <code>C##4</code>. Também vale o número MIDI (<code>60</code>). Separe por espaço, vírgula ou travessão: <code>F#2 – C3</code>.</p>
+        <p><strong>Convenção de oitava.</strong> Internamente tudo é número MIDI. Por padrão, <strong>MIDI 60 = C4</strong> (dó central, padrão científico). Ableton Live e Studio One costumam chamar essa mesma tecla de <strong>C3</strong>: é a mesma nota, só muda o nome. Se preferir ver os nomes como na sua DAW, troque “Dó central” para C3 — as teclas exportadas continuam idênticas.</p>
+        <p><strong>Na DAW.</strong> Arraste o <code>.mid</code> para uma faixa de instrumento. Algumas DAWs não trocam o BPM do projeto ao importar: as notas já estão em tempos musicais, então ficam certas em compassos; ajuste o BPM do projeto se quiser o andamento do arquivo.</p>
+        <p><strong>O nome do acorde é só um rótulo.</strong> O MIDI usa exatamente as notas digitadas. O nome vai como marcador no arquivo.</p>
+      </div>
+    </details>
+  </main>
+
+  <footer class="actionbar">
+    <div class="actionbar-inner">
+      <p class="summary" id="summary" aria-live="polite"></p>
+      <div class="actions">
+        <button class="btn secondary" id="play-all"></button>
+        <button class="btn primary" id="export"></button>
+      </div>
+    </div>
+  </footer>
+
+  <dialog id="menu" class="sheet" aria-label="Menu do projeto">
+    <form method="dialog" class="sheet-body">
+      <p class="sheet-title">Projeto</p>
+      <button class="menu-item" value="open" data-icon="folder">Abrir projeto (.json)</button>
+      <button class="menu-item" value="paste" data-icon="paste">Colar JSON (ex.: do ChatGPT)</button>
+      <button class="menu-item" value="save" data-icon="save">Salvar projeto (.json)</button>
+      <button class="menu-item" value="example" data-icon="sparkle">Carregar exemplo</button>
+      <button class="menu-item" value="new" data-icon="file">Novo projeto vazio</button>
+      <button class="menu-item subtle" value="close">Fechar</button>
+    </form>
+  </dialog>
+
+  <dialog id="paste-dialog" class="sheet" aria-labelledby="paste-title">
+    <form method="dialog" class="sheet-body paste-body">
+      <p class="sheet-title" id="paste-title">Colar projeto JSON</p>
+      <p class="paste-hint">Cole um projeto no formato do Harmony Lab (veja o README). Ele substitui a progressão atual — dá para desfazer.</p>
+      <label class="field">
+        <span class="sr-only">JSON do projeto</span>
+        <textarea id="paste-text" rows="10" spellcheck="false" placeholder='{ "tempo": 80, "chords": [ { "symbol": "Em9", "left_hand": ["E2", "B2", "D3"], "right_hand": ["G3", "F#4"] } ] }'></textarea>
+      </label>
+      <span class="field-msg" id="paste-error"></span>
+      <div class="paste-actions">
+        <button class="btn ghost" value="cancel" formnovalidate>Cancelar</button>
+        <button class="btn primary" value="load" id="paste-load">Carregar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <input type="file" id="file-input" accept=".json,application/json" hidden>
+  <div class="toasts" id="toasts" role="status" aria-live="polite"></div>
+</body>
+</html>
