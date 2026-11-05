@@ -17,28 +17,39 @@ discutiu — mão esquerda, mão direita, oitavas, soprano — num arquivo **`.m
 ## Publicar e instalar no celular
 
 O app é só um conjunto de arquivos estáticos (`harmonalab/web/`). Para ter um endereço `https://` (exigência do
-celular para instalar), publique na Cloudflare — grátis e sem login para quem usa.
+celular para instalar) e poder compartilhar, publique no **Cloudflare Pages** — grátis, sem login para quem usa e com
+endereço próprio: **https://harmona-lab.pages.dev**.
 
-**Uma vez só, no painel da Cloudflare** (*Workers & Pages → Create → Import a repository*):
+**Uma vez só, no painel da Cloudflare:** *Workers & Pages → Create* → escolha **Pages** (não Worker) →
+*Import an existing Git repository*. Se o painel abrir direto na criação de um Worker, procure o link para Pages
+(“Looking to deploy Pages?”).
 
 | Campo | Valor |
 |---|---|
 | Repositório | `harmona-lab` |
-| Nome do projeto | `harmona-lab` |
+| Nome do projeto | `harmona-lab` — vira o endereço `harmona-lab.pages.dev` |
 | Branch de produção | `main` |
-| Root directory (pasta raiz) | *(vazio — a raiz do repositório)* |
+| Framework preset | *None* |
 | Build command | *(vazio)* |
-| Deploy command | `npx wrangler deploy` |
+| Build output directory | `harmonalab/web` |
+| Root directory | *(vazio)* |
 
 Se o repositório não aparecer na lista, o app do GitHub da Cloudflare ainda não tem acesso a ele: o próprio painel
-oferece o link para liberar este repositório (*Configure GitHub* / *Add repository*).
+oferece o link para liberar (*Configure GitHub* / *Add repository*). Se o nome `harmona-lab` já estiver em uso por
+outra pessoa, a Cloudflare acrescenta um sufixo; o painel mostra o endereço final.
 
-O `wrangler.jsonc` já diz o que publicar (só a pasta `harmonalab/web`). Daí em diante, todo `git push` na `main`
-publica sozinho. O endereço fica como `https://harmona-lab.<subdomínio-da-conta>.workers.dev` — na conta que já
-hospeda o CRM, provavelmente **https://harmona-lab.crm-canais-bx2.workers.dev**. Não ligue o *Access* (login) neste
-Worker.
+Daí em diante, todo `git push` na `main` publica sozinho (o `wrangler.jsonc` diz o que publicar). Outras branches
+ganham um endereço de prévia próprio, bom para testar antes.
 
-Sem painel, dá para publicar à mão, na pasta do projeto: `npx wrangler login && npx wrangler deploy`.
+Sem painel, dá para publicar à mão, na pasta do projeto: `npx wrangler login && npx wrangler pages deploy`.
+
+**Endereço próprio (opcional).** Para algo como `harmonalab.app` ou `harmonalab.com.br`, registre o domínio (a
+Cloudflare vende a preço de custo; `.com.br` sai no Registro.br) e, no projeto do Pages, use *Custom domains → Set up
+a domain*. O custo é só o do domínio, por ano; a hospedagem continua grátis.
+
+**Compartilhar com amigos.** Basta mandar o endereço. Cada pessoa instala no próprio aparelho, e os projetos de cada
+um ficam só nesse aparelho: nada vai para servidor e ninguém vê o que o outro criou. Para trocar progressões, use
+*Salvar projeto (.json)* e *Abrir* / *Colar JSON*.
 
 **Instalar:** abra o endereço no celular.
 - **Android (Chrome):** menu ⋯ do app → *Instalar como app* (ou menu do Chrome → *Instalar app*).
@@ -278,7 +289,7 @@ harmona-lab/
 ├── design/logo.mjs     desenho do logotipo: gera icon.svg e os ícones PNG (node design/logo.mjs)
 ├── examples/           projeto de exemplo (.json) e o .mid gerado
 ├── tests/              testes automatizados (pytest) + js_engine_runner.mjs (paridade)
-├── wrangler.jsonc      publicação na Cloudflare (só estáticos)
+├── wrangler.jsonc      publicação no Cloudflare Pages (só estáticos)
 ├── iniciar-windows.bat / iniciar-mac-linux.sh
 ├── requirements.txt    mido
 └── requirements-dev.txt  + pytest
