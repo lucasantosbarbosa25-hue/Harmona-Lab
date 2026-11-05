@@ -1,3 +1,5 @@
+<p align="center"><img src="harmonalab/web/icon.svg" alt="Harmona Lab" width="120"></p>
+
 # Harmona Lab
 
 Laboratório de **voicings, reharmonização e condução de vozes** que transforma exatamente as notas que você
@@ -273,6 +275,7 @@ harmona-lab/
 │       ├── engine/     motor em JS: pitch, model, analysis, midi (espelho do Python)
 │       ├── manifest.webmanifest, sw.js, icons/   instalação e modo offline
 │       └── example.json                    exemplo (cópia de examples/, conferida por teste)
+├── design/logo.mjs     desenho do logotipo: gera icon.svg e os ícones PNG (node design/logo.mjs)
 ├── examples/           projeto de exemplo (.json) e o .mid gerado
 ├── tests/              testes automatizados (pytest) + js_engine_runner.mjs (paridade)
 ├── wrangler.jsonc      publicação na Cloudflare (só estáticos)

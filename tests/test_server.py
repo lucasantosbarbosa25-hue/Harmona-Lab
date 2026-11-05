@@ -70,6 +70,21 @@ def test_arquivos_do_modo_offline_existem():
     assert modules <= set(shell)
 
 
+def test_icones_principais():
+    import struct
+    import xml.etree.ElementTree as ET
+
+    ET.parse(WEB_DIR / "icon.svg")  # SVG válido (logo do cabeçalho e da aba)
+    expected = {"icon-192.png": (192, True), "icon-512.png": (512, True),
+                "maskable-512.png": (512, False), "apple-touch-icon.png": (180, False)}
+    for name, (size, transparent) in expected.items():
+        head = (WEB_DIR / "icons" / name).read_bytes()[:26]
+        assert head[:8] == b"\x89PNG\r\n\x1a\n", name
+        assert struct.unpack(">II", head[16:24]) == (size, size), name
+        # ícones recortados pelo sistema (Android maskable, iPhone) não podem ter transparência
+        assert (head[25] == 6) == transparent, name
+
+
 def test_manifesto_instalavel():
     manifest = json.loads((WEB_DIR / "manifest.webmanifest").read_text(encoding="utf-8"))
     assert manifest["display"] == "standalone" and manifest["start_url"] == "./"
