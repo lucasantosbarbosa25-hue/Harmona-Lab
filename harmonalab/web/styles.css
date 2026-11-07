@@ -293,6 +293,12 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 }
 .segmented button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
 .beats-input { width: 84px !important; flex: none; text-align: center; }
+
+/* Strum */
+.strum { display: grid; gap: 8px; }
+.strum .segmented button { white-space: normal; line-height: 1.15; padding: 4px; }
+.strum-delay { display: grid; gap: 6px; }
+.strum-hint { font-size: .82rem; color: var(--muted); line-height: 1.4; }
 .unit-hint { font-size: .75rem; color: var(--muted); }
 
 .with-button { display: flex; gap: 6px; }

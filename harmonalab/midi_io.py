@@ -38,6 +38,24 @@ def beats_to_ticks(beats: float, ticks_per_beat: int = TICKS_PER_BEAT) -> int:
     return int(round(beats * ticks_per_beat))
 
 
+def strum_plan(count: int, delay_ms: float, tempo: float, length: int,
+               ticks_per_beat: int = TICKS_PER_BEAT) -> tuple[list[int], bool]:
+    """Quando cada nota de um strum entra, em ticks depois do início do acorde.
+
+    A 1ª nota entra no tempo e cada seguinte ``delay_ms`` depois da anterior. O fim do acorde não muda.
+    O strum ocupa no máximo metade do acorde: se não couber, o espaço entre as notas encolhe.
+    Devolve (deslocamentos na ordem em que as notas entram, se precisou encolher).
+    """
+    if count < 2 or delay_ms <= 0:
+        return [0] * count, False
+    step = delay_ms * tempo * ticks_per_beat / 60000
+    limit = length / 2
+    compressed = (count - 1) * step > limit
+    if compressed:
+        step = limit / (count - 1)
+    return [int(round(i * step)) for i in range(count)], compressed
+
+
 def _meta_text(text: str) -> str:
     """Texto seguro para metadados MIDI (latin-1)."""
     for src, dst in _TEXT_REPLACEMENTS.items():
@@ -56,8 +74,15 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         velocity = project.velocity_for(chord)
         if markers and chord.symbol:
             events.append((tick, 1, 0, mido.MetaMessage("marker", text=_meta_text(chord.symbol))))
-        for pitch in chord.pitches:
-            events.append((tick, 2, pitch, mido.Message("note_on", channel=CHANNEL, note=pitch, velocity=velocity)))
+        pitches = chord.pitches  # do grave ao agudo
+        offsets = [0] * len(pitches)
+        direction = project.strum_for(chord)
+        if direction != "off":
+            offsets, _ = strum_plan(len(pitches), project.strum_delay_ms, project.tempo, length, ticks_per_beat)
+            if direction == "down":
+                pitches = pitches[::-1]  # a nota mais aguda entra primeiro
+        for pitch, offset in zip(pitches, offsets):
+            events.append((tick + offset, 2, pitch, mido.Message("note_on", channel=CHANNEL, note=pitch, velocity=velocity)))
             events.append((tick + length, 0, pitch, mido.Message("note_off", channel=CHANNEL, note=pitch, velocity=0)))
         tick += length
     end_tick = tick

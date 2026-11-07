@@ -59,6 +59,26 @@
           </select>
         </label>
       </div>
+      <div class="strum" role="group" aria-labelledby="strum-label">
+        <span class="label" id="strum-label">Strum</span>
+        <div class="segmented" id="strum-direction" role="group" aria-label="Direção do strum">
+          <button type="button" data-value="off" aria-pressed="true">Desligado</button>
+          <button type="button" data-value="up" aria-pressed="false">Grave → agudo</button>
+          <button type="button" data-value="down" aria-pressed="false">Agudo → grave</button>
+        </div>
+        <div class="field strum-delay" id="strum-delay-row" hidden>
+          <span class="label">Atraso entre as notas</span>
+          <div class="duration-row">
+            <div class="segmented" id="strum-presets" role="group" aria-label="Atrasos comuns do strum">
+              <button type="button" data-ms="10" aria-pressed="false">10 ms</button>
+              <button type="button" data-ms="20" aria-pressed="false">20 ms</button>
+              <button type="button" data-ms="30" aria-pressed="false">30 ms</button>
+            </div>
+            <input id="strum-delay" class="beats-input" type="number" inputmode="decimal" min="1" max="250" step="any" aria-label="Atraso do strum em milissegundos">
+          </div>
+        </div>
+        <p class="strum-hint" id="strum-hint"></p>
+      </div>
       <ul class="issues" id="project-issues" aria-live="polite"></ul>
     </section>
 
@@ -86,6 +106,7 @@
         <p><strong>Na DAW.</strong> Arraste o <code>.mid</code> para uma faixa de instrumento. Algumas DAWs não trocam o BPM do projeto ao importar: as notas já estão em tempos musicais, então ficam certas em compassos; ajuste o BPM do projeto se quiser o andamento do arquivo.</p>
         <p><strong>Instalar no celular.</strong> No Android (Chrome): menu ⋯ deste app → <em>Instalar como app</em>, ou menu do Chrome → <em>Instalar app</em>. No iPhone (Safari): botão Compartilhar → <em>Adicionar à Tela de Início</em>. Depois ele abre pelo ícone, em tela cheia, e funciona sem internet. Os projetos ficam só neste aparelho; use <em>Salvar projeto</em> para levar para outro.</p>
         <p><strong>Do celular para a DAW.</strong> O <code>.mid</code> vai para a pasta Downloads. Mande para o computador como preferir (Drive, WhatsApp, e-mail, cabo) e arraste para a DAW. Quando o sistema permite, aparece o botão <em>Enviar</em> logo após gerar.</p>
+        <p><strong>Strum.</strong> Em vez de todas as notas juntas, cada nota entra uma após a outra (10 a 30 ms costuma soar natural), do grave ao agudo ou do agudo ao grave. A primeira nota entra no tempo certo e o acorde termina no mesmo instante, então nada se desloca. Desligado, o MIDI sai exatamente como digitado. Cada acorde pode trocar o strum do projeto em <em>Mais</em>.</p>
         <p><strong>O nome do acorde é só um rótulo.</strong> O MIDI usa exatamente as notas digitadas. O nome vai como marcador no arquivo.</p>
       </div>
     </details>

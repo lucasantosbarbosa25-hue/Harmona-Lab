@@ -19,6 +19,13 @@ const TEMPO_MIN = 10;
 const TEMPO_MAX = 999;
 const MAX_DURATION_BEATS = 1024;
 
+// Strum: atraso entre as notas de um acorde. "up" = do grave ao agudo; "down" = do agudo ao grave.
+export const STRUM_DIRECTIONS = ["off", "up", "down"];
+const STRUM_DELAY_MIN = 1;
+const STRUM_DELAY_MAX = 250; // milissegundos
+export const DEFAULT_STRUM_DELAY_MS = 20;
+const STRUM_HINT = 'Use "off", "up" (grave → agudo) ou "down" (agudo → grave).';
+
 export const issue = (level, message, chord = null, field = null) => ({ level, message, chord, field });
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
@@ -29,7 +36,7 @@ const has = (obj, key) => obj[key] !== undefined && obj[key] !== null;
 export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
-    top_note: null, velocity: null, omitted: [], comment: "",
+    top_note: null, velocity: null, strum: null, omitted: [], comment: "",
   };
 }
 
@@ -56,6 +63,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   }
   d.top_note = chord.top_note ? noteName(chord.top_note, middleC) : null;
   d.velocity = chord.velocity;
+  if (chord.strum !== null) d.strum = chord.strum;
   if (chord.omitted.length) d.omitted = [...chord.omitted];
   if (chord.comment) d.comment = chord.comment;
   return d;
@@ -66,7 +74,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, chords: [], comment: "",
+    default_velocity: 80, strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -74,6 +82,7 @@ export function newProject() {
 export const beatsPerBar = (project) => (project.time_signature[0] * 4) / project.time_signature[1];
 export const totalBeats = (project) => project.chords.reduce((sum, c) => sum + c.duration_beats, 0);
 export const velocityFor = (project, chord) => (chord.velocity !== null ? chord.velocity : project.default_velocity);
+export const strumFor = (project, chord) => (chord.strum !== null ? chord.strum : project.strum_direction);
 
 export function projectToDict(project) {
   const [num, den] = project.time_signature;
@@ -84,6 +93,7 @@ export function projectToDict(project) {
     time_signature: `${num}/${den}`,
     middle_c: project.middle_c,
     default_velocity: project.default_velocity,
+    strum: { direction: project.strum_direction, delay_ms: project.strum_delay_ms },
     chords: project.chords.map((c) => chordToDict(c, project.middle_c)),
   };
   if (project.comment) d.comment = project.comment;
@@ -166,6 +176,8 @@ export function loadProject(data) {
     if (vel !== null) project.default_velocity = vel;
   }
 
+  if (has(data, "strum")) loadStrum(data.strum, project, issues);
+
   let rawChords = has(data, "chords") ? data.chords : [];
   if (!Array.isArray(rawChords)) {
     issues.push(issue("error", 'O campo "chords" deve ser uma lista de acordes.', null, "chords"));
@@ -173,6 +185,30 @@ export function loadProject(data) {
   }
   rawChords.forEach((raw, index) => project.chords.push(loadChord(raw, index, project, issues)));
   return { project, issues };
+}
+
+function loadStrum(raw, project, issues) {
+  if (typeof raw === "string") raw = { direction: raw }; // atalho: "strum": "up"
+  if (!isObject(raw)) {
+    issues.push(issue("error", 'O campo "strum" deve ser um objeto, por exemplo {"direction": "up", "delay_ms": 20}, ou só a direção ("up").', null, "strum"));
+    return;
+  }
+  if (has(raw, "direction")) {
+    if (typeof raw.direction === "string" && STRUM_DIRECTIONS.includes(raw.direction)) {
+      project.strum_direction = raw.direction;
+    } else {
+      const shown = typeof raw.direction === "string" ? `: "${raw.direction}"` : "";
+      issues.push(issue("error", `Direção do strum desconhecida${shown}. ${STRUM_HINT}`, null, "strum"));
+    }
+  }
+  if (has(raw, "delay_ms")) {
+    const delay = toNumber(raw.delay_ms);
+    if (delay === null || !(delay >= STRUM_DELAY_MIN && delay <= STRUM_DELAY_MAX)) {
+      issues.push(issue("error", `Atraso do strum deve ser um número entre 1 e 250 ms (recebido "${raw.delay_ms}").`, null, "strum"));
+    } else {
+      project.strum_delay_ms = delay;
+    }
+  }
 }
 
 function loadChord(raw, index, project, issues) {
@@ -219,6 +255,16 @@ function loadChord(raw, index, project, issues) {
 
   if (raw.velocity !== undefined && raw.velocity !== null && raw.velocity !== "") {
     chord.velocity = readVelocity(raw.velocity, issues, index, "velocity");
+  }
+
+  const strum = raw.strum;
+  if (strum !== undefined && strum !== null && strum !== "") {
+    if (typeof strum === "string" && STRUM_DIRECTIONS.includes(strum)) {
+      chord.strum = strum;
+    } else {
+      const shown = typeof strum === "string" ? `: "${strum}"` : "";
+      issues.push(issue("error", `Strum do acorde desconhecido${shown}. ${STRUM_HINT}`, index, "strum"));
+    }
   }
 
   if (raw.omitted) chord.omitted = splitNoteList(raw.omitted).map(String);

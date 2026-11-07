@@ -4,7 +4,7 @@
 
 import { Player } from "./audio.js";
 import { analyzeData } from "./engine/analysis.js";
-import { midiBytes } from "./engine/midi.js";
+import { TICKS_PER_BEAT, beatsToTicks, midiBytes, strumPlan } from "./engine/midi.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 
@@ -12,7 +12,9 @@ const DRAFT_KEY = "harmonalab:draft:v1";
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
-const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "omitted"];
+const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted"];
+const STRUM_LABEL = { up: "grave → agudo", down: "agudo → grave" };
+const DEFAULT_STRUM_DELAY_MS = 20;
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -109,7 +111,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", omitted: "", comment: "", ...extra,
+    top_note: "", velocity: "", strum: "", omitted: "", comment: "", ...extra,
   };
 }
 
@@ -129,10 +131,12 @@ function toEditable(data) {
       duration_beats: beats,
       right_hand: text(c.right_hand), left_hand: text(c.left_hand),
       bass: text(c.bass), notes: text(c.notes),
-      top_note: text(c.top_note), velocity: c.velocity ?? "",
+      top_note: text(c.top_note), velocity: c.velocity ?? "", strum: text(c.strum),
       omitted: text(c.omitted), comment: text(c.comment),
     };
   });
+  // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
+  const rawStrum = typeof data.strum === "string" ? { direction: data.strum } : data.strum && typeof data.strum === "object" ? data.strum : {};
   return {
     schema_version: 1,
     title: data.title ?? "Nova progressão",
@@ -140,6 +144,7 @@ function toEditable(data) {
     time_signature: sig,
     middle_c: data.middle_c || "C4",
     default_velocity: data.default_velocity ?? 80,
+    strum: { direction: rawStrum.direction ?? "off", delay_ms: rawStrum.delay_ms ?? DEFAULT_STRUM_DELAY_MS },
     comment: data.comment ?? "",
     chords,
   };
@@ -220,6 +225,25 @@ function renderSettings() {
   const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
   select.replaceChildren(...options.map((sig) => h("option", { value: sig }, sig)));
   select.value = p.time_signature;
+  renderStrumSettings();
+}
+
+/** Atualiza os controles de strum do projeto a partir do estado. */
+function renderStrumSettings() {
+  const { direction, delay_ms: delay } = state.project.strum;
+  document.querySelectorAll("#strum-direction button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.value === direction)));
+  $("#strum-delay-row").hidden = direction === "off";
+  $("#strum-delay").value = delay;
+  updateStrumDelayInfo();
+}
+
+function updateStrumDelayInfo() {
+  const { direction, delay_ms: delay } = state.project.strum;
+  const ms = toNumber(delay);
+  document.querySelectorAll("#strum-presets button").forEach((b) => b.setAttribute("aria-pressed", String(ms === Number(b.dataset.ms))));
+  $("#strum-hint").textContent = direction === "off"
+    ? "Desligado: as notas de cada acorde começam juntas. Cada acorde pode ligar o strum em “Mais”."
+    : `A 1ª nota entra no tempo e cada próxima entra ${Number.isFinite(ms) ? fmt(ms) : "…"} ms depois da anterior, ${STRUM_LABEL[direction] || "…"}. O acorde termina no mesmo instante.`;
 }
 
 function bindSettings() {
@@ -235,6 +259,22 @@ function bindSettings() {
   });
   bind("#time-signature", "time_signature", () => state.project.chords.forEach(updateDuration));
   $("#middle-c").addEventListener("change", changeConvention);
+
+  document.querySelectorAll("#strum-direction button").forEach((b) => b.addEventListener("click", () => {
+    state.project.strum.direction = b.dataset.value;
+    renderStrumSettings();
+    scheduleValidate();
+  }));
+  document.querySelectorAll("#strum-presets button").forEach((b) => b.addEventListener("click", () => {
+    state.project.strum.delay_ms = Number(b.dataset.ms);
+    renderStrumSettings();
+    scheduleValidate();
+  }));
+  $("#strum-delay").addEventListener("input", (e) => {
+    state.project.strum.delay_ms = e.target.value; // sem redesenhar o campo enquanto a pessoa digita
+    updateStrumDelayInfo();
+    scheduleValidate();
+  });
 }
 
 function changeConvention(e) {
@@ -360,10 +400,19 @@ function chordCard(chord, index, total) {
     oninput: (e) => { chord.comment = e.target.value; saveDraftSoon(); },
   });
   r.comment.value = chord.comment;
-  const hasMore = Boolean(chord.bass || chord.notes || chord.omitted || chord.comment);
+  r.strum = h("select", {
+    id: `f-${chord.id}-strum`,
+    onchange: (e) => { chord.strum = e.target.value; scheduleValidate(); },
+  }, h("option", { value: "" }, "Seguir o projeto"), h("option", { value: "off" }, "Desligado"),
+  h("option", { value: "up" }, "Grave → agudo"), h("option", { value: "down" }, "Agudo → grave"));
+  r.strum.value = chord.strum;
+  r.inputs.strum = r.strum;
+  r.msgs.strum = h("span", { class: "field-msg" });
+  const hasMore = Boolean(chord.strum || chord.bass || chord.notes || chord.omitted || chord.comment);
   r.more = h("details", { class: "more", open: hasMore },
-    h("summary", null, "Mais: baixo/pedal e comentário"),
+    h("summary", null, "Mais: strum, baixo/pedal e comentário"),
     h("div", { class: "more-body" },
+      h("label", { class: "field wide", for: `f-${chord.id}-strum` }, h("span", { class: "label" }, "Strum deste acorde"), r.strum, r.msgs.strum),
       noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
       noteField(chord, r, "notes", "ex.: G3 B3"),
       h("label", { class: "field" }, h("span", { class: "label" }, "Notas omitidas (só anotação)"), r.omitted, r.msgs.omitted),
@@ -481,6 +530,7 @@ function renderAnalysis() {
         title: `${PART_LABEL[note.part]} · MIDI ${note.midi}`,
       }, h("b", null, note.name), h("small", null, note.midi === topMidi ? `${note.midi} · topo` : note.midi))));
       const parts = ["grave → agudo"];
+      if (info.strum && info.strum !== "off") parts.push(`strum ${STRUM_LABEL[info.strum]}, ${fmt(report.strum_delay_ms)} ms`);
       if (info.spacing.length) parts.push(`intervalos entre vozes: ${info.spacing.join(" · ")} semitons`);
       if (info.doublings.length) parts.push(`dobras: ${info.doublings.join(", ")}`);
       r.spacing.textContent = parts.join(" — ");
@@ -494,7 +544,7 @@ function renderAnalysis() {
       if (r.inputs[field]) r.inputs[field].setAttribute("aria-invalid", String(messages.length > 0));
       if (messages.length) {
         hasError = true;
-        if (field === "bass" || field === "notes" || field === "omitted") r.more.open = true;
+        if (["bass", "notes", "omitted", "strum"].includes(field)) r.more.open = true;
       }
     }
     const rest = issues.filter((i) => !(i.level === "error" && CHORD_FIELDS.includes(i.field)));
@@ -506,7 +556,7 @@ function renderAnalysis() {
   // Problemas do projeto (BPM, compasso…)
   const projectIssues = (report?.issues || []).filter((i) => i.chord == null);
   $("#project-issues").replaceChildren(...projectIssues.map(issueItem));
-  for (const [selector, field] of [["#tempo", "tempo"], ["#time-signature", "time_signature"], ["#default-velocity", "default_velocity"]]) {
+  for (const [selector, field] of [["#tempo", "tempo"], ["#time-signature", "time_signature"], ["#default-velocity", "default_velocity"], ["#strum-delay", "strum"]]) {
     $(selector).setAttribute("aria-invalid", String(projectIssues.some((i) => i.field === field && i.level === "error")));
   }
 
@@ -581,15 +631,22 @@ function removeChord(chord) {
 
 function chordsForPlayback(only = null) {
   const bpb = beatsPerBar();
+  const tempo = toNumber(state.project.tempo);
+  const bpm = tempo > 0 ? tempo : 80;
+  const delay = toNumber(state.project.strum.delay_ms);
   return state.project.chords
     .filter((c) => !only || c === only)
     .map((c) => {
       const info = state.byId.get(c.id)?.chord;
-      return {
-        midis: info ? info.notes.map((n) => n.midi) : [],
-        velocity: info?.velocity ?? 80,
-        beats: info?.duration_beats ?? bpb,
-      };
+      let midis = info ? info.notes.map((n) => n.midi) : [];
+      let offsets = midis.map(() => 0); // segundos depois do início do acorde
+      if (info && info.strum !== "off" && delay > 0) {
+        // o mesmo cálculo do MIDI: o que você ouve aqui é o que sai no arquivo
+        const plan = strumPlan(midis.length, delay, bpm, beatsToTicks(info.duration_beats));
+        offsets = plan.offsets.map((ticks) => (ticks / TICKS_PER_BEAT) * (60 / bpm));
+        if (info.strum === "down") midis = midis.slice().reverse();
+      }
+      return { midis, offsets, velocity: info?.velocity ?? 80, beats: info?.duration_beats ?? bpb };
     });
 }
 
@@ -761,7 +818,7 @@ async function loadExample() {
 
 function newProject() {
   loadProject({ title: "Nova progressão", tempo: state.project.tempo, time_signature: state.project.time_signature,
-    middle_c: state.project.middle_c, default_velocity: state.project.default_velocity, chords: [{}] }, "Projeto novo.");
+    middle_c: state.project.middle_c, default_velocity: state.project.default_velocity, strum: state.project.strum, chords: [{}] }, "Projeto novo.");
 }
 
 // ---------------------------------------------------------------- início

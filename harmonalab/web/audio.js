@@ -26,15 +26,16 @@ export class Player {
   }
 
   /** Um acorde: timbre de piano elétrico simples (senoide + harmônico suave). */
-  #chord(midis, velocity, start, seconds) {
+  #chord(midis, velocity, start, seconds, offsets) {
     const ctx = this.ctx;
     const peak = ((velocity / 127) ** 1.6 * 0.42) / Math.sqrt(Math.max(1, midis.length));
     const end = start + Math.max(0.08, seconds - 0.03);
-    for (const midi of midis) {
+    for (const [i, midi] of midis.entries()) {
+      const t0 = start + (offsets?.[i] ?? 0); // strum: cada nota entra no seu momento
       const env = ctx.createGain();
-      env.gain.setValueAtTime(0, start);
-      env.gain.linearRampToValueAtTime(peak, start + 0.008);
-      env.gain.setTargetAtTime(peak * 0.3, start + 0.01, 0.9);
+      env.gain.setValueAtTime(0, t0);
+      env.gain.linearRampToValueAtTime(peak, t0 + 0.008);
+      env.gain.setTargetAtTime(peak * 0.3, t0 + 0.01, 0.9);
       env.gain.setTargetAtTime(0, end, 0.07);
       env.connect(this.master);
 
@@ -45,13 +46,13 @@ export class Player {
       bell.type = "triangle";
       bell.frequency.value = freq(midi) * 2;
       const bellGain = ctx.createGain();
-      bellGain.gain.setValueAtTime(0.18, start);
-      bellGain.gain.setTargetAtTime(0.02, start, 0.25);
+      bellGain.gain.setValueAtTime(0.18, t0);
+      bellGain.gain.setTargetAtTime(0.02, t0, 0.25);
 
       body.connect(env);
       bell.connect(bellGain).connect(env);
       for (const osc of [body, bell]) {
-        osc.start(start);
+        osc.start(t0);
         osc.stop(end + 0.6);
         this.voices.push(osc);
       }
@@ -60,7 +61,7 @@ export class Player {
 
   /**
    * Toca uma sequência de acordes.
-   * chords: [{midis, velocity, beats}], bpm; onStep(i) / onEnd() para destacar a tela.
+   * chords: [{midis, offsets (s, opcional: strum), velocity, beats}], bpm; onStep(i) / onEnd() para destacar a tela.
    */
   play(chords, bpm, { onStep, onEnd } = {}) {
     this.stop();
@@ -69,7 +70,7 @@ export class Player {
     let t = ctx.currentTime + 0.06;
     chords.forEach((c, i) => {
       const seconds = c.beats * spb;
-      if (c.midis.length) this.#chord(c.midis, c.velocity, t, seconds);
+      if (c.midis.length) this.#chord(c.midis, c.velocity, t, seconds, c.offsets);
       const delay = Math.max(0, (t - ctx.currentTime) * 1000);
       this.timers.push(setTimeout(() => onStep?.(i), delay));
       t += seconds;

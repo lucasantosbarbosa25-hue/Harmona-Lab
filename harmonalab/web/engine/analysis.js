@@ -3,11 +3,11 @@
 
 import { fmtG, roundHalfEven } from "./numbers.js";
 import {
-  PARTS, PART_LABELS, beatsPerBar, highest, isRest, issue, loadProject, lowest, projectToDict, sounding,
-  totalBeats, velocityFor,
+  PARTS, PART_LABELS, beatsPerBar, highest, isRest, issue, loadProject, lowest, pitches, projectToDict, sounding,
+  strumFor, totalBeats, velocityFor,
 } from "./model.js";
 import { noteName, pitchClass, pitchClassName } from "./pitch.js";
-import { TICKS_PER_BEAT } from "./midi.js";
+import { TICKS_PER_BEAT, beatsToTicks, strumPlan } from "./midi.js";
 
 const PIANO_LOW = 21; // A0
 const PIANO_HIGH = 108; // C8
@@ -25,9 +25,21 @@ export function chordIssues(project, chord, index) {
   if (isRest(chord)) add("info", "Sem notas: este trecho será uma pausa (silêncio).");
 
   const exact = chord.duration_beats * TICKS_PER_BEAT;
-  if (Math.abs(exact - roundHalfEven(exact)) > 1e-6) {
+  if (roundHalfEven(exact) < 1) {
+    add("error", "Duração curta demais: o MIDI não marca menos de 1/960 de tempo.", "duration_beats");
+  } else if (Math.abs(exact - roundHalfEven(exact)) > 1e-6) {
     add("warning", `Duração arredondada para ${fmtG(roundHalfEven(exact) / TICKS_PER_BEAT)} tempos `
       + `(resolução de 1/${TICKS_PER_BEAT} de semínima).`, "duration_beats");
+  }
+
+  // Strum que não cabe no acorde: o espaço entre as notas encolhe.
+  const count = pitches(chord).length;
+  if (strumFor(project, chord) !== "off" && count >= 2 && roundHalfEven(exact) >= 1) {
+    const { compressed } = strumPlan(count, project.strum_delay_ms, project.tempo, beatsToTicks(chord.duration_beats));
+    if (compressed) {
+      add("warning", "Acorde curto demais para este strum: o espaço entre as notas foi reduzido "
+        + "(o strum ocupa no máximo metade do acorde).", "strum");
+    }
   }
 
   // Alturas repetidas (mesma tecla em duas partes ou duas vezes na mesma parte).
@@ -109,6 +121,7 @@ export function analyzeChord(project, chord, index, startBeats) {
     start_beats: startBeats,
     duration_beats: chord.duration_beats,
     velocity: velocityFor(project, chord),
+    strum: notes.length >= 2 ? strumFor(project, chord) : "off",
   };
 }
 
@@ -134,6 +147,7 @@ export function analyze(project, issues = []) {
     chords,
     middle_c: project.middle_c,
     beats_per_bar: beatsPerBar(project),
+    strum_delay_ms: project.strum_delay_ms,
     totals: {
       chords: project.chords.length,
       beats: total,

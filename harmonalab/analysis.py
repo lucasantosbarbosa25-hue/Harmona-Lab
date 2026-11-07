@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from .midi_io import TICKS_PER_BEAT
+from .midi_io import TICKS_PER_BEAT, beats_to_ticks, strum_plan
 from .model import PART_LABELS, PARTS, ChordEvent, Issue, Project, load_project
 
 PIANO_LOW, PIANO_HIGH = 21, 108  # A0 a C8
@@ -32,9 +32,19 @@ def chord_issues(project: Project, chord: ChordEvent, index: int) -> list[Issue]
         add("info", "Sem notas: este trecho será uma pausa (silêncio).")
 
     exact = chord.duration_beats * TICKS_PER_BEAT
-    if abs(exact - round(exact)) > 1e-6:
+    if round(exact) < 1:
+        add("error", "Duração curta demais: o MIDI não marca menos de 1/960 de tempo.", "duration_beats")
+    elif abs(exact - round(exact)) > 1e-6:
         add("warning", f"Duração arredondada para {round(exact) / TICKS_PER_BEAT:g} tempos "
                        f"(resolução de 1/{TICKS_PER_BEAT} de semínima).", "duration_beats")
+
+    # Strum que não cabe no acorde: o espaço entre as notas encolhe.
+    count = len(chord.pitches)
+    if project.strum_for(chord) != "off" and count >= 2 and round(exact) >= 1:
+        _, compressed = strum_plan(count, project.strum_delay_ms, project.tempo, beats_to_ticks(chord.duration_beats))
+        if compressed:
+            add("warning", "Acorde curto demais para este strum: o espaço entre as notas foi reduzido "
+                           "(o strum ocupa no máximo metade do acorde).", "strum")
 
     # Alturas repetidas (mesma tecla em duas partes ou duas vezes na mesma parte).
     where: dict[int, list[str]] = {}
@@ -103,6 +113,7 @@ def analyze_chord(project: Project, chord: ChordEvent, index: int, start_beats: 
         "start_beats": start_beats,
         "duration_beats": chord.duration_beats,
         "velocity": project.velocity_for(chord),
+        "strum": project.strum_for(chord) if len(notes) >= 2 else "off",
     }
 
 
@@ -129,6 +140,7 @@ def analyze(project: Project, issues: list[Issue] | None = None) -> dict[str, An
         "chords": chords,
         "middle_c": project.middle_c,
         "beats_per_bar": project.beats_per_bar,
+        "strum_delay_ms": project.strum_delay_ms,
         "totals": {
             "chords": len(project.chords),
             "beats": total,
@@ -160,6 +172,9 @@ def describe(report: dict[str, Any]) -> str:
         lines.append(f"   grave → agudo: {voicing}")
         lines.append(f"   MIDI:          {' '.join(str(n['midi']) for n in c['notes'])}")
         lines.append(f"   soprano: {c['top']['name']} · baixo: {c['bottom']['name']}")
+        if c["strum"] != "off":
+            arrow = "grave → agudo" if c["strum"] == "up" else "agudo → grave"
+            lines.append(f"   strum: {arrow}, {report['strum_delay_ms']:g} ms entre as notas")
     icons = {"error": "ERRO", "warning": "aviso", "info": "nota"}
     for issue in report["issues"]:
         where = f"acorde {issue['chord'] + 1}: " if issue["chord"] is not None else ""

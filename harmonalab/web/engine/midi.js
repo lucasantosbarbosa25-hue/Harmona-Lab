@@ -5,7 +5,7 @@
 // Nota comum entre acordes: o note_off vem antes do note_on no mesmo tick.
 
 import { roundHalfEven } from "./numbers.js";
-import { pitches, velocityFor } from "./model.js";
+import { pitches, strumFor, velocityFor } from "./model.js";
 
 export const TICKS_PER_BEAT = 480;
 const CHANNEL = 0;
@@ -16,6 +16,21 @@ const TEXT_REPLACEMENTS = [
 ];
 
 export const beatsToTicks = (beats, ticksPerBeat = TICKS_PER_BEAT) => roundHalfEven(beats * ticksPerBeat);
+
+/**
+ * Quando cada nota de um strum entra, em ticks depois do início do acorde.
+ * A 1ª nota entra no tempo e cada seguinte `delayMs` depois da anterior. O fim do acorde não muda.
+ * O strum ocupa no máximo metade do acorde: se não couber, o espaço entre as notas encolhe.
+ * Devolve { offsets (na ordem em que as notas entram), compressed (se precisou encolher) }.
+ */
+export function strumPlan(count, delayMs, tempo, length, ticksPerBeat = TICKS_PER_BEAT) {
+  if (count < 2 || delayMs <= 0) return { offsets: new Array(count).fill(0), compressed: false };
+  let step = delayMs * tempo * ticksPerBeat / 60000;
+  const limit = length / 2;
+  const compressed = (count - 1) * step > limit;
+  if (compressed) step = limit / (count - 1);
+  return { offsets: Array.from({ length: count }, (_, i) => roundHalfEven(i * step)), compressed };
+}
 
 /** Texto seguro para metadados MIDI: latin-1, o resto vira "?". Devolve os bytes. */
 function metaTextBytes(text) {
@@ -52,8 +67,15 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
     const length = beatsToTicks(chord.duration_beats, ticksPerBeat);
     const velocity = velocityFor(project, chord);
     if (markers && chord.symbol) events.push([tick, 1, 0, meta(0x06, metaTextBytes(chord.symbol))]);
-    for (const pitch of pitches(chord)) {
-      events.push([tick, 2, pitch, { bytes: [0x90 | CHANNEL, pitch, velocity] }]);
+    let notes = pitches(chord); // do grave ao agudo
+    let offsets = notes.map(() => 0);
+    const direction = strumFor(project, chord);
+    if (direction !== "off") {
+      offsets = strumPlan(notes.length, project.strum_delay_ms, project.tempo, length, ticksPerBeat).offsets;
+      if (direction === "down") notes = notes.slice().reverse(); // a nota mais aguda entra primeiro
+    }
+    for (const [i, pitch] of notes.entries()) {
+      events.push([tick + offsets[i], 2, pitch, { bytes: [0x90 | CHANNEL, pitch, velocity] }]);
       events.push([tick + length, 0, pitch, { bytes: [0x80 | CHANNEL, pitch, 0] }]);
     }
     tick += length;

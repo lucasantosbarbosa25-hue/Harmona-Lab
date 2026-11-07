@@ -107,6 +107,7 @@ Outras coisas na tela:
 | Recurso | O que faz |
 |---|---|
 | **Soprano travado** | Declara a nota que *precisa* ser a mais aguda. Se outra nota ficar acima (ou ela faltar), aparece um aviso. O botão **Travar** fixa o soprano atual. |
+| **Strum** | Em vez de todas as notas juntas, cada nota entra uma após a outra: **grave → agudo** ou **agudo → grave**, com **10, 20 ou 30 ms** (ou outro valor, de 1 a 250) entre elas. A 1ª nota entra no tempo e o acorde termina no mesmo instante, então nada se desloca. Fica **desligado** por padrão: assim o MIDI sai exatamente como digitado. Vale para o projeto todo, e cada acorde pode trocar em **Mais → Strum deste acorde**. A pré‑escuta (**▶**) usa os mesmos atrasos. |
 | **Mais: baixo/pedal, notas sem mão** | Notas extras que soam junto (ex.: pedal de `E1` sob o acorde, ou notas sem mão definida). |
 | **Notas omitidas / comentário** | Só anotação (não vão para o MIDI). |
 | **+ Pausa** | Compasso de silêncio (útil para comparar ideias). |
@@ -193,11 +194,13 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `time_signature` | não (`"4/4"`) | `"3/4"`, `"6/8"`, `"7/8"`… |
 | `middle_c` | não (`"C4"`) | Como se chama o MIDI 60: `"C4"` ou `"C3"`. |
 | `default_velocity` | não (80) | Usada quando o acorde não tem `velocity`. |
+| `strum` | não (desligado) | `{"direction": "up", "delay_ms": 20}`. `direction`: `"off"`, `"up"` (grave → agudo) ou `"down"` (agudo → grave). `delay_ms`: 1 a 250 (padrão 20). Atalho: `"strum": "up"`. |
 | `chords[].left_hand`, `right_hand` | não | Lista (`["B2","A3"]`) **ou** texto (`"B2 A3"`). Nomes com oitava ou números MIDI. |
 | `chords[].bass`, `notes` | não | Baixo/pedal e notas sem mão definida. Também soam. |
 | `chords[].duration_beats` | não (1 compasso) | Em tempos de semínima (4 = 1 compasso em 4/4; 3 = 1 compasso em 6/8). Ou use `duration_bars`. |
 | `chords[].top_note` | não | Soprano travado (validação: deve ser a nota mais aguda). |
 | `chords[].velocity` | não | 1–127. |
+| `chords[].strum` | não (segue o projeto) | `"off"`, `"up"` ou `"down"`: troca o strum só neste acorde. O atraso é o do projeto. |
 | `chords[].symbol`, `omitted`, `comment` | não | Informativos. |
 
 Acorde sem nenhuma nota = pausa. Um exemplo completo está em
@@ -331,9 +334,11 @@ inversões, drop 2/3, posição aberta/fechada, faixas por região (baixo C1–B
 penalidade por saltos, bônus por notas comuns, soprano e baixo preservados, distância confortável entre vozes).
 Regra: o gerador só atua quando pedido; notas explícitas continuam intocadas.
 
-**Fase 4 — humanização e playback.** Opções em `build_midi` (desligadas por padrão, para que o MIDI continue
-exato): velocity/atraso/duração aleatórios pequenos, **strum** grave→agudo ou agudo→grave (10/20/30 ms) e arpejo. A
-pré‑escuta do navegador (`web/audio.js`) já existe e pode ganhar os mesmos parâmetros.
+**Fase 4 — humanização e playback.** O **strum** (grave→agudo ou agudo→grave, 10/20/30 ms) **já existe**, na tela, no
+MIDI e na pré‑escuta, e mostra o caminho: opções em `build_midi`, desligadas por padrão para que o MIDI continue exato.
+Falta a **humanização** (velocity, atraso e duração aleatórios pequenos, sempre com “Humanization OFF” como padrão) e o
+**arpejo**. Ambos entram em `midi_io.py`/`web/engine/midi.js` e na pré‑escuta (`web/audio.js`), com casos novos no teste
+de paridade.
 
 **Fase 5 — texto livre e sugestões.** Um parser (`textparse.py`) para entradas como
 `1. F#m7b5 LH: F#2 C3 RH: E3 A3 C4 E4 Duration: 4` produzindo o mesmo JSON; depois o modo **harmonic alternatives**

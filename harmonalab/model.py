@@ -37,6 +37,11 @@ PART_LABELS = {
 VALID_DENOMINATORS = (1, 2, 4, 8, 16, 32)
 # Abaixo de ~3,6 BPM o tempo não cabe nos 3 bytes do MIDI; 10 já é bem mais lento que qualquer balada.
 TEMPO_MIN, TEMPO_MAX = 10.0, 999.0
+
+# Strum: atraso entre as notas de um acorde. "up" = do grave ao agudo; "down" = do agudo ao grave.
+STRUM_DIRECTIONS = ("off", "up", "down")
+STRUM_DELAY_MIN, STRUM_DELAY_MAX = 1.0, 250.0  # milissegundos
+DEFAULT_STRUM_DELAY_MS = 20.0
 MAX_DURATION_BEATS = 1024.0
 
 
@@ -80,6 +85,7 @@ class ChordEvent:
     notes: list[Note] = field(default_factory=list)
     top_note: Note | None = None  # soprano declarado (trava); None = automático
     velocity: int | None = None  # None = velocity padrão do projeto
+    strum: str | None = None  # None = segue o projeto; ou "off" / "up" / "down"
     omitted: list[str] = field(default_factory=list)  # informativo (ex.: ["5"])
     comment: str = ""
 
@@ -124,6 +130,8 @@ class ChordEvent:
                 d[part] = [n.name(middle_c) for n in notes]
         d["top_note"] = self.top_note.name(middle_c) if self.top_note else None
         d["velocity"] = self.velocity
+        if self.strum is not None:
+            d["strum"] = self.strum
         if self.omitted:
             d["omitted"] = list(self.omitted)
         if self.comment:
@@ -138,6 +146,8 @@ class Project:
     time_signature: tuple[int, int] = (4, 4)
     middle_c: str = DEFAULT_MIDDLE_C
     default_velocity: int = 80
+    strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
+    strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
     comment: str = ""
 
@@ -154,6 +164,9 @@ class Project:
     def velocity_for(self, chord: ChordEvent) -> int:
         return chord.velocity if chord.velocity is not None else self.default_velocity
 
+    def strum_for(self, chord: ChordEvent) -> str:
+        return chord.strum if chord.strum is not None else self.strum_direction
+
     def to_dict(self) -> dict[str, Any]:
         num, den = self.time_signature
         d: dict[str, Any] = {
@@ -163,6 +176,7 @@ class Project:
             "time_signature": f"{num}/{den}",
             "middle_c": self.middle_c,
             "default_velocity": self.default_velocity,
+            "strum": {"direction": self.strum_direction, "delay_ms": _clean_number(self.strum_delay_ms)},
             "chords": [c.to_dict(self.middle_c) for c in self.chords],
         }
         if self.comment:
@@ -268,6 +282,9 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         if vel is not None:
             project.default_velocity = vel
 
+    if data.get("strum") is not None:
+        _load_strum(data["strum"], project, issues)
+
     raw_chords = data.get("chords")
     if raw_chords is None:
         raw_chords = []
@@ -277,6 +294,30 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
     for index, raw in enumerate(raw_chords):
         project.chords.append(_load_chord(raw, index, project, issues))
     return project, issues
+
+
+_STRUM_HINT = 'Use "off", "up" (grave → agudo) ou "down" (agudo → grave).'
+
+
+def _load_strum(raw: Any, project: Project, issues: list[Issue]) -> None:
+    if isinstance(raw, str):
+        raw = {"direction": raw}  # atalho: "strum": "up"
+    if not isinstance(raw, dict):
+        issues.append(Issue("error", 'O campo "strum" deve ser um objeto, por exemplo {"direction": "up", "delay_ms": 20}, ou só a direção ("up").', None, "strum"))
+        return
+    direction = raw.get("direction")
+    if direction is not None:
+        if isinstance(direction, str) and direction in STRUM_DIRECTIONS:
+            project.strum_direction = direction
+        else:
+            shown = f': "{direction}"' if isinstance(direction, str) else ""
+            issues.append(Issue("error", f"Direção do strum desconhecida{shown}. {_STRUM_HINT}", None, "strum"))
+    if raw.get("delay_ms") is not None:
+        delay = _to_number(raw["delay_ms"])
+        if delay is None or not STRUM_DELAY_MIN <= delay <= STRUM_DELAY_MAX:
+            issues.append(Issue("error", f'Atraso do strum deve ser um número entre 1 e 250 ms (recebido "{raw["delay_ms"]}").', None, "strum"))
+        else:
+            project.strum_delay_ms = delay
 
 
 def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> ChordEvent:
@@ -316,6 +357,14 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
 
     if raw.get("velocity") is not None and raw.get("velocity") != "":
         chord.velocity = _velocity(raw["velocity"], issues, index, "velocity")
+
+    strum = raw.get("strum")
+    if strum is not None and strum != "":
+        if isinstance(strum, str) and strum in STRUM_DIRECTIONS:
+            chord.strum = strum
+        else:
+            shown = f': "{strum}"' if isinstance(strum, str) else ""
+            issues.append(Issue("error", f"Strum do acorde desconhecido{shown}. {_STRUM_HINT}", index, "strum"))
 
     omitted = raw.get("omitted")
     if omitted:
