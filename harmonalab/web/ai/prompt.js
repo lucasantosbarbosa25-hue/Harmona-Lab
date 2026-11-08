@@ -71,88 +71,12 @@ O texto pode vir de ditado: ignore erros de grafia e pontuação e entenda notas
 EXPLICAÇÃO (campo "explicacao")
 Texto simples em português do Brasil, sem markdown, até cerca de 200 palavras: a ideia geral, a linha do soprano e a do baixo, as técnicas usadas e onde ouvi-las, e as suposições que você fez. Se pesquisou, diga o que aproveitou sem inventar fontes nem endereços. Também preencha "pedido_extraido" com o número de acordes e o BPM que o pedido disse explicitamente (null quando não disse).${tool ? "" : CHAT_ANSWER}`;
 
-/** Instruções do modo automático (API): a entrega é pela ferramenta. Texto fixo, para o cache da API. */
-export const SYSTEM_PROMPT = instructions(true);
-
 /** Instruções do modo grátis: vão junto do pedido para o chat de IA que a pessoa já usa; a resposta é um bloco JSON. */
 export const CHAT_INSTRUCTIONS = instructions(false);
 
-const numberSchema = (description) => ({ type: "number", description });
-const noteList = (description) => ({ type: "array", items: { type: "string" }, description });
-
-/** Definição da ferramenta de entrega. Sem "strict": o app mesmo valida e devolve os problemas à IA. */
-export const DELIVERY_TOOL = {
-  name: TOOL_NAME,
-  description:
-    "Entrega ao app a progressão final, com explicação. O app confere as notas, o soprano e o que o pedido exigia; "
-    + "se houver problemas, devolve a lista e você corrige e chama de novo, sempre com o projeto completo.",
-  eager_input_streaming: true,
-  input_schema: {
-    type: "object",
-    properties: {
-      pedido_extraido: {
-        type: "object",
-        description: "O que o pedido disse de forma explícita (null quando não disse).",
-        properties: {
-          acordes: { type: ["integer", "null"], description: "Número de acordes pedido." },
-          bpm: { type: ["number", "null"], description: "BPM pedido." },
-        },
-      },
-      explicacao: { type: "string", description: "Explicação em texto simples, em português do Brasil." },
-      projeto: {
-        type: "object",
-        description: "Projeto do Harmona Lab, no formato descrito nas instruções.",
-        properties: {
-          title: { type: "string" },
-          tempo: numberSchema("BPM"),
-          time_signature: { type: "string", description: "Ex.: 4/4" },
-          middle_c: { type: "string", enum: ["C4"] },
-          default_velocity: { type: "integer" },
-          strum: {
-            type: "object",
-            properties: {
-              direction: { type: "string", enum: ["off", "up", "down"] },
-              delay_ms: { type: "number" },
-            },
-          },
-          chords: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                symbol: { type: "string" },
-                duration_beats: numberSchema("Em tempos de semínima."),
-                left_hand: noteList("Notas da mão esquerda, ex.: [\"B2\", \"A3\"]."),
-                right_hand: noteList("Notas da mão direita."),
-                bass: noteList("Baixo ou pedal."),
-                notes: noteList("Notas sem mão definida."),
-                top_note: { type: "string", description: "Nota mais aguda do acorde." },
-                velocity: { type: "integer" },
-                strum: { type: "string", enum: ["off", "up", "down"] },
-                comment: { type: "string" },
-              },
-              required: ["symbol", "duration_beats", "right_hand", "top_note"],
-            },
-          },
-        },
-        required: ["tempo", "chords"],
-      },
-    },
-    required: ["explicacao", "projeto"],
-  },
-};
-
-/** Ferramenta de pesquisa (versão básica: funciona em todos os modelos, sem execução de código). */
-export function searchTool(maxUses) {
-  return { type: "web_search_20250305", name: "web_search", max_uses: maxUses };
-}
-
 /** A mensagem do usuário. O pedido e as preferências vão entre aspas triplas para ficarem claramente separados. */
-export function buildUserMessage({ request, preferences, mode, currentProject }) {
+export function buildUserMessage({ request, mode, currentProject }) {
   const parts = [`PEDIDO (pode ter sido ditado por voz):\n"""\n${request.trim()}\n"""`];
-  if (preferences && preferences.trim()) {
-    parts.push(`PREFERÊNCIAS PERMANENTES DE QUEM PEDE (valem sempre, a menos que o pedido diga outra coisa):\n"""\n${preferences.trim()}\n"""`);
-  }
   if (mode === "adjust" && currentProject) {
     parts.push(
       "PROGRESSÃO ATUAL (JSON do Harmona Lab). Ajuste-a conforme o pedido e devolva o projeto COMPLETO:\n"

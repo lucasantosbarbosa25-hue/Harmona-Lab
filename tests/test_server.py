@@ -37,8 +37,7 @@ def get(url):
     ("/sw.js", "text/javascript"),
     ("/icons/icon-192.png", "image/png"),
     ("/example.json", "application/json"),
-    ("/ai/generate.js", "text/javascript"),
-    ("/vendor/anthropic-sdk.js", "text/javascript"),
+    ("/ai/chat.js", "text/javascript"),
 ])
 def test_serve_o_app(base_url, path, content_type):
     status, headers, body = get(base_url + path)
@@ -58,7 +57,7 @@ def test_nao_serve_fora_da_pasta_web(base_url, path):
 
 def test_exemplo_do_app_e_o_mesmo_da_pasta_examples():
     web = json.loads((WEB_DIR / "example.json").read_text(encoding="utf-8"))
-    original = json.loads((EXAMPLES / "resolucao_em_fsharp_soprano.json").read_text(encoding="utf-8"))
+    original = json.loads((EXAMPLES / "resolucao_em_fsharp_ponta.json").read_text(encoding="utf-8"))
     assert web == original
 
 
@@ -68,9 +67,7 @@ def test_arquivos_do_modo_offline_existem():
     for name in shell:
         assert (WEB_DIR / (name or "index.html")).is_file(), name
     # todo módulo JS do app precisa estar no cache offline
-    # (a cópia do SDK da Anthropic é carregada só quando se usa a IA e entra no cache na primeira vez)
-    modules = {p.relative_to(WEB_DIR).as_posix() for p in WEB_DIR.rglob("*.js")
-               if p.name != "sw.js" and "vendor" not in p.relative_to(WEB_DIR).parts}
+    modules = {p.relative_to(WEB_DIR).as_posix() for p in WEB_DIR.rglob("*.js") if p.name != "sw.js"}
     assert modules <= set(shell)
 
 

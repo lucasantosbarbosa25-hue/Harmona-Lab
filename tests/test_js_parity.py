@@ -22,7 +22,7 @@ from .test_midi_io import PROGRESSAO
 NODE = shutil.which("node")
 pytestmark = pytest.mark.skipif(NODE is None, reason="Node.js não instalado")
 HERE = Path(__file__).parent
-EXAMPLE = json.loads((HERE.parent / "examples" / "resolucao_em_fsharp_soprano.json").read_text(encoding="utf-8"))
+EXAMPLE = json.loads((HERE.parent / "examples" / "resolucao_em_fsharp_ponta.json").read_text(encoding="utf-8"))
 
 CASES = [
     EXAMPLE,

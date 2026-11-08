@@ -5,7 +5,7 @@ def levels(report, chord=None):
     return [(i["level"], i["field"]) for i in report["issues"] if chord is None or i["chord"] == chord]
 
 
-def test_soprano_e_baixo():
+def test_ponta_e_baixo():
     report = analyze_data({"chords": [{"left_hand": "B2 A3", "right_hand": "D4 Eb4 G4 C5"}]})
     chord = report["chords"][0]
     assert report["ok"]
@@ -15,7 +15,7 @@ def test_soprano_e_baixo():
     assert chord["spacing"] == [10, 5, 1, 4, 5]
 
 
-def test_soprano_travado_que_nao_e_o_mais_agudo_gera_aviso():
+def test_ponta_travado_que_nao_e_o_mais_agudo_gera_aviso():
     report = analyze_data({"chords": [{"right_hand": "D4 G4 F#4", "top_note": "F#4"}]})
     assert report["ok"]  # aviso não bloqueia
     assert ("warning", "top_note") in levels(report)
@@ -23,12 +23,12 @@ def test_soprano_travado_que_nao_e_o_mais_agudo_gera_aviso():
     assert "G4" in msg
 
 
-def test_soprano_travado_ausente_gera_aviso():
+def test_ponta_travado_ausente_gera_aviso():
     report = analyze_data({"chords": [{"right_hand": "D4 E4", "top_note": "F#4"}]})
     assert ("warning", "top_note") in levels(report)
 
 
-def test_soprano_travado_correto_sem_aviso():
+def test_ponta_travado_correto_sem_aviso():
     report = analyze_data({"chords": [{"left_hand": "E2 B2 D3", "right_hand": "G3 F#4", "top_note": "F#4"}]})
     assert levels(report) == []
 

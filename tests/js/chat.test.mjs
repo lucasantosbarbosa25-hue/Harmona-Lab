@@ -3,25 +3,23 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { CHATS, buildChatPrompt, correctionPrompt, extractJson, readChatAnswer } from "../../harmonalab/web/ai/chat.js";
-import { CHAT_INSTRUCTIONS, SYSTEM_PROMPT, TOOL_NAME } from "../../harmonalab/web/ai/prompt.js";
-import { GOOD_PROJECT, delivery } from "./fake_api.mjs";
+import { CHAT_INSTRUCTIONS } from "../../harmonalab/web/ai/prompt.js";
+import { GOOD_PROJECT, delivery } from "./fixtures.mjs";
 
 const fenced = (obj, before = "Aqui está:", after = "Bom estudo!") => `${before}\n\`\`\`json\n${JSON.stringify(obj, null, 2)}\n\`\`\`\n${after}`;
 
-test("instruções do chat não falam de ferramentas da API e pedem um bloco JSON", () => {
-  assert.ok(!CHAT_INSTRUCTIONS.includes(TOOL_NAME));
+test("instruções para a IA: pedem um bloco JSON e não falam de ferramentas da API", () => {
+  assert.ok(!CHAT_INSTRUCTIONS.includes("entregar_progressao"));
   assert.ok(!CHAT_INSTRUCTIONS.includes("web_search"));
   assert.match(CHAT_INSTRUCTIONS, /bloco de código JSON/);
   assert.match(CHAT_INSTRUCTIONS, /"explicacao"/);
-  assert.ok(SYSTEM_PROMPT.includes(TOOL_NAME) && !SYSTEM_PROMPT.includes("RESPOSTA\n"));
   for (const chat of CHATS) assert.match(chat.url, /^https:\/\//);
 });
 
 test("pedido para colar: instruções + pedido + preferências + progressão atual", () => {
-  const text = buildChatPrompt({ request: "8 acordes, 76 BPM", preferences: "gosto de pedais", mode: "adjust", currentProject: { tempo: 70, chords: [] } });
+  const text = buildChatPrompt({ request: "8 acordes, 76 BPM", mode: "adjust", currentProject: { tempo: 70, chords: [] } });
   assert.ok(text.startsWith(CHAT_INSTRUCTIONS));
   assert.match(text, /PEDIDO[^]*8 acordes, 76 BPM/);
-  assert.match(text, /gosto de pedais/);
   assert.match(text, /PROGRESSÃO ATUAL[^]*"tempo":70/);
   assert.match(buildChatPrompt({ request: "x", mode: "new" }), /Crie uma progressão nova/);
 });

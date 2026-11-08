@@ -33,54 +33,48 @@
 
   <main id="main">
     <section class="card assistant" id="assistant" aria-labelledby="assistant-heading">
-      <div class="assistant-head">
-        <div>
-          <h2 id="assistant-heading">Descreva a progressão</h2>
-          <p class="assistant-intro">Escreva ou dite do seu jeito: quantos acordes, BPM, estilo, artista ou música de referência, nota de ponta (soprano), baixo…</p>
-        </div>
-        <button type="button" class="btn ghost small icon-only" id="ai-settings-button" aria-label="Configurar a IA" title="Configurar a IA"></button>
+      <div>
+        <h2 id="assistant-heading">Peça a harmonia à sua IA</h2>
+        <p class="assistant-intro">Descreva do seu jeito: estilo, artista ou música de referência, número de acordes, BPM, ponta, baixo… Sua IA monta a progressão e <strong>explica a função de cada acorde</strong>; o Harmona Lab confere as notas e abre tudo aqui, pronto para ouvir e exportar.</p>
       </div>
-      <div class="segmented" id="ai-engine" role="group" aria-label="Como gerar">
-        <button type="button" data-engine="chat" aria-pressed="true">Grátis, pelo seu chat</button>
-        <button type="button" data-engine="api" aria-pressed="false">Automático (API paga)</button>
-      </div>
-      <p class="assistant-intro" id="ai-engine-hint"></p>
       <div class="segmented" id="ai-mode" role="group" aria-label="O que fazer" hidden>
         <button type="button" data-mode="new" aria-pressed="true">Nova progressão</button>
         <button type="button" data-mode="adjust" aria-pressed="false">Ajustar a atual</button>
       </div>
       <div class="ai-input">
         <label class="sr-only" for="ai-prompt">Pedido</label>
-        <textarea id="ai-prompt" rows="4" maxlength="4000" placeholder="Ex.: 8 acordes, 76 BPM, estilo Jesús Molina, soprano descendo de F# até C e baixo em pedal de E"></textarea>
+        <textarea id="ai-prompt" rows="4" maxlength="4000" placeholder="Ex.: 8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E"></textarea>
         <button type="button" class="mic-button" id="ai-mic" aria-pressed="false" aria-label="Ditar por voz" title="Ditar por voz"></button>
       </div>
       <p class="ai-tip" id="ai-mic-tip" hidden>Este navegador não tem ditado por voz: use o microfone do teclado do celular.</p>
       <div class="ai-examples" id="ai-examples" aria-label="Exemplos de pedido"></div>
       <div class="ai-actions">
         <button type="button" class="btn primary" id="ai-generate"></button>
-        <button type="button" class="btn secondary" id="ai-cancel" hidden>Cancelar</button>
       </div>
       <div class="ai-chat-step" id="ai-chat-step" hidden>
-        <p class="ai-step-title">2. Abra o chat de IA que você usa, cole o pedido e envie</p>
+        <p class="ai-step-title">2. Cole na sua IA e envie</p>
         <div class="chat-links" id="ai-chat-links"></div>
         <textarea id="ai-chat-prompt" rows="4" readonly hidden aria-label="Pedido para copiar"></textarea>
-        <p class="ai-step-title">3. Copie a resposta inteira do chat e cole aqui</p>
-        <label class="sr-only" for="ai-answer">Resposta do chat</label>
-        <textarea id="ai-answer" rows="4" spellcheck="false" placeholder="Cole aqui a resposta do chat (com o bloco de código JSON)"></textarea>
+        <p class="ai-step-title">3. Toque no link que ela mandar, ou cole a resposta aqui</p>
+        <label class="sr-only" for="ai-answer">Resposta da IA</label>
+        <textarea id="ai-answer" rows="4" spellcheck="false" placeholder="Cole aqui a resposta da IA (com o bloco de código)"></textarea>
         <div class="ai-actions">
           <button type="button" class="btn primary" id="ai-load-answer">Conferir e carregar</button>
         </div>
       </div>
       <p class="ai-status" id="ai-status" role="status" aria-live="polite" hidden></p>
       <div class="ai-actions" id="ai-fix-actions" hidden>
-        <button type="button" class="btn secondary" id="ai-copy-fix">Copiar correções para o chat</button>
+        <button type="button" class="btn secondary" id="ai-copy-fix">Copiar correções para a IA</button>
         <button type="button" class="btn ghost" id="ai-load-anyway">Carregar mesmo assim</button>
       </div>
       <div class="ai-result" id="ai-result" hidden></div>
-      <div class="ai-setup" id="ai-setup" hidden>
-        <p><strong>Falta só a chave da IA.</strong> Ela é sua e fica só neste aparelho. Leva um minuto para criar e a IA passa a montar as progressões por você.</p>
-        <button type="button" class="btn outline" id="ai-setup-button">Configurar a IA</button>
-      </div>
+      <details class="more" id="ai-permanent">
+        <summary>Uso sempre a mesma IA: configurar uma vez</summary>
+        <div class="more-body">
+          <p class="ai-help wide">Cole as instruções abaixo uma única vez nas instruções permanentes da sua IA (no Claude, num Projeto; no ChatGPT, em Personalizar ou num GPT; no Gemini, num Gem). Depois é só pedir, sem copiar nada: <em>“8 acordes, estilo Domi &amp; JD Beck, ponta em F#”</em>.</p>
+          <button type="button" class="btn outline wide" id="ai-copy-instructions">Copiar instruções permanentes</button>
+        </div>
+      </details>
     </section>
 
     <section class="card project" aria-labelledby="project-heading">
@@ -167,7 +161,7 @@
         <p><strong>Instalar no celular.</strong> No Android (Chrome): menu ⋯ deste app → <em>Instalar como app</em>, ou menu do Chrome → <em>Instalar app</em>. No iPhone (Safari): botão Compartilhar → <em>Adicionar à Tela de Início</em>. Depois ele abre pelo ícone, em tela cheia, e funciona sem internet. Os projetos ficam só neste aparelho; use <em>Salvar projeto</em> para levar para outro.</p>
         <p><strong>Do celular para a DAW.</strong> O <code>.mid</code> vai para a pasta Downloads. Mande para o computador como preferir (Drive, WhatsApp, e-mail, cabo) e arraste para a DAW. Quando o sistema permite, aparece o botão <em>Enviar</em> logo após gerar.</p>
         <p><strong>Strum.</strong> Em vez de todas as notas juntas, cada nota entra uma após a outra (10 a 30 ms costuma soar natural), do grave ao agudo ou do agudo ao grave. A primeira nota entra no tempo certo e o acorde termina no mesmo instante, então nada se desloca. Desligado, o MIDI sai exatamente como digitado. Cada acorde pode trocar o strum do projeto em <em>Mais</em>.</p>
-        <p><strong>Assistente de IA.</strong> Descreva a progressão em texto ou por voz (quantos acordes, BPM, estilo, artista ou música de referência, nota do soprano, baixo). A IA pesquisa na internet se precisar, monta os voicings e o app confere cada nota antes de mostrar. Precisa de uma chave da API da Anthropic, configurada em ⚙. <em>Ajustar a atual</em> pede mudanças na progressão que já está na tela.</p>
+        <p><strong>Pedir à sua IA.</strong> No cartão do topo, descreva a progressão (estilo, artista, número de acordes, BPM, ponta, baixo). O app copia o pedido completo; você cola no ChatGPT, Claude ou Gemini, e a IA devolve a progressão com a explicação de cada acorde. Cole a resposta de volta e o app confere cada nota antes de abrir. Não há chave nem custo no app.</p>
         <p><strong>O nome do acorde é só um rótulo.</strong> O MIDI usa exatamente as notas digitadas. O nome vai como marcador no arquivo.</p>
       </div>
     </details>
@@ -212,40 +206,6 @@
     </form>
   </dialog>
 
-  <dialog id="ai-settings" class="sheet" aria-labelledby="ai-settings-title">
-    <form method="dialog" class="sheet-body paste-body">
-      <p class="sheet-title" id="ai-settings-title">Configurar a IA</p>
-      <p class="paste-hint" id="ai-settings-note" hidden></p>
-      <div class="field">
-        <label class="label" for="ai-key">Chave da API da Anthropic</label>
-        <div class="with-button">
-          <input id="ai-key" type="password" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="sk-ant-...">
-          <button type="button" class="btn secondary small" id="ai-key-show">Mostrar</button>
-        </div>
-      </div>
-      <p class="ai-help">Crie em <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener noreferrer">console.anthropic.com</a> → API Keys. A API é cobrada à parte da assinatura do Claude e precisa de créditos. Use uma chave só para este app e defina um limite de gasto no console. A chave fica guardada só neste aparelho e vai direto para a Anthropic: o Harmona Lab não tem servidor.</p>
-      <div class="ai-test-row">
-        <button type="button" class="btn outline small" id="ai-test">Testar chave</button>
-        <span class="field-msg" id="ai-test-result" role="status"></span>
-      </div>
-      <label class="field"><span class="label">Modelo</span><select id="ai-model"></select></label>
-      <label class="field"><span class="label">Raciocínio (mais fundo = mais lento e mais caro)</span><select id="ai-effort"></select></label>
-      <label class="check"><input type="checkbox" id="ai-search"> Pesquisar na internet quando eu citar artista, música ou estilo</label>
-      <label class="field"><span class="label">Máximo de pesquisas por pedido (cada uma custa cerca de US$ 0,01)</span><input id="ai-max-searches" type="number" min="1" max="8" step="1" inputmode="numeric"></label>
-      <label class="field"><span class="label">Meu gosto (a IA considera sempre)</span><textarea id="ai-preferences" rows="3" maxlength="2000" placeholder="Ex.: gosto de menor melódica, dominantes alterados, maj7(#11), pedais e condução de vozes com notas comuns"></textarea></label>
-      <details class="more"><summary>Avançado</summary>
-        <div class="more-body">
-          <label class="field wide"><span class="label">Endereço da API</span><input id="ai-base" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://api.anthropic.com"></label>
-          <button type="button" class="btn ghost small danger" id="ai-clear-key">Apagar a chave deste aparelho</button>
-        </div>
-      </details>
-      <span class="field-msg" id="ai-settings-error"></span>
-      <div class="paste-actions">
-        <button class="btn ghost" value="cancel" formnovalidate>Cancelar</button>
-        <button class="btn primary" value="save" id="ai-settings-save">Salvar</button>
-      </div>
-    </form>
-  </dialog>
 
   <input type="file" id="file-input" accept=".json,application/json" hidden>
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>

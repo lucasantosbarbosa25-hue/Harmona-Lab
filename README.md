@@ -92,33 +92,25 @@ celular não instala o app — para isso, publique (seção acima).
 
 ---
 
-## Descrever a progressão (texto ou voz)
+## Pedir a harmonia à sua IA (texto ou voz)
 
-No topo do app, escreva ou **dite** (🎤) do seu jeito o que quer: quantos acordes, BPM, estilo, artista ou música de
-referência, nota de ponta (soprano), baixo/pedal, strum. Exemplo: *“8 acordes, 76 BPM, balada no estilo Jesús Molina,
-soprano descendo de F# até C, baixo em pedal de E”*. Há dois jeitos de gerar:
+No topo do app, escreva ou **dite** (🎤) o que quer: estilo, artista ou música de referência, número de acordes, BPM,
+**ponta** (a nota mais aguda), baixo/pedal. Exemplo: *“8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C,
+baixo em pedal de E”*.
 
-| Modo | Como funciona | Custo |
-|---|---|---|
-| **Grátis, pelo seu chat** (padrão) | O app monta o pedido completo (com as regras do formato e de condução de vozes) e copia. Você cola no **ChatGPT, Claude ou Gemini** que já usa — inclusive nos planos gratuitos, que também pesquisam na internet —, copia a resposta inteira e cola de volta. O app confere cada nota; se achar problema, mostra a lista e copia o texto de correção para você colar no mesmo chat. | **R$ 0** |
-| **Automático (API paga)** | O app fala direto com a IA da Anthropic, com a **sua** chave: pesquisa na internet se você citar artista/música, monta os voicings, confere e corrige sozinho (até 3 rodadas de correção) e mostra as páginas consultadas e o custo estimado. | Por uso (veja abaixo) |
+1. **Copiar pedido para a IA** monta o pedido completo (regras do formato e da condução de vozes) e copia.
+2. Cole no **ChatGPT, Claude ou Gemini** que você já usa (os planos gratuitos servem e também pesquisam na internet).
+   A IA devolve a progressão e **explica o porquê de cada acorde**.
+3. Cole a resposta de volta. O app **confere cada nota**; se achar problema, mostra a lista e copia o texto de correção
+   para você colar na mesma conversa.
 
-Nos dois modos, **Ajustar a atual** pede mudanças na progressão que já está na tela (“deixe o 3º acorde mais tenso”),
-e a explicação da IA, o pedido e as páginas consultadas ficam em **Sobre esta progressão** (salvos junto do projeto).
-Em **⚙ → Meu gosto** você descreve uma vez as suas preferências e elas vão em todos os pedidos.
+O app não usa chave de API, não tem servidor e não custa nada: quem faz a harmonia é a sua IA. Quem usa sempre a mesma IA
+pode colar as instruções uma única vez nas instruções permanentes dela (**Uso sempre a mesma IA** no cartão) e depois só
+pedir. **Ajustar a atual** pede mudanças na progressão que já está na tela. A explicação, o pedido e a progressão ficam em
+**Sobre esta progressão** (salvos junto do projeto).
 
-**Modo automático: chave e custos.** Crie uma chave em [console.anthropic.com](https://console.anthropic.com/settings/keys)
-(a API é cobrada à parte da assinatura do Claude e precisa de créditos) e cole em **⚙ Configurar a IA**; o botão
-**Testar chave** confere. A chave fica guardada **só no seu aparelho** e vai direto para a Anthropic: o Harmona Lab
-não tem servidor, e cada pessoa usa a própria chave. O que mais pesa no custo, em ordem: o **modelo** (Opus 5.5 é o
-mais caro; Sonnet 5.5 custa metade; Haiku 5.5, uma fração), a **pesquisa na internet** (US$ 0,01 por busca, mais o
-texto das páginas lido pela IA; dá para desligar ou limitar), o **raciocínio** (Rápida/Equilibrada/Profunda) e as
-rodadas de correção. Depois de cada pedido o app mostra o custo estimado. As instruções fixas ficam em cache na
-Anthropic, o que barateia pedidos seguidos.
-
-O ditado usa o reconhecimento de voz do próprio navegador (Chrome, Edge, Safari recentes; precisa de internet):
-toque no microfone, fale e faça uma pausa; toque de novo para continuar. Onde não houver, use o microfone do
-teclado do celular.
+O ditado usa o reconhecimento de voz do próprio navegador (Chrome, Edge, Safari recentes; precisa de internet): toque no
+microfone, fale e faça uma pausa. Onde não houver, use o microfone do teclado do celular.
 
 ## Como usar
 
@@ -232,7 +224,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].symbol`, `omitted`, `comment` | não | Informativos. |
 
 Acorde sem nenhuma nota = pausa. Um exemplo completo está em
-[`examples/resolucao_em_fsharp_soprano.json`](examples/resolucao_em_fsharp_soprano.json) (e o `.mid` gerado ao lado,
+[`examples/resolucao_em_fsharp_ponta.json`](examples/resolucao_em_fsharp_ponta.json) (e o `.mid` gerado ao lado,
 pronto para arrastar na DAW).
 
 ### Usando com o ChatGPT
@@ -316,9 +308,8 @@ harmona-lab/
 │       ├── index.html, styles.css, app.js   interface
 │       ├── keyboard.js, audio.js            teclado visual e pré‑escuta
 │       ├── engine/     motor em JS: pitch, model, analysis, midi (espelho do Python)
-│       ├── ai/         assistente: instruções (prompt.js), modo grátis (chat.js), modo automático
-│       │               (generate.js), ditado (speech.js), configurações e tela
-│       ├── vendor/     SDK oficial da Anthropic em um arquivo (só carregado no modo automático)
+│       ├── ai/         assistente: instruções (prompt.js), pedido e resposta (chat.js), conferência
+│       │               (check.js), ditado (speech.js) e tela (ui.js)
 │       ├── manifest.webmanifest, sw.js, icons/   instalação e modo offline
 │       └── example.json                    exemplo (cópia de examples/, conferida por teste)
 ├── design/logo.mjs     desenho do logotipo: gera icon.svg e os ícones PNG (node design/logo.mjs)

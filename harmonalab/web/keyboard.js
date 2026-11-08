@@ -23,7 +23,7 @@ export function keyboardRange(midis) {
 
 /**
  * Desenha o teclado dentro de `el`.
- * notes: [{midi, part}], top: midi do soprano (ou null).
+ * notes: [{midi, part}], top: midi da ponta (ou null).
  */
 export function renderKeyboard(el, { low, high, notes, top, middleC }) {
   const byMidi = new Map(notes.map((n) => [n.midi, PART_CLASS[n.part] || "free"]));
@@ -70,7 +70,7 @@ export function renderKeyboard(el, { low, high, notes, top, middleC }) {
     const marker = document.createElement("div");
     marker.className = "kb-marker";
     marker.style.left = centerOf.get(top);
-    marker.title = "Soprano";
+    marker.title = "Ponta";
     parts.unshift(marker);
   }
   el.replaceChildren(...parts);

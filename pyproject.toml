@@ -20,7 +20,7 @@ harmonalab = "harmonalab.cli:main"
 packages = ["harmonalab"]
 
 [tool.setuptools.package-data]
-harmonalab = ["web/*", "web/engine/*", "web/icons/*", "web/ai/*", "web/vendor/*"]
+harmonalab = ["web/*", "web/engine/*", "web/icons/*", "web/ai/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

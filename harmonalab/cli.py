@@ -3,7 +3,7 @@
   python -m harmonalab                      abre a interface no navegador
   python -m harmonalab serve [--port N]     idem, com opções
   python -m harmonalab export proj.json     gera proj.mid (ou -o outro.mid)
-  python -m harmonalab check proj.json      mostra notas, soprano, baixo e avisos
+  python -m harmonalab check proj.json      mostra notas, ponta, baixo e avisos
   python -m harmonalab inspect arquivo.mid  lista as notas de um .mid
 """
 

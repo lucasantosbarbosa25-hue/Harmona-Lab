@@ -1,10 +1,10 @@
 """Geração automática de voicings — base da Fase 3 ("Lock Top Note").
 
 Por enquanto há uma única função, propositalmente simples: monta um voicing
-fechado com a nota do soprano travada. Ela garante as duas regras que todo
+fechado com a nota da ponta travada. Ela garante as duas regras que todo
 gerador futuro (inversões, drops, condução de vozes) também terá de cumprir:
 
-  1. o soprano travado está presente;
+  1. a ponta travada está presente;
   2. nenhuma nota gerada fica acima dele.
 
 Notas digitadas à mão nunca passam por aqui: elas são exportadas como estão.
@@ -25,15 +25,15 @@ def voice_under_top(
     low_limit: int | None = None,
     middle_c: str = DEFAULT_MIDDLE_C,
 ) -> list[int]:
-    """Voicing fechado abaixo de um soprano travado.
+    """Voicing fechado abaixo de uma ponta travada.
 
     ``pitch_classes``: notas do acorde sem oitava ("E", "G", "B", "D", "F#").
-    ``top``: soprano com oitava ("F#4"), número MIDI ou ``Note``.
+    ``top``: ponta com oitava ("F#4"), número MIDI ou ``Note``.
     ``bass``: classe de altura opcional, colocada abaixo de todas as vozes.
     ``low_limit``: altura MIDI mínima permitida (``ValueError`` se violada).
 
     Cada classe de altura ocupa a posição mais aguda possível abaixo do
-    soprano (dentro de uma oitava). Devolve alturas MIDI em ordem crescente.
+    ponta (dentro de uma oitava). Devolve alturas MIDI em ordem crescente.
     """
     top_note = top if isinstance(top, Note) else parse_note(top, middle_c)
     top_midi = top_note.midi

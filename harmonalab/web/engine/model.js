@@ -249,7 +249,7 @@ function loadChord(raw, index, project, issues) {
       chord.top_note = parseNote(typeof top === "string" ? top.trim() : top, project.middle_c);
     } catch (err) {
       if (!(err instanceof NoteParseError)) throw err;
-      issues.push(issue("error", `Soprano: ${err.message}`, index, "top_note"));
+      issues.push(issue("error", `Ponta: ${err.message}`, index, "top_note"));
     }
   }
 

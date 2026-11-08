@@ -1,4 +1,4 @@
-// Leitura do voicing: soprano, baixo, espaçamento e avisos — espelho de harmonalab/analysis.py.
+// Leitura do voicing: ponta, baixo, espaçamento e avisos — espelho de harmonalab/analysis.py.
 // Nada aqui altera notas; só "error" bloqueia a exportação.
 
 import { fmtG, roundHalfEven } from "./numbers.js";
@@ -59,15 +59,15 @@ export function chordIssues(project, chord, index) {
     }
   }
 
-  // Soprano travado.
+  // Ponta travada.
   const top = chord.top_note;
   const high = highest(chord);
   if (top !== null && high !== null) {
     if (!where.has(top.midi)) {
-      add("warning", `O soprano travado ${noteName(top, mc)} não está entre as notas do voicing.`, "top_note");
+      add("warning", `A ponta travada ${noteName(top, mc)} não está entre as notas do voicing.`, "top_note");
     } else if (high.midi !== top.midi) {
       const above = voices.filter((v) => v.note.midi > top.midi).map((v) => noteName(v.note, mc));
-      add("warning", `O soprano travado é ${noteName(top, mc)}, mas ${above.join(" ")} `
+      add("warning", `A ponta travada é ${noteName(top, mc)}, mas ${above.join(" ")} `
         + `${above.length === 1 ? "fica" : "ficam"} acima.`, "top_note");
     }
   }

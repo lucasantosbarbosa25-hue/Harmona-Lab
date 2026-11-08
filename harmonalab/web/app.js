@@ -318,14 +318,14 @@ function chordCard(chord, index, total) {
   refs.set(chord, r);
   const n = index + 1;
 
-  // Cabeçalho: número, nome, soprano e ▶
+  // Cabeçalho: número, nome, ponta e ▶
   r.symbol = h("input", {
     type: "text", class: "chord-symbol", value: chord.symbol, placeholder: "Nome do acorde",
     autocomplete: "off", spellcheck: false, "aria-label": `Nome do acorde ${n}`,
     oninput: (e) => { chord.symbol = e.target.value; scheduleValidate(); },
   });
   r.pos = h("span", { class: "chord-pos" });
-  r.badge = h("span", { class: "soprano-badge", title: "Soprano: a nota mais aguda" });
+  r.badge = h("span", { class: "ponta-badge", title: "Ponta: a nota mais aguda" });
   const head = h("div", { class: "chord-head" },
     h("span", { class: "chord-index", "aria-hidden": "true" }, n),
     h("div", { style: "flex:1;min-width:0" }, r.symbol, r.pos),
@@ -379,7 +379,7 @@ function chordCard(chord, index, total) {
   r.msgs.velocity = h("span", { class: "field-msg" });
   const velocity = h("label", { class: "field", for: velId }, h("span", { class: "label" }, "Velocity"), r.velocity, r.msgs.velocity);
 
-  // Soprano travado
+  // Ponta travada
   const topId = `f-${chord.id}-top`;
   r.top = h("input", {
     ...noteInputProps, id: topId, class: "notes", value: chord.top_note, placeholder: "auto",
@@ -388,11 +388,11 @@ function chordCard(chord, index, total) {
   r.inputs.top_note = r.top;
   r.lock = h("button", { type: "button", class: "btn secondary small", onclick: () => toggleLock(chord) });
   r.msgs.top_note = h("span", { class: "field-msg" });
-  const soprano = h("div", { class: "field" },
-    h("label", { class: "label", for: topId }, "Soprano travado"),
+  const ponta = h("div", { class: "field" },
+    h("label", { class: "label", for: topId }, "Ponta travada"),
     h("div", { class: "with-button" }, r.top, r.lock), r.msgs.top_note);
 
-  const params = h("div", { class: "chord-params" }, duration, h("div", { class: "params-pair" }, velocity, soprano));
+  const params = h("div", { class: "chord-params" }, duration, h("div", { class: "params-pair" }, velocity, ponta));
 
   // Mais opções
   r.omitted = h("input", {
@@ -455,7 +455,7 @@ function updateLock(chord) {
   const r = refs.get(chord);
   const locked = Boolean(String(chord.top_note).trim());
   r.lock.replaceChildren(icon(locked ? "unlock" : "lock"), locked ? "Soltar" : "Travar");
-  r.lock.title = locked ? "Voltar ao soprano automático" : "Travar a nota mais aguda atual";
+  r.lock.title = locked ? "Voltar à ponta automática" : "Travar a nota mais aguda atual";
 }
 
 function toggleLock(chord) {
@@ -464,7 +464,7 @@ function toggleLock(chord) {
     chord.top_note = "";
   } else {
     const top = state.byId.get(chord.id)?.chord?.top;
-    if (!top) { toast("Digite as notas do acorde antes de travar o soprano."); return; }
+    if (!top) { toast("Digite as notas do acorde antes de travar a ponta."); return; }
     chord.top_note = top.name;
   }
   r.top.value = chord.top_note;
@@ -517,7 +517,7 @@ function renderAnalysis() {
     renderKeyboard(r.kb, { low, high, notes: info?.notes || [], top: info?.top?.midi ?? null, middleC });
     r.card.classList.toggle("is-rest", Boolean(info?.is_rest));
 
-    // Soprano
+    // Ponta
     r.badge.replaceChildren();
     if (info?.top) r.badge.append(icon(info.top_locked ? "lock" : "note"), info.top.name);
     r.top.placeholder = info?.top ? `auto · ${info.top.name}` : "auto";

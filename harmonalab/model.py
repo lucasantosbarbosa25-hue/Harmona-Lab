@@ -83,7 +83,7 @@ class ChordEvent:
     left_hand: list[Note] = field(default_factory=list)
     right_hand: list[Note] = field(default_factory=list)
     notes: list[Note] = field(default_factory=list)
-    top_note: Note | None = None  # soprano declarado (trava); None = automático
+    top_note: Note | None = None  # ponta declarada (trava); None = automático
     velocity: int | None = None  # None = velocity padrão do projeto
     strum: str | None = None  # None = segue o projeto; ou "off" / "up" / "down"
     omitted: list[str] = field(default_factory=list)  # informativo (ex.: ["5"])
@@ -353,7 +353,7 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
         try:
             chord.top_note = parse_note(top.strip() if isinstance(top, str) else top, project.middle_c)
         except NoteParseError as exc:
-            issues.append(Issue("error", f"Soprano: {exc}", index, "top_note"))
+            issues.append(Issue("error", f"Ponta: {exc}", index, "top_note"))
 
     if raw.get("velocity") is not None and raw.get("velocity") != "":
         chord.velocity = _velocity(raw["velocity"], issues, index, "velocity")

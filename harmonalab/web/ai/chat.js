@@ -2,7 +2,7 @@
 // (ChatGPT, Claude, Gemini...), lê a resposta colada de volta e confere tudo com o mesmo motor do modo automático.
 // Nada é enviado a lugar nenhum pelo app e não há custo de API.
 
-import { checkDelivery } from "./generate.js";
+import { checkDelivery } from "./check.js";
 import { CHAT_INSTRUCTIONS, buildUserMessage } from "./prompt.js";
 
 export const CHATS = [
@@ -14,8 +14,8 @@ export const CHATS = [
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** Texto completo para colar no chat: instruções + pedido (+ progressão atual, no ajuste). */
-export function buildChatPrompt({ request, preferences, mode, currentProject }) {
-  return `${CHAT_INSTRUCTIONS}\n\n---\n\n${buildUserMessage({ request, preferences, mode, currentProject })}`;
+export function buildChatPrompt({ request, mode, currentProject }) {
+  return `${CHAT_INSTRUCTIONS}\n\n---\n\n${buildUserMessage({ request, mode, currentProject })}`;
 }
 
 /** Acha o JSON na resposta do chat: bloco ```json``` (o maior que for válido) ou o trecho entre a primeira { e a última }. */

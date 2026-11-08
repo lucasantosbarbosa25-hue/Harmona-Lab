@@ -26,7 +26,7 @@ def test_top_fsharp5_nunca_e_ultrapassado():
 
 
 @pytest.mark.parametrize("top", ["C4", "F#4", "Bb5", "E6", "G2"])
-def test_soprano_sempre_presente_e_mais_agudo(top):
+def test_ponta_sempre_presente_e_mais_agudo(top):
     voicing = voice_under_top(["B", "C", "D", "Eb", "F", "G", "A"], top)
     assert voicing[-1] == name_to_midi(top)
     assert len(voicing) == len(set(voicing))

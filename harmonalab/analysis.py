@@ -1,4 +1,4 @@
-"""Leitura do voicing: soprano, baixo, espaçamento e avisos musicais.
+"""Leitura do voicing: ponta, baixo, espaçamento e avisos musicais.
 
 Nada aqui altera notas. Avisos (``warning``/``info``) apontam situações que
 podem ser engano de digitação — mas notas explícitas são sempre respeitadas.
@@ -57,15 +57,15 @@ def chord_issues(project: Project, chord: ChordEvent, index: int) -> list[Issue]
             labels = ", ".join(dict.fromkeys(PART_LABELS[p].lower() for p in parts))
             add("warning", f"{name} aparece {len(parts)} vezes ({labels}). No MIDI ela soa uma vez só.")
 
-    # Soprano travado.
+    # Ponta travada.
     highest = chord.highest
     if chord.top_note is not None and highest is not None:
         top = chord.top_note
         if top.midi not in where:
-            add("warning", f"O soprano travado {top.name(mc)} não está entre as notas do voicing.", "top_note")
+            add("warning", f"A ponta travada {top.name(mc)} não está entre as notas do voicing.", "top_note")
         elif highest.midi != top.midi:
             above = [n.name(mc) for n, _ in chord.sounding() if n.midi > top.midi]
-            add("warning", f"O soprano travado é {top.name(mc)}, mas {' '.join(above)} "
+            add("warning", f"A ponta travada é {top.name(mc)}, mas {' '.join(above)} "
                            f"{'fica' if len(above) == 1 else 'ficam'} acima.", "top_note")
 
     # Cruzamentos (só informativo: pode ser intencional).
@@ -171,7 +171,7 @@ def describe(report: dict[str, Any]) -> str:
         lines.append(f"{head} — vel {c['velocity']}")
         lines.append(f"   grave → agudo: {voicing}")
         lines.append(f"   MIDI:          {' '.join(str(n['midi']) for n in c['notes'])}")
-        lines.append(f"   soprano: {c['top']['name']} · baixo: {c['bottom']['name']}")
+        lines.append(f"   ponta: {c['top']['name']} · baixo: {c['bottom']['name']}")
         if c["strum"] != "off":
             arrow = "grave → agudo" if c["strum"] == "up" else "agudo → grave"
             lines.append(f"   strum: {arrow}, {report['strum_delay_ms']:g} ms entre as notas")
