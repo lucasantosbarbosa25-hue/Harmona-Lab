@@ -2,10 +2,11 @@
 // Estratégia "stale-while-revalidate": responde com a cópia guardada e, ao mesmo tempo,
 // busca a versão nova na rede — a atualização aparece na próxima vez que o app abrir.
 
-const CACHE = "harmona-lab-v3";
+const CACHE = "harmona-lab-v4";
 const SHELL = [
   "./", "./index.html", "./styles.css", "./app.js", "./audio.js", "./keyboard.js",
   "./engine/analysis.js", "./engine/midi.js", "./engine/model.js", "./engine/numbers.js", "./engine/pitch.js",
+  "./ai/chat.js", "./ai/generate.js", "./ai/prompt.js", "./ai/settings.js", "./ai/speech.js", "./ai/ui.js",
   "./example.json", "./manifest.webmanifest", "./icon.svg",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/maskable-512.png", "./icons/apple-touch-icon.png",
 ];

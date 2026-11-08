@@ -92,6 +92,34 @@ celular não instala o app — para isso, publique (seção acima).
 
 ---
 
+## Descrever a progressão (texto ou voz)
+
+No topo do app, escreva ou **dite** (🎤) do seu jeito o que quer: quantos acordes, BPM, estilo, artista ou música de
+referência, nota de ponta (soprano), baixo/pedal, strum. Exemplo: *“8 acordes, 76 BPM, balada no estilo Jesús Molina,
+soprano descendo de F# até C, baixo em pedal de E”*. Há dois jeitos de gerar:
+
+| Modo | Como funciona | Custo |
+|---|---|---|
+| **Grátis, pelo seu chat** (padrão) | O app monta o pedido completo (com as regras do formato e de condução de vozes) e copia. Você cola no **ChatGPT, Claude ou Gemini** que já usa — inclusive nos planos gratuitos, que também pesquisam na internet —, copia a resposta inteira e cola de volta. O app confere cada nota; se achar problema, mostra a lista e copia o texto de correção para você colar no mesmo chat. | **R$ 0** |
+| **Automático (API paga)** | O app fala direto com a IA da Anthropic, com a **sua** chave: pesquisa na internet se você citar artista/música, monta os voicings, confere e corrige sozinho (até 3 rodadas de correção) e mostra as páginas consultadas e o custo estimado. | Por uso (veja abaixo) |
+
+Nos dois modos, **Ajustar a atual** pede mudanças na progressão que já está na tela (“deixe o 3º acorde mais tenso”),
+e a explicação da IA, o pedido e as páginas consultadas ficam em **Sobre esta progressão** (salvos junto do projeto).
+Em **⚙ → Meu gosto** você descreve uma vez as suas preferências e elas vão em todos os pedidos.
+
+**Modo automático: chave e custos.** Crie uma chave em [console.anthropic.com](https://console.anthropic.com/settings/keys)
+(a API é cobrada à parte da assinatura do Claude e precisa de créditos) e cole em **⚙ Configurar a IA**; o botão
+**Testar chave** confere. A chave fica guardada **só no seu aparelho** e vai direto para a Anthropic: o Harmona Lab
+não tem servidor, e cada pessoa usa a própria chave. O que mais pesa no custo, em ordem: o **modelo** (Opus 5.5 é o
+mais caro; Sonnet 5.5 custa metade; Haiku 5.5, uma fração), a **pesquisa na internet** (US$ 0,01 por busca, mais o
+texto das páginas lido pela IA; dá para desligar ou limitar), o **raciocínio** (Rápida/Equilibrada/Profunda) e as
+rodadas de correção. Depois de cada pedido o app mostra o custo estimado. As instruções fixas ficam em cache na
+Anthropic, o que barateia pedidos seguidos.
+
+O ditado usa o reconhecimento de voz do próprio navegador (Chrome, Edge, Safari recentes; precisa de internet):
+toque no microfone, fale e faça uma pausa; toque de novo para continuar. Onde não houver, use o microfone do
+teclado do celular.
+
 ## Como usar
 
 1. Ajuste **BPM**, **compasso**, **velocity padrão** e a convenção do **dó central**.
@@ -209,7 +237,8 @@ pronto para arrastar na DAW).
 
 ### Usando com o ChatGPT
 
-Peça a resposta já no formato do Harmona Lab, por exemplo:
+O jeito mais fácil é o modo **Grátis, pelo seu chat** (seção “Descrever a progressão”), que monta o pedido
+completo e confere a resposta. Para pedir à mão, peça a resposta já no formato do Harmona Lab, por exemplo:
 
 > Responda só com um bloco JSON no formato Harmona Lab: `tempo`, `time_signature`, `middle_c: "C4"` e uma lista
 > `chords`, cada um com `symbol`, `duration_beats`, `left_hand`, `right_hand` (notas com oitava, MIDI 60 = C4),
@@ -287,11 +316,15 @@ harmona-lab/
 │       ├── index.html, styles.css, app.js   interface
 │       ├── keyboard.js, audio.js            teclado visual e pré‑escuta
 │       ├── engine/     motor em JS: pitch, model, analysis, midi (espelho do Python)
+│       ├── ai/         assistente: instruções (prompt.js), modo grátis (chat.js), modo automático
+│       │               (generate.js), ditado (speech.js), configurações e tela
+│       ├── vendor/     SDK oficial da Anthropic em um arquivo (só carregado no modo automático)
 │       ├── manifest.webmanifest, sw.js, icons/   instalação e modo offline
 │       └── example.json                    exemplo (cópia de examples/, conferida por teste)
 ├── design/logo.mjs     desenho do logotipo: gera icon.svg e os ícones PNG (node design/logo.mjs)
 ├── examples/           projeto de exemplo (.json) e o .mid gerado
 ├── tests/              testes automatizados (pytest) + js_engine_runner.mjs (paridade)
+│   └── js/             testes do assistente (node --test), com a API da Anthropic simulada
 ├── wrangler.jsonc      publicação no Cloudflare Pages (só estáticos)
 ├── iniciar-windows.bat / iniciar-mac-linux.sh
 ├── requirements.txt    mido
@@ -314,7 +347,10 @@ automaticamente passa de `F#5` (testado em todas as combinações de até 6 clas
 pitches, note on/off, velocity, duração, ordem temporal, tempo, compasso, marcadores, nota comum re‑articulada,
 pausas; **paridade JS × Python** (análise, mensagens e bytes do `.mid`, se houver Node.js instalado; sem Node o
 teste é pulado); servidor local (inclusive bloqueio de caminhos fora da pasta do app); arquivos do modo offline e do
-manifesto; linha de comando.
+manifesto; linha de comando; **assistente de IA** (rodam no Node, chamados pelo pytest): o pedido enviado à API,
+pesquisa e continuação (`pause_turn`) devolvendo a mensagem intacta, conferência que recusa e devolve os problemas
+à IA, erros da API em português, cancelamento, leitura da resposta colada do chat e ditado, tudo com uma API
+simulada no formato oficial de streaming, sem chave e sem custo.
 
 ---
 
@@ -355,3 +391,6 @@ cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes*
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").
 - Os projetos ficam no aparelho (rascunho automático) ou em arquivos `.json`; não há sincronização entre aparelhos.
 - No Android, o Chrome costuma não permitir compartilhar `.mid` direto (sem botão "Enviar"); o arquivo vai para Downloads.
+- O modo automático foi testado com uma API simulada que segue o formato oficial; a primeira chamada real depende da
+  sua chave e dos créditos da conta. No modo grátis, a qualidade depende do chat usado (o app garante o formato e a
+  conferência das notas).

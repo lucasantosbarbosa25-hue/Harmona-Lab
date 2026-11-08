@@ -2,6 +2,7 @@
 // O motor (engine/) roda aqui mesmo no navegador: o app funciona offline, sem servidor,
 // e gera os mesmos bytes de MIDI que a versão em Python (há teste comparando).
 
+import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { analyzeData } from "./engine/analysis.js";
 import { TICKS_PER_BEAT, beatsToTicks, midiBytes, strumPlan } from "./engine/midi.js";
@@ -35,6 +36,9 @@ const ICONS = {
   save: '<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4"/><path d="M8 20v-6h8v6"/>',
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16v4M17 18h4"/>',
   file: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/>',
+  mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
   install: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><rect x="4" y="18" width="16" height="3" rx="1"/>',
   paste: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3"/>',
   note: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
@@ -221,6 +225,7 @@ function renderSettings() {
   $("#tempo").value = p.tempo;
   $("#default-velocity").value = p.default_velocity;
   $("#middle-c").value = p.middle_c;
+  $("#project-comment").value = p.comment || "";
   const select = $("#time-signature");
   const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
   select.replaceChildren(...options.map((sig) => h("option", { value: sig }, sig)));
@@ -253,6 +258,7 @@ function bindSettings() {
     scheduleValidate();
   });
   bind("#title", "title");
+  bind("#project-comment", "comment");
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
@@ -561,6 +567,7 @@ function renderAnalysis() {
   }
 
   renderSummary();
+  assistant?.refresh();
 }
 
 function renderSummary() {
@@ -867,6 +874,25 @@ function bindUi() {
   bindSettings();
 }
 
+// ---------------------------------------------------------------- assistente de IA
+let assistant = null;
+
+/** O que a IA pode ajustar: o projeto como está (já conferido, se estiver sem erros). */
+function currentProjectJson() {
+  return state.report?.ok ? state.report.project : toPayload();
+}
+
+const hasProgression = () => Boolean(state.report?.chords?.some((c) => !c.is_rest));
+
+/** Carrega a progressão gerada. A IA escreve em C4 = dó central; convertemos para a convenção escolhida aqui. */
+function applyGenerated(data, { comment, message }) {
+  const project = { ...data, comment, middle_c: "C4" };
+  if (!("strum" in project)) project.strum = state.project.strum; // pedido que não fala de strum mantém o seu
+  const mc = state.project.middle_c;
+  loadProject(mc === "C4" ? project : renameProjectNotes(project, mc), message);
+  $("#progression-heading").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 // ---------------------------------------------------------------- app instalável (PWA)
 let installPrompt = null;
 
@@ -906,6 +932,9 @@ async function init() {
   }
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
+  assistant = initAssistant({
+    $, h, icon, toast, getProjectJson: currentProjectJson, hasProgression, applyGenerated,
+  });
 }
 
 init();
