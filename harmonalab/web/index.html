@@ -73,6 +73,7 @@
         <div class="more-body">
           <p class="ai-help wide">Cole as instruções abaixo uma única vez nas instruções permanentes da sua IA (no Claude, num Projeto; no ChatGPT, em Personalizar ou num GPT; no Gemini, num Gem). Depois é só pedir, sem copiar nada: <em>“8 acordes, estilo Domi &amp; JD Beck, ponta em F#”</em>.</p>
           <button type="button" class="btn outline wide" id="ai-copy-instructions">Copiar instruções permanentes</button>
+          <p class="ai-help wide">Usa o Claude com Skills? Baixe a <a href="harmona-harmonia.zip" download>skill do Harmona Lab (.zip)</a> e instale como as suas outras skills: ela confere as notas e gera o link sozinha. Para IAs com navegação, vale mandar: <em>“leia <a href="ia.md" target="_blank" rel="noopener">ia.md</a> e monte uma progressão…”</em>.</p>
         </div>
       </details>
     </section>
@@ -126,8 +127,10 @@
       </div>
       <ul class="issues" id="project-issues" aria-live="polite"></ul>
       <details class="more" id="project-notes">
-        <summary>Sobre esta progressão (explicação e notas)</summary>
+        <summary>Sobre esta progressão (tom, referências e explicação)</summary>
         <div class="more-body">
+          <label class="field"><span class="label">Tom</span><input id="project-key" type="text" autocomplete="off" placeholder="ex.: Em"></label>
+          <label class="field"><span class="label">Referências (artistas, músicas)</span><input id="project-refs" type="text" autocomplete="off" placeholder="ex.: Jesús Molina, Dirty Loops"></label>
           <label class="field wide">
             <span class="label">Notas do projeto</span>
             <textarea id="project-comment" rows="4" placeholder="Ideia, referências, o que testar… A explicação da IA fica aqui."></textarea>
@@ -145,6 +148,24 @@
           <span class="dot bass"></span>Baixo
         </span>
       </div>
+      <div class="meta-chips" id="project-meta" hidden></div>
+      <details class="more voicing-tools" id="voicing-tools">
+        <summary>Mexer nos voicings de todos os acordes</summary>
+        <div class="more-body">
+          <div class="field wide">
+            <span class="label">Mão direita</span>
+            <div class="segmented" id="voicing-all" role="group" aria-label="Voicing de todos os acordes"></div>
+          </div>
+          <div class="field wide">
+            <label class="label" for="pedal-note">Ponta pedal (a mesma nota no topo de todos os acordes)</label>
+            <div class="with-button">
+              <input id="pedal-note" type="text" class="notes" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ex.: F#5">
+              <button type="button" class="btn secondary small" id="pedal-apply">Aplicar</button>
+            </div>
+          </div>
+          <p class="ai-help wide">Só mudam as oitavas da mão direita; a esquerda e o baixo ficam como estão. Em cada acorde dá para trocar o voicing no cartão. Tudo pode ser desfeito.</p>
+        </div>
+      </details>
       <ol class="chords" id="chords"></ol>
       <div class="add-row">
         <button class="btn outline" id="add-chord"></button>
@@ -183,6 +204,7 @@
       <button class="menu-item highlight" value="install" data-icon="install" id="install-item" hidden>Instalar como app</button>
       <button class="menu-item" value="open" data-icon="folder">Abrir projeto (.json)</button>
       <button class="menu-item" value="paste" data-icon="paste">Colar JSON (ex.: do ChatGPT)</button>
+      <button class="menu-item" value="share" data-icon="link">Copiar link da progressão</button>
       <button class="menu-item" value="save" data-icon="save">Salvar projeto (.json)</button>
       <button class="menu-item" value="example" data-icon="sparkle">Carregar exemplo</button>
       <button class="menu-item" value="new" data-icon="file">Novo projeto vazio</button>

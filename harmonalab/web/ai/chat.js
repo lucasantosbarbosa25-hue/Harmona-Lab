@@ -3,7 +3,7 @@
 // Nada é enviado a lugar nenhum pelo app e não há custo de API.
 
 import { checkDelivery } from "./check.js";
-import { CHAT_INSTRUCTIONS, buildUserMessage } from "./prompt.js";
+import { buildUserMessage, instructions } from "./prompt.js";
 
 export const CHATS = [
   { name: "ChatGPT", url: "https://chatgpt.com/" },
@@ -14,8 +14,8 @@ export const CHATS = [
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** Texto completo para colar no chat: instruções + pedido (+ progressão atual, no ajuste). */
-export function buildChatPrompt({ request, mode, currentProject }) {
-  return `${CHAT_INSTRUCTIONS}\n\n---\n\n${buildUserMessage({ request, mode, currentProject })}`;
+export function buildChatPrompt({ request, mode, currentProject, appUrl }) {
+  return `${instructions(appUrl)}\n\n---\n\n${buildUserMessage({ request, mode, currentProject })}`;
 }
 
 /** Acha o JSON na resposta do chat: bloco ```json``` (o maior que for válido) ou o trecho entre a primeira { e a última }. */

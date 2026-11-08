@@ -3,7 +3,7 @@
 # Harmona Lab
 
 Laboratório de **voicings, reharmonização e condução de vozes** que transforma exatamente as notas que você
-discutiu — mão esquerda, mão direita, oitavas, soprano — num arquivo **`.mid`** para arrastar em qualquer DAW
+discutiu — mão esquerda, mão direita, oitavas, ponta — num arquivo **`.mid`** para arrastar em qualquer DAW
 (Studio One, Ableton, Logic, Reaper…) e tocar com qualquer VST (Pianoteq, Kontakt, Rhodes, strings, synth).
 
 > Foco desta primeira versão (MVP): **os voicings exatos que surgem nas conversas de harmonia viram MIDI, sem
@@ -94,30 +94,45 @@ celular não instala o app — para isso, publique (seção acima).
 
 ## Pedir a harmonia à sua IA (texto ou voz)
 
-No topo do app, escreva ou **dite** (🎤) o que quer: estilo, artista ou música de referência, número de acordes, BPM,
-**ponta** (a nota mais aguda), baixo/pedal. Exemplo: *“8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C,
-baixo em pedal de E”*.
+O app é para **aprender harmonia rebuscada** (Jesús Molina, Dirty Loops, Domi & JD Beck, Stevie Wonder, Ed Motta e afins):
+quem monta a progressão e **explica a função de cada acorde** (escala, empréstimo modal, cromatismo, substituição) é a
+**sua IA**, no seu chat. O app confere as notas, mostra tom, referências, função e escala em cada acorde, e deixa você
+mexer nos voicings. Não há chave de API, servidor nem custo.
 
-1. **Copiar pedido para a IA** monta o pedido completo (regras do formato e da condução de vozes) e copia.
-2. Cole no **ChatGPT, Claude ou Gemini** que você já usa (os planos gratuitos servem e também pesquisam na internet).
-   A IA devolve a progressão e **explica o porquê de cada acorde**.
-3. Cole a resposta de volta. O app **confere cada nota**; se achar problema, mostra a lista e copia o texto de correção
-   para você colar na mesma conversa.
+**Jeito mais simples (uma vez):** em **Uso sempre a mesma IA**, copie as instruções e cole nas instruções permanentes da
+sua IA (no Claude, num Projeto; no ChatGPT, em Personalizar ou num GPT; no Gemini, num Gem). Depois é só pedir no chat,
+sem copiar nada: *“8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C, baixo em pedal de E”*. A IA responde
+com a explicação acorde a acorde e **um link**: toque nele e a progressão abre no app, conferida.
 
-O app não usa chave de API, não tem servidor e não custa nada: quem faz a harmonia é a sua IA. Quem usa sempre a mesma IA
-pode colar as instruções uma única vez nas instruções permanentes dela (**Uso sempre a mesma IA** no cartão) e depois só
-pedir. **Ajustar a atual** pede mudanças na progressão que já está na tela. A explicação, o pedido e a progressão ficam em
-**Sobre esta progressão** (salvos junto do projeto).
+**Sem configurar nada:** escreva ou dite (🎤) o pedido no cartão do topo e use **Copiar pedido para a IA**; cole no chat,
+e depois toque no link que ela mandar ou cole a resposta no passo 3. Se a conferência achar problema, o app mostra a lista
+e copia o texto de correção para você colar na mesma conversa. **Ajustar a atual** pede mudanças na progressão da tela.
 
-O ditado usa o reconhecimento de voz do próprio navegador (Chrome, Edge, Safari recentes; precisa de internet): toque no
-microfone, fale e faça uma pausa. Onde não houver, use o microfone do teclado do celular.
+**Links.** O que vem depois do `#` nunca vai para servidor.
+- `#t=…&k=Em&bpm=80&p=cifra:notas:duração:função:escala;…`: o formato compacto que qualquer IA consegue escrever
+  (descrito em [`/ia.md`](harmonalab/web/ia.md), que também serve para IAs com navegação: “leia …/ia.md e monte…”).
+- `#z=…`: a progressão comprimida, o link mais curto. **⋯ → Copiar link da progressão** gera um para você mandar a um amigo.
+- `#json=…` (o projeto) e `#pedido=…` (só preenche o pedido; o app nunca gera sozinho ao abrir um link).
+
+**Voicings à mão.** Em cada acorde, **Voicing da mão direita**: Fechado, Aberto, Drop 2 e Drop 3. Em **Mexer nos voicings de
+todos os acordes**, os mesmos botões valem para a progressão inteira, e a **ponta pedal** põe a mesma nota no topo de todos
+os acordes (o app avisa em quantos ela não fazia parte do acorde: é a tensão que você vai ouvir). Só mudam as oitavas da
+mão direita; tudo pode ser desfeito.
+
+**Skill para o Claude.** A pasta [`skill/harmona-harmonia`](skill/harmona-harmonia) (e o `.zip` em
+`harmonalab/web/harmona-harmonia.zip`, que o app oferece para baixar) é uma skill: instruções, vocabulário de harmonia no
+estilo de livros-texto (modos da menor melódica, tensões, substituições, upper structures, voicings), pistas por artista,
+um exemplo completo de resposta e dois scripts (`validar.py` confere as notas e a ponta; `gerar_link.py` gera o link).
+Para acrescentar material de estudo próprio (apostilas, anotações de aula), coloque em `references/` e cite no `SKILL.md`.
+
+O ditado usa o reconhecimento de voz do próprio navegador (Chrome, Edge, Safari recentes; precisa de internet).
 
 ## Como usar
 
 1. Ajuste **BPM**, **compasso**, **velocity padrão** e a convenção do **dó central**.
 2. Em cada acorde, digite as notas da **mão direita** e da **mão esquerda** com oitava: `D4 Eb4 G4 C5`.
    O teclado e as fichas logo abaixo mostram, em tempo real, exatamente o que vai para o MIDI
-   (do grave ao agudo, com o número MIDI de cada nota e o **soprano** destacado).
+   (do grave ao agudo, com o número MIDI de cada nota e a **ponta** destacada).
 3. Escolha a duração (`½`, `1` ou `2` compassos, ou qualquer número de tempos).
 4. **▶ Ouvir** faz uma pré‑escuta simples no navegador (só para conferir; o som de verdade é o do seu VST).
 5. **Gerar MIDI** salva o `.mid`. Arraste o arquivo para uma faixa de instrumento na DAW.
@@ -126,7 +141,7 @@ Outras coisas na tela:
 
 | Recurso | O que faz |
 |---|---|
-| **Soprano travado** | Declara a nota que *precisa* ser a mais aguda. Se outra nota ficar acima (ou ela faltar), aparece um aviso. O botão **Travar** fixa o soprano atual. |
+| **Ponta travada** | Declara a nota que *precisa* ser a mais aguda (a ponta, ou soprano). Se outra nota ficar acima (ou ela faltar), aparece um aviso. O botão **Travar** fixa o soprano atual. |
 | **Strum** | Em vez de todas as notas juntas, cada nota entra uma após a outra: **grave → agudo** ou **agudo → grave**, com **10, 20 ou 30 ms** (ou outro valor, de 1 a 250) entre elas. A 1ª nota entra no tempo e o acorde termina no mesmo instante, então nada se desloca. Fica **desligado** por padrão: assim o MIDI sai exatamente como digitado. Vale para o projeto todo, e cada acorde pode trocar em **Mais → Strum deste acorde**. A pré‑escuta (**▶**) usa os mesmos atrasos. |
 | **Mais: baixo/pedal, notas sem mão** | Notas extras que soam junto (ex.: pedal de `E1` sob o acorde, ou notas sem mão definida). |
 | **Notas omitidas / comentário** | Só anotação (não vão para o MIDI). |
@@ -144,7 +159,7 @@ WhatsApp, e‑mail, cabo). Quando o sistema permite compartilhar o arquivo, apar
 
 - **Erro** (vermelho) impede gerar o MIDI: nota que não existe (`H3`), nota sem oitava (`Eb`), fora de 0–127,
   BPM/duração/velocity inválidos.
-- **Aviso** (amarelo) e **nota** (cinza) nunca bloqueiam: soprano travado que não é o mais agudo, mesma tecla
+- **Aviso** (amarelo) e **nota** (cinza) nunca bloqueiam: ponta travada que não é a nota mais aguda, mesma tecla
   digitada duas vezes, mãos cruzadas, mão abrindo mais que uma 10ª, nota fora do piano de 88 teclas.
 
 **Notas explícitas sempre mandam.** Clusters, semitons, baixos inesperados, acordes sem nome: tudo é exportado
@@ -189,7 +204,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 
 ```json
 {
-  "title": "Resolução B7alt para Em com F# no soprano",
+  "title": "Resolução B7alt para Em com F# na ponta",
   "tempo": 80,
   "time_signature": "4/4",
   "middle_c": "C4",
@@ -218,9 +233,11 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].left_hand`, `right_hand` | não | Lista (`["B2","A3"]`) **ou** texto (`"B2 A3"`). Nomes com oitava ou números MIDI. |
 | `chords[].bass`, `notes` | não | Baixo/pedal e notas sem mão definida. Também soam. |
 | `chords[].duration_beats` | não (1 compasso) | Em tempos de semínima (4 = 1 compasso em 4/4; 3 = 1 compasso em 6/8). Ou use `duration_bars`. |
-| `chords[].top_note` | não | Soprano travado (validação: deve ser a nota mais aguda). |
+| `chords[].top_note` | não | Ponta travada (validação: deve ser a nota mais aguda). |
 | `chords[].velocity` | não | 1–127. |
 | `chords[].strum` | não (segue o projeto) | `"off"`, `"up"` ou `"down"`: troca o strum só neste acorde. O atraso é o do projeto. |
+| `key`, `references` | não | Tom (`"Em"`) e artistas ou músicas de referência (lista): aparecem em destaque na progressão. |
+| `chords[].function`, `scale` | não | Função em graus (`"V7alt"`) e escala ou modo: aparecem sob o nome do acorde. |
 | `chords[].symbol`, `omitted`, `comment` | não | Informativos. |
 
 Acorde sem nenhuma nota = pausa. Um exemplo completo está em
@@ -246,7 +263,7 @@ Depois use **⋯ → Colar JSON**: o app aceita o JSON puro ou dentro de um bloc
 python -m harmonalab                              # abre o app no navegador (igual a "serve")
 python -m harmonalab serve --port 9000 --no-browser
 python -m harmonalab export projeto.json          # gera projeto.mid (ou -o outro.mid)
-python -m harmonalab check projeto.json           # mostra notas grave→agudo, MIDI, soprano, baixo e avisos
+python -m harmonalab check projeto.json           # mostra notas grave→agudo, MIDI, ponta, baixo e avisos
 python -m harmonalab inspect arquivo.mid          # lista as notas de qualquer .mid
 ```
 
@@ -262,7 +279,7 @@ python -m harmonalab inspect arquivo.mid          # lista as notas de qualquer .
               │                                                     │
    ┌──────────┴─────── motor (mesmas camadas nos dois lados) ───────┴──────────┐
    │  model      projeto → acordes (notas concretas), leitura com lista de erros │
-   │  analysis   soprano, baixo, espaçamento, avisos                             │
+   │  analysis   ponta, baixo, espaçamento, avisos                               │
    │  pitch      nota = número MIDI + grafia original                            │
    │  midi       projeto → bytes do .mid                                         │
    └──────────────────────────────────────────────────────────────────────────────┘
@@ -299,20 +316,23 @@ harmona-lab/
 ├── harmonalab/
 │   ├── pitch.py        notas ↔ MIDI, convenções de oitava, grafia enarmônica
 │   ├── model.py        Project / ChordEvent, leitura tolerante do JSON com lista de erros
-│   ├── analysis.py     soprano, baixo, espaçamento, dobras, avisos musicais
+│   ├── analysis.py     ponta, baixo, espaçamento, dobras, avisos musicais
 │   ├── midi_io.py      gera .mid e lê de volta (conferência/testes)
-│   ├── voicing.py      geradores automáticos — hoje: voicing fechado sob soprano travado
+│   ├── voicing.py      geradores automáticos — hoje: voicing fechado sob ponta travada
 │   ├── server.py       servidor local que entrega o app (uso no computador)
 │   ├── cli.py          linha de comando
 │   └── web/            o app publicado (arquivos estáticos)
 │       ├── index.html, styles.css, app.js   interface
 │       ├── keyboard.js, audio.js            teclado visual e pré‑escuta
 │       ├── engine/     motor em JS: pitch, model, analysis, midi (espelho do Python)
-│       ├── ai/         assistente: instruções (prompt.js), pedido e resposta (chat.js), conferência
-│       │               (check.js), ditado (speech.js) e tela (ui.js)
+│       ├── ai/         assistente: instruções (prompt.js), pedido e resposta (chat.js), links (link.js),
+│       │               conferência (check.js), ditado (speech.js) e tela (ui.js)
+│       ├── ia.md       instruções para IAs (gerado por design/ia.mjs)
+│       ├── harmona-harmonia.zip   a skill, para baixar (gerado por design/build_skill.py)
 │       ├── manifest.webmanifest, sw.js, icons/   instalação e modo offline
 │       └── example.json                    exemplo (cópia de examples/, conferida por teste)
-├── design/logo.mjs     desenho do logotipo: gera icon.svg e os ícones PNG (node design/logo.mjs)
+├── design/             logo.mjs (ícones), ia.mjs (ia.md e SKILL.md), build_skill.py (cópia do motor e .zip da skill)
+├── skill/harmona-harmonia/   a skill do Claude: SKILL.md, scripts, referências e exemplo
 ├── examples/           projeto de exemplo (.json) e o .mid gerado
 ├── tests/              testes automatizados (pytest) + js_engine_runner.mjs (paridade)
 │   └── js/             testes do assistente (node --test), com a API da Anthropic simulada
@@ -332,16 +352,16 @@ python -m pytest
 ```
 
 Cobrem, entre outros: `C4 = 60`, `C#4 = Db4 = 61`, `B3 = 59`, `B#3`/`Cb4`, convenção C3; preservação da grafia;
-leitura tolerante do JSON (todos os erros de uma vez); **top note**: com soprano `F#5`, nenhum voicing gerado
+leitura tolerante do JSON (todos os erros de uma vez); **top note**: com ponta `F#5`, nenhum voicing gerado
 automaticamente passa de `F#5` (testado em todas as combinações de até 6 classes de altura); **duração**: 4 tempos em
 4/4 = exatamente 1 compasso em vários BPMs, e outras fórmulas (3/4, 6/8, 5/4, 7/8); **MIDI relido do disco**:
 pitches, note on/off, velocity, duração, ordem temporal, tempo, compasso, marcadores, nota comum re‑articulada,
 pausas; **paridade JS × Python** (análise, mensagens e bytes do `.mid`, se houver Node.js instalado; sem Node o
 teste é pulado); servidor local (inclusive bloqueio de caminhos fora da pasta do app); arquivos do modo offline e do
-manifesto; linha de comando; **assistente de IA** (rodam no Node, chamados pelo pytest): o pedido enviado à API,
-pesquisa e continuação (`pause_turn`) devolvendo a mensagem intacta, conferência que recusa e devolve os problemas
-à IA, erros da API em português, cancelamento, leitura da resposta colada do chat e ditado, tudo com uma API
-simulada no formato oficial de streaming, sem chave e sem custo.
+manifesto; linha de comando; **links** (formato compacto, `#json=` e `#z=` comprimido, links colados no meio de uma
+resposta, links quebrados), **voicings** (fechado, aberto, drop 2, drop 3, ponta pedal, com propriedades sobre 400
+acordes aleatórios), conferência da resposta da IA, ditado, e **a skill** (cópia do motor e `.zip` em dia, scripts, links
+gerados em Python abrindo igual no app). Os testes em JavaScript rodam com `node --test tests/js` (e também pelo pytest).
 
 ---
 
@@ -355,10 +375,10 @@ um módulo `arrange.py` que monta `contexto → alternativa → pausa`, repetind
 `ChordEvent`), exportar várias alternativas de uma vez, e um banco de experimentos (pasta de `.json` com `name`,
 `tags`, comentários e o `.mid` gerado — sem banco de dados).
 
-**Fase 3 — voicings automáticos.** `voicing.py` já tem `voice_under_top()` (soprano travado garantido). Próximos:
-inversões, drop 2/3, posição aberta/fechada, faixas por região (baixo C1–B2, ME C2–C4, MD C3–C6, soprano até C7) e
+**Fase 3 — voicings automáticos.** `voicing.py` já tem `voice_under_top()` (ponta travada garantida). Os botões de voicing do app (fechado, aberto, drop 2, drop 3, ponta pedal) estão em `web/engine/voicing.js`. Próximos:
+inversões, drop 2/3, posição aberta/fechada, faixas por região (baixo C1–B2, ME C2–C4, MD C3–C6, ponta até C7) e
 **condução de vozes** — busca de oitavas/inversões minimizando uma função de custo (movimento total em semitons,
-penalidade por saltos, bônus por notas comuns, soprano e baixo preservados, distância confortável entre vozes).
+penalidade por saltos, bônus por notas comuns, ponta e baixo preservados, distância confortável entre vozes).
 Regra: o gerador só atua quando pedido; notas explícitas continuam intocadas.
 
 **Fase 4 — humanização e playback.** O **strum** (grave→agudo ou agudo→grave, 10/20/30 ms) **já existe**, na tela, no
@@ -369,19 +389,18 @@ de paridade.
 
 **Fase 5 — texto livre e sugestões.** Um parser (`textparse.py`) para entradas como
 `1. F#m7b5 LH: F#2 C3 RH: E3 A3 C4 E4 Duration: 4` produzindo o mesmo JSON; depois o modo **harmonic alternatives**
-(alvo `Em9`, contexto `B7alt`, soprano `F#` → várias alternativas como `Cmaj7(#11)/E`, estruturas suspensas,
+(alvo `Em9`, contexto `B7alt`, ponta `F#` → várias alternativas como `Cmaj7(#11)/E`, estruturas suspensas,
 cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes** do `model.py`; o motor MIDI não muda.
 
 ---
 
 ## Limitações conhecidas desta versão
 
-- O soprano travado é **validado** (aviso), não reorganizado automaticamente — reorganizar é a Fase 3.
+- A ponta travada é **validada** (aviso); o app só reorganiza voicings quando você pede, pelos botões (fechado, aberto, drop 2, drop 3, ponta pedal).
 - Uma faixa MIDI única (sem separar mãos em faixas).
 - A pré‑escuta do navegador é um timbre simples; o objetivo dela é só conferir notas.
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").
 - Os projetos ficam no aparelho (rascunho automático) ou em arquivos `.json`; não há sincronização entre aparelhos.
 - No Android, o Chrome costuma não permitir compartilhar `.mid` direto (sem botão "Enviar"); o arquivo vai para Downloads.
-- O modo automático foi testado com uma API simulada que segue o formato oficial; a primeira chamada real depende da
-  sua chave e dos créditos da conta. No modo grátis, a qualidade depende do chat usado (o app garante o formato e a
-  conferência das notas).
+- O fluxo com a IA foi testado com respostas simuladas e conferido no navegador; a qualidade musical depende da IA usada
+  (o app garante o formato e a conferência das notas). As pistas sobre cada artista são generalizações a confirmar.

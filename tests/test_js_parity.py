@@ -73,6 +73,10 @@ CASES = [
     {"strum": {"direction": "up", "delay_ms": 20}, "chords": [{"notes": "C4 E4 G4"}, {"notes": "C4 E4 G4"}]},  # nota comum reatacada
     # duração menor que meio tick: erro (a nota ficaria presa)
     {"chords": [{"notes": "C4", "duration_beats": 0.0004}, {"notes": "D4", "duration_beats": 0.001}]},
+    # tom, referências, função e escala (só informativos)
+    {"key": " Em ", "references": ["Jesús Molina", " Dirty Loops ", "", 5, None], "chords": [{"notes": "E3 G3 B3", "function": "i7", "scale": " Eólio "}]},
+    {"key": 5, "references": "Domi & JD Beck, Stevie Wonder; Ed Motta", "chords": [{"notes": "C4", "function": 3, "scale": ["x"]}]},
+    {"references": {"a": 1}, "chords": [{"notes": "C4"}]},
     # erros
     {"strum": 5, "chords": [{"notes": "C4 E4", "strum": "sideways"}]},
     {"strum": "down", "chords": [{"notes": "C4 E4 G4"}]},  # atalho: só a direção

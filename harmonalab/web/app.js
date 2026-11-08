@@ -2,12 +2,14 @@
 // O motor (engine/) roda aqui mesmo no navegador: o app funciona offline, sem servidor,
 // e gera os mesmos bytes de MIDI que a versão em Python (há teste comparando).
 
+import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { analyzeData } from "./engine/analysis.js";
 import { TICKS_PER_BEAT, beatsToTicks, midiBytes, strumPlan } from "./engine/midi.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
+import { VOICINGS, revoiceChord } from "./engine/voicing.js";
 
 const DRAFT_KEY = "harmonalab:draft:v1";
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
@@ -39,6 +41,7 @@ const ICONS = {
   mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   check: '<path d="M5 12.5l4.5 4.5L19 7.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
   install: '<path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><rect x="4" y="18" width="16" height="3" rx="1"/>',
   paste: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3"/>',
   note: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
@@ -115,7 +118,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", omitted: "", comment: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", ...extra,
   };
 }
 
@@ -136,7 +139,7 @@ function toEditable(data) {
       right_hand: text(c.right_hand), left_hand: text(c.left_hand),
       bass: text(c.bass), notes: text(c.notes),
       top_note: text(c.top_note), velocity: c.velocity ?? "", strum: text(c.strum),
-      omitted: text(c.omitted), comment: text(c.comment),
+      omitted: text(c.omitted), comment: text(c.comment), function: text(c.function), scale: text(c.scale),
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -150,6 +153,8 @@ function toEditable(data) {
     default_velocity: data.default_velocity ?? 80,
     strum: { direction: rawStrum.direction ?? "off", delay_ms: rawStrum.delay_ms ?? DEFAULT_STRUM_DELAY_MS },
     comment: data.comment ?? "",
+    key: typeof data.key === "string" ? data.key : "",
+    references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     chords,
   };
 }
@@ -219,6 +224,18 @@ function snapshot() {
 }
 
 // ---------------------------------------------------------------- configurações do projeto
+/** Tom e artistas de referência, em destaque acima da progressão. */
+function renderMeta() {
+  const p = state.project;
+  const refs = String(p.references || "").split(/[,;]/).map((t) => t.trim()).filter(Boolean);
+  const box = $("#project-meta");
+  box.replaceChildren(
+    ...(p.key && String(p.key).trim() ? [h("span", { class: "meta-chip key" }, `Tom: ${String(p.key).trim()}`)] : []),
+    ...refs.map((name) => h("span", { class: "meta-chip" }, name)),
+  );
+  box.hidden = !box.children.length;
+}
+
 function renderSettings() {
   const p = state.project;
   $("#title").value = p.title;
@@ -226,6 +243,9 @@ function renderSettings() {
   $("#default-velocity").value = p.default_velocity;
   $("#middle-c").value = p.middle_c;
   $("#project-comment").value = p.comment || "";
+  $("#project-key").value = p.key || "";
+  $("#project-refs").value = p.references || "";
+  renderMeta();
   const select = $("#time-signature");
   const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
   select.replaceChildren(...options.map((sig) => h("option", { value: sig }, sig)));
@@ -259,6 +279,8 @@ function bindSettings() {
   });
   bind("#title", "title");
   bind("#project-comment", "comment");
+  bind("#project-key", "key", renderMeta);
+  bind("#project-refs", "references", renderMeta);
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
@@ -325,10 +347,11 @@ function chordCard(chord, index, total) {
     oninput: (e) => { chord.symbol = e.target.value; scheduleValidate(); },
   });
   r.pos = h("span", { class: "chord-pos" });
+  r.fn = h("span", { class: "chord-fn" });
   r.badge = h("span", { class: "ponta-badge", title: "Ponta: a nota mais aguda" });
   const head = h("div", { class: "chord-head" },
     h("span", { class: "chord-index", "aria-hidden": "true" }, n),
-    h("div", { style: "flex:1;min-width:0" }, r.symbol, r.pos),
+    h("div", { style: "flex:1;min-width:0" }, r.symbol, r.fn, r.pos),
     r.badge,
     h("button", { type: "button", class: "btn ghost icon-only", "aria-label": `Ouvir acorde ${n}`, title: "Ouvir este acorde", onclick: () => playOne(chord) }, icon("play")),
   );
@@ -343,6 +366,12 @@ function chordCard(chord, index, total) {
     noteField(chord, r, "right_hand", "ex.: D4 Eb4 G4 C5"),
     noteField(chord, r, "left_hand", "ex.: B2 A3"),
   );
+
+  // Voicing da mão direita
+  const voicingRow = h("div", { class: "field voicing-row" },
+    h("span", { class: "label" }, "Voicing da mão direita"),
+    h("div", { class: "segmented", role: "group", "aria-label": `Voicing do acorde ${n}` },
+      VOICINGS.map((v) => h("button", { type: "button", onclick: () => revoiceChords({ kind: v.id }, chord) }, v.label))));
 
   // Duração
   r.segments = [0.5, 1, 2].map((factor) => h("button", {
@@ -414,10 +443,16 @@ function chordCard(chord, index, total) {
   r.strum.value = chord.strum;
   r.inputs.strum = r.strum;
   r.msgs.strum = h("span", { class: "field-msg" });
+  const textField = (label, key, placeholder) => h("label", { class: "field" }, h("span", { class: "label" }, label), h("input", {
+    type: "text", value: chord[key], placeholder, autocomplete: "off",
+    oninput: (e) => { chord[key] = e.target.value; updateFn(chord); saveDraftSoon(); },
+  }));
   const hasMore = Boolean(chord.strum || chord.bass || chord.notes || chord.omitted || chord.comment);
   r.more = h("details", { class: "more", open: hasMore },
-    h("summary", null, "Mais: strum, baixo/pedal e comentário"),
+    h("summary", null, "Mais: função, escala, strum, baixo/pedal e comentário"),
     h("div", { class: "more-body" },
+      textField("Função (graus)", "function", "ex.: V7alt/ii"),
+      textField("Escala ou modo", "scale", "ex.: menor melódica a partir de B"),
       h("label", { class: "field wide", for: `f-${chord.id}-strum` }, h("span", { class: "label" }, "Strum deste acorde"), r.strum, r.msgs.strum),
       noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
       noteField(chord, r, "notes", "ex.: G3 B3"),
@@ -435,10 +470,20 @@ function chordCard(chord, index, total) {
     h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
   );
 
-  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, view, hands, params, r.more, r.issues, actions);
+  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, view, hands, voicingRow, params, r.more, r.issues, actions);
   updateDuration(chord);
   updateLock(chord);
+  updateFn(chord);
   return r.card;
+}
+
+/** Função e escala logo abaixo do nome do acorde: é o que o app ensina em cada acorde. */
+function updateFn(chord) {
+  const r = refs.get(chord);
+  if (!r) return;
+  const text = [chord.function, chord.scale].map((t) => String(t || "").trim()).filter(Boolean).join(" · ");
+  r.fn.textContent = text;
+  r.fn.hidden = !text;
 }
 
 function updateDuration(chord) {
@@ -611,6 +656,41 @@ function moveChord(chord, delta) {
   validateNow();
   saveDraftSoon();
   refs.get(chord).card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+/** Muda o voicing da mão direita de um acorde (ou de todos): fechado, aberto, drop 2, drop 3, ou ponta pedal. */
+function revoiceChords({ kind = null, pedal = null }, only = null) {
+  const targets = only ? [only] : state.project.chords;
+  const undo = snapshot();
+  const middleC = state.project.middle_c;
+  let changed = 0;
+  let skipped = 0;
+  let added = 0;
+  let firstReason = "";
+  try {
+    for (const chord of targets) {
+      const result = revoiceChord(chord, { kind, pedal, middleC });
+      if (result.skipped) { skipped += 1; firstReason ||= result.skipped; continue; }
+      chord[result.field] = result.text;
+      if (pedal) chord.top_note = result.top; // a ponta agora é o pedal: a trava acompanha
+      changed += 1;
+      if (result.added) added += 1;
+    }
+  } catch {
+    toast("Ponta pedal: use uma nota com oitava, como F#5 ou C5.", { error: true });
+    return;
+  }
+  if (!changed) { toast(`Nada mudou (${firstReason}).`); return; }
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+  const what = pedal ? `Ponta pedal ${pedal}` : VOICINGS.find((v) => v.id === kind).label;
+  const notes = [
+    `${what}: ${changed} ${changed === 1 ? "acorde mudou" : "acordes mudaram"}.`,
+    skipped ? ` ${skipped} ficaram como estavam (${firstReason}).` : "",
+    added ? ` Em ${added} a nota não fazia parte do acorde: ouça a tensão.` : "",
+  ].join("");
+  toast(notes, { action: { label: "Desfazer", run: undo }, timeout: 7000 });
 }
 
 function duplicateChord(chord) {
@@ -839,6 +919,12 @@ function bindUi() {
   $("#add-chord").addEventListener("click", () => addChord());
   $("#add-rest").addEventListener("click", () => addChord({ symbol: "Pausa" }));
   $("#play-all").addEventListener("click", playAll);
+  $("#voicing-all").replaceChildren(...VOICINGS.map((v) => h("button", { type: "button", onclick: () => revoiceChords({ kind: v.id }) }, v.label)));
+  $("#pedal-apply").addEventListener("click", () => {
+    const pedal = $("#pedal-note").value.trim();
+    if (!pedal) { toast("Digite a nota da ponta pedal, por exemplo F#5.", { error: true }); return; }
+    revoiceChords({ pedal });
+  });
   $("#export").addEventListener("click", exportMidi);
 
   const menu = $("#menu");
@@ -849,6 +935,7 @@ function bindUi() {
     menu.returnValue = "";
     if (action === "open") $("#file-input").click();
     else if (action === "paste") openPaste();
+    else if (action === "share") copyShareLink();
     else if (action === "save") saveProject();
     else if (action === "example") loadExample();
     else if (action === "new") newProject();
@@ -872,6 +959,29 @@ function bindUi() {
     e.target.value = "";
   });
   bindSettings();
+}
+
+// ---------------------------------------------------------------- links
+/** Copia um link que abre esta progressão no Harmona Lab de quem receber (vai depois do #, não passa por servidor). */
+async function copyShareLink() {
+  validateNow();
+  const data = state.report?.ok ? state.report.project : toPayload();
+  const url = `${location.origin}${location.pathname}${await buildShareHash(data)}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    toast("Link copiado. Quem abrir vê esta progressão no Harmona Lab.");
+  } catch {
+    window.prompt("Copie o link desta progressão:", url);
+  }
+}
+
+/** Abre o link que trouxe a pessoa até aqui (ou que ela tocou com o app já aberto) e limpa o endereço. */
+async function handleHash(askBeforeReplacing) {
+  if (location.hash.length < 3 || !assistant) return;
+  const hash = location.hash;
+  history.replaceState(null, "", `${location.pathname}${location.search}`);
+  const handled = await assistant.openLink(hash, { askBeforeReplacing });
+  if (handled) $("#assistant").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 // ---------------------------------------------------------------- assistente de IA
@@ -924,6 +1034,7 @@ async function init() {
   bindUi();
   setupInstall();
   let data = loadDraft();
+  const hadDraft = Boolean(data); // quem já tinha trabalho salvo é avisado antes de um link trocar a progressão
   if (!data) {
     try {
       const res = await fetch("./example.json");
@@ -935,6 +1046,8 @@ async function init() {
   assistant = initAssistant({
     $, h, icon, toast, getProjectJson: currentProjectJson, hasProgression, applyGenerated,
   });
+  window.addEventListener("hashchange", () => handleHash(true));
+  await handleHash(hadDraft);
 }
 
 init();

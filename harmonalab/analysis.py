@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections import Counter
 from typing import Any
 
-from .midi_io import TICKS_PER_BEAT, beats_to_ticks, strum_plan
+from .timing import TICKS_PER_BEAT, beats_to_ticks, strum_plan
 from .model import PART_LABELS, PARTS, ChordEvent, Issue, Project, load_project
 
 PIANO_LOW, PIANO_HIGH = 21, 108  # A0 a C8

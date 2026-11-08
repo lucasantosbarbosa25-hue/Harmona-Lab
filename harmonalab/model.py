@@ -9,6 +9,7 @@ um rótulo informativo; nada aqui depende de reconhecê-lo.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -86,6 +87,8 @@ class ChordEvent:
     top_note: Note | None = None  # ponta declarada (trava); None = automático
     velocity: int | None = None  # None = velocity padrão do projeto
     strum: str | None = None  # None = segue o projeto; ou "off" / "up" / "down"
+    function: str = ""  # função harmônica em graus (ex.: "V7alt/ii"), só informativa
+    scale: str = ""  # escala ou modo (ex.: "menor melódica a partir de B"), só informativa
     omitted: list[str] = field(default_factory=list)  # informativo (ex.: ["5"])
     comment: str = ""
 
@@ -132,6 +135,10 @@ class ChordEvent:
         d["velocity"] = self.velocity
         if self.strum is not None:
             d["strum"] = self.strum
+        if self.function:
+            d["function"] = self.function
+        if self.scale:
+            d["scale"] = self.scale
         if self.omitted:
             d["omitted"] = list(self.omitted)
         if self.comment:
@@ -146,6 +153,8 @@ class Project:
     time_signature: tuple[int, int] = (4, 4)
     middle_c: str = DEFAULT_MIDDLE_C
     default_velocity: int = 80
+    key: str = ""  # tonalidade (ex.: "Em"), só informativa
+    references: list[str] = field(default_factory=list)  # artistas e músicas de referência
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
@@ -179,6 +188,10 @@ class Project:
             "strum": {"direction": self.strum_direction, "delay_ms": _clean_number(self.strum_delay_ms)},
             "chords": [c.to_dict(self.middle_c) for c in self.chords],
         }
+        if self.key:
+            d["key"] = self.key
+        if self.references:
+            d["references"] = list(self.references)
         if self.comment:
             d["comment"] = self.comment
         return d
@@ -256,6 +269,13 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         project.title = str(data["title"])
     if data.get("comment"):
         project.comment = str(data["comment"])
+    if isinstance(data.get("key"), str):
+        project.key = data["key"].strip()
+    refs = data.get("references")
+    if isinstance(refs, str):
+        refs = [t for t in re.split(r"[,;]", refs)]
+    if isinstance(refs, list):
+        project.references = [t.strip() for t in refs if isinstance(t, str) and t.strip()]
 
     middle_c = data.get("middle_c", DEFAULT_MIDDLE_C) or DEFAULT_MIDDLE_C
     if isinstance(middle_c, str) and middle_c in MIDDLE_C_OFFSETS:
@@ -328,6 +348,9 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
 
     chord.symbol = str(raw.get("symbol") or "").strip()
     chord.comment = str(raw.get("comment") or "")
+    for name in ("function", "scale"):
+        if isinstance(raw.get(name), str):
+            setattr(chord, name, raw[name].strip())
 
     if raw.get("duration_beats") is not None:
         beats = _to_number(raw["duration_beats"])

@@ -2,7 +2,9 @@
 // Recebe de app.js só o que precisa (api); não importa o app, para não haver dependência circular.
 
 import { CHATS, buildChatPrompt, correctionPrompt, readChatAnswer } from "./chat.js";
-import { CHAT_INSTRUCTIONS } from "./prompt.js";
+import { checkDelivery } from "./check.js";
+import { findLinkInText, parseLinkHash } from "./link.js";
+import { instructions } from "./prompt.js";
 import { createDictation, mergeDictation, speechSupported } from "./speech.js";
 
 const PROMPT_KEY = "harmonalab:ai:prompt";
@@ -14,6 +16,8 @@ const EXAMPLES = [
   "8 acordes, bossa soul à Ed Motta, com maj7(#11), dominantes alterados e diminutos de passagem",
 ];
 
+/** Endereço do app (sem o arquivo e sem #), para as instruções apontarem para onde a pessoa está. */
+const appUrl = () => `${location.origin}${location.pathname.replace(/[^/]*$/, "")}`;
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 const loadPrompt = () => { try { return localStorage.getItem(PROMPT_KEY) || ""; } catch { return ""; } };
 const savePrompt = (text) => { try { localStorage.setItem(PROMPT_KEY, text); } catch { /* sem armazenamento */ } };
@@ -78,7 +82,7 @@ export function initAssistant(api) {
     dictation?.stop();
     savePrompt(request);
     const adjust = mode === "adjust" && hasProgression();
-    const text = buildChatPrompt({ request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null });
+    const text = buildChatPrompt({ request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null, appUrl: appUrl() });
     chatRequest = request;
     els.chatPrompt.hidden = true;
     els.chatStep.hidden = false;
@@ -88,7 +92,7 @@ export function initAssistant(api) {
   }
 
   $("#ai-copy-instructions").addEventListener("click", async () => {
-    const copied = await copyText(CHAT_INSTRUCTIONS);
+    const copied = await copyText(instructions(appUrl()));
     toast(copied ? "Instruções copiadas. Cole nas instruções permanentes da sua IA." : "Não consegui copiar sozinho: copie o texto que apareceu na tela.", { error: !copied });
   });
 
@@ -106,9 +110,9 @@ export function initAssistant(api) {
     els.result.hidden = false;
   }
 
-  function accept(project, explanation, problems, message) {
+  function accept(project, explanation, problems, message, request = chatRequest || els.prompt.value.trim()) {
     const title = String(project.title || "Progressão");
-    applyGenerated(project, { comment: buildComment(chatRequest || els.prompt.value.trim(), explanation), message: message || `Progressão carregada: ${title}` });
+    applyGenerated(project, { comment: buildComment(request, explanation), message: message || `Progressão carregada: ${title}` });
     showResult(title, explanation, problems);
     pending = null;
     els.fixActions.hidden = true;
@@ -116,9 +120,44 @@ export function initAssistant(api) {
     setStatus("", "");
   }
 
-  function loadAnswer() {
+  /** Projeto vindo de um link: confere e abre; se houver problema, oferece copiar as correções para a IA. */
+  function receiveProject(project, explanation) {
+    const check = checkDelivery({ projeto: project, explicacao: explanation }, { requireExplanation: false });
+    // Link de outra pessoa abre sempre que não houver erro de verdade; avisos (ex.: ponta) aparecem no resultado.
+    const errors = (check.report?.issues || []).filter((i) => i.level === "error");
+    if (!errors.length) { accept(project, explanation, check.problems, undefined, ""); return; }
+    pending = { project, explanation, problems: check.problems };
+    els.fixActions.hidden = false;
+    $("#ai-load-anyway").hidden = false;
+    els.chatStep.hidden = false;
+    setStatus("error", `O link tem ${check.problems.length} problema(s): ${check.problems.slice(0, 3).join(" · ")}${check.problems.length > 3 ? " …" : ""}`);
+  }
+
+  /**
+   * Abre um link do Harmona Lab (o que vem depois do #). Devolve true se tratou o link.
+   * `askBeforeReplacing`: pergunta antes de trocar uma progressão que a pessoa já tinha.
+   */
+  async function openLink(hash, { askBeforeReplacing = false } = {}) {
+    const link = await parseLinkHash(hash);
+    if (link.kind === "none") return false;
+    if (link.kind === "error") { setStatus("error", link.message); return true; }
+    if (link.kind === "request") {
+      els.prompt.value = link.request;
+      savePrompt(link.request);
+      setStatus("info", "Pedido do link carregado. Toque em “Copiar pedido para a IA” quando quiser.");
+      els.prompt.scrollIntoView({ behavior: "smooth", block: "center" });
+      return true;
+    }
+    if (askBeforeReplacing && !window.confirm("Abrir a progressão deste link? Ela substitui a atual (dá para desfazer logo em seguida).")) return true;
+    receiveProject(link.project, link.explanation);
+    return true;
+  }
+
+  async function loadAnswer() {
     const text = els.answer.value.trim();
-    if (!text) { setStatus("error", "Cole a resposta da IA na caixa do passo 3."); els.answer.focus(); return; }
+    if (!text) { setStatus("error", "Cole a resposta da IA (ou o link dela) na caixa do passo 3."); els.answer.focus(); return; }
+    const hash = findLinkInText(text);
+    if (hash && (await openLink(hash))) { if (!pending) els.answer.value = ""; return; }
     let read;
     try {
       read = readChatAnswer(text);
@@ -167,5 +206,5 @@ export function initAssistant(api) {
   els.mic.append(icon("mic"));
 
   refresh();
-  return { refresh };
+  return { refresh, openLink };
 }

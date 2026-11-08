@@ -38,6 +38,8 @@ def get(url):
     ("/icons/icon-192.png", "image/png"),
     ("/example.json", "application/json"),
     ("/ai/chat.js", "text/javascript"),
+    ("/ia.md", "text/markdown"),
+    ("/harmona-harmonia.zip", "application/zip"),
 ])
 def test_serve_o_app(base_url, path, content_type):
     status, headers, body = get(base_url + path)

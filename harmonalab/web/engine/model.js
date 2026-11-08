@@ -36,7 +36,7 @@ const has = (obj, key) => obj[key] !== undefined && obj[key] !== null;
 export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
-    top_note: null, velocity: null, strum: null, omitted: [], comment: "",
+    top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
   };
 }
 
@@ -64,6 +64,8 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   d.top_note = chord.top_note ? noteName(chord.top_note, middleC) : null;
   d.velocity = chord.velocity;
   if (chord.strum !== null) d.strum = chord.strum;
+  if (chord.function) d.function = chord.function;
+  if (chord.scale) d.scale = chord.scale;
   if (chord.omitted.length) d.omitted = [...chord.omitted];
   if (chord.comment) d.comment = chord.comment;
   return d;
@@ -74,7 +76,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
+    default_velocity: 80, key: "", references: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -96,6 +98,8 @@ export function projectToDict(project) {
     strum: { direction: project.strum_direction, delay_ms: project.strum_delay_ms },
     chords: project.chords.map((c) => chordToDict(c, project.middle_c)),
   };
+  if (project.key) d.key = project.key;
+  if (project.references.length) d.references = [...project.references];
   if (project.comment) d.comment = project.comment;
   return d;
 }
@@ -146,6 +150,10 @@ export function loadProject(data) {
   }
   if (has(data, "title")) project.title = String(data.title);
   if (data.comment) project.comment = String(data.comment);
+  if (typeof data.key === "string") project.key = data.key.trim();
+  let refs = data.references;
+  if (typeof refs === "string") refs = refs.split(/[,;]/);
+  if (Array.isArray(refs)) project.references = refs.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim());
 
   const middleC = data.middle_c || DEFAULT_MIDDLE_C;
   if (isMiddleC(middleC)) project.middle_c = middleC;
@@ -219,6 +227,7 @@ function loadChord(raw, index, project, issues) {
   }
   chord.symbol = String(raw.symbol || "").trim();
   chord.comment = String(raw.comment || "");
+  for (const name of ["function", "scale"]) if (typeof raw[name] === "string") chord[name] = raw[name].trim();
 
   if (has(raw, "duration_beats")) {
     const beats = toNumber(raw.duration_beats);

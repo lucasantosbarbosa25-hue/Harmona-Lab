@@ -127,3 +127,22 @@ def test_trocar_convencao_mantem_alturas():
     a = Project.from_dict(original).chords[0].pitches
     b = Project.from_dict(converted).chords[0].pitches
     assert a == b
+
+
+def test_tom_referencias_funcao_e_escala_sao_informativos():
+    data = {"key": " Em ", "references": ["Jesús Molina", " Dirty Loops ", "", 5],
+            "chords": [{"notes": "E3 G3 B3", "function": "i7", "scale": " Eólio "}, {"notes": "C4"}]}
+    project = Project.from_dict(data)
+    assert project.key == "Em" and project.references == ["Jesús Molina", "Dirty Loops"]
+    assert (project.chords[0].function, project.chords[0].scale) == ("i7", "Eólio")
+    d = project.to_dict()
+    assert d["key"] == "Em" and d["references"] == ["Jesús Molina", "Dirty Loops"]
+    assert d["chords"][0]["function"] == "i7" and "function" not in d["chords"][1]
+    assert Project.from_dict(d).to_dict() == d  # ida e volta
+    assert "key" not in Project.from_dict({"chords": []}).to_dict()
+
+
+def test_referencias_como_texto():
+    assert Project.from_dict({"references": "Domi & JD Beck, Stevie Wonder; Ed Motta", "chords": []}).references == [
+        "Domi & JD Beck", "Stevie Wonder", "Ed Motta"]
+    assert Project.from_dict({"references": {"a": 1}, "chords": []}).references == []
