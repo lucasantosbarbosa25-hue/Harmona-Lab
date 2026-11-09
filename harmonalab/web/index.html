@@ -163,6 +163,19 @@
           <button type="button" data-mode="chords" aria-pressed="false">Só acorde</button>
         </div>
       </div>
+      <details class="more sound-tools" id="sound-tools">
+        <summary>Som da pré-escuta: <span id="sound-summary">timbre simples</span></summary>
+        <div class="more-body">
+          <label class="field wide" for="sound-chords"><span class="label">Som dos acordes</span><select id="sound-chords"></select></label>
+          <label class="field wide" for="sound-phrase" id="sound-phrase-field" hidden><span class="label">Som da frase</span><select id="sound-phrase"></select></label>
+          <div class="sound-actions wide">
+            <button type="button" class="btn secondary small" id="sound-load">Carregar banco de sons (.sf2)</button>
+            <button type="button" class="btn ghost small danger" id="sound-remove" hidden>Remover banco</button>
+            <input type="file" id="sound-file" accept=".sf2,.sf3,.dls" hidden>
+          </div>
+          <p class="ai-help wide" id="sound-info">Com um banco de sons (.sf2) o app toca exatamente o MIDI que você exporta, com o instrumento escolhido (um Rhodes, um piano…). O arquivo fica só neste aparelho. Bancos de até algumas dezenas de MB vão bem no celular.</p>
+        </div>
+      </details>
       <details class="more voicing-tools" id="voicing-tools">
         <summary>Mexer nos voicings de todos os acordes</summary>
         <div class="more-body">
@@ -198,6 +211,7 @@
         <p><strong>Strum.</strong> Em vez de todas as notas juntas, cada nota entra uma após a outra (10 a 30 ms costuma soar natural), do grave ao agudo ou do agudo ao grave. A primeira nota entra no tempo certo e o acorde termina no mesmo instante, então nada se desloca. Desligado, o MIDI sai exatamente como digitado. Cada acorde pode trocar o strum do projeto em <em>Mais</em>.</p>
         <p><strong>Pedir à sua IA.</strong> No cartão do topo, descreva a progressão (estilo, artista, número de acordes, BPM, ponta, baixo). O app copia o pedido completo; você cola no ChatGPT, Claude ou Gemini, e a IA devolve a progressão com a explicação de cada acorde. Cole a resposta de volta e o app confere cada nota antes de abrir. Não há chave nem custo no app.</p>
         <p><strong>Frases melódicas.</strong> Escolha uma levada (salsa, samba, neo-soul, fusion, gospel, rock, ska…) ou deixe em “Automática”, e a sua IA escreve uma frase curta para cada acorde, dentro da escala dele. O app confere se os alvos caem nos tempos e são notas do acorde, se as aproximações resolvem por semitom e se as notas são da escala. Na barra de cima da progressão você escolhe ouvir e exportar <em>acorde + frase</em>, <em>mão esquerda + frase</em> ou <em>só acorde</em>. No MIDI, a frase fica no canal 2, separada da harmonia (canal 1). Dá para escrever ou editar a frase à mão em <em>Mais</em>: <code>G5/8 F5/8 Eb5/4*alvo</code> (nota/duração; 4 = semínima, 8 = colcheia, 16 = semicolcheia, <code>r</code> = pausa).</p>
+        <p><strong>Banco de sons (.sf2).</strong> Em <em>Som da pré-escuta</em>, carregue um SoundFont do aparelho e escolha o instrumento dos acordes (e, se quiser, outro para a frase). O app toca exatamente o arquivo MIDI que exporta, com esse instrumento. O banco fica guardado só neste aparelho; bancos grandes (centenas de MB) podem pesar no celular. O tocador é o SpessaSynth (Apache-2.0).</p>
         <p><strong>O nome do acorde é só um rótulo.</strong> O MIDI usa exatamente as notas digitadas. O nome vai como marcador no arquivo.</p>
       </div>
     </details>

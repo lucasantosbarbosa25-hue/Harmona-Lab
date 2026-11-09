@@ -2,9 +2,11 @@
 // Estratégia "stale-while-revalidate": responde com a cópia guardada e, ao mesmo tempo,
 // busca a versão nova na rede — a atualização aparece na próxima vez que o app abrir.
 
-const CACHE = "harmona-lab-v7";
+const CACHE = "harmona-lab-v8";
+// O tocador de banco de sons (vendor/) fica fora da lista: só baixa quando alguém usa um .sf2, e aí fica guardado
+// pela estratégia abaixo (toda resposta boa vai para o cache), funcionando também sem internet.
 const SHELL = [
-  "./", "./index.html", "./styles.css", "./app.js", "./audio.js", "./keyboard.js",
+  "./", "./index.html", "./styles.css", "./app.js", "./audio.js", "./keyboard.js", "./sound.js",
   "./engine/analysis.js", "./engine/midi.js", "./engine/model.js", "./engine/numbers.js", "./engine/phrase.js", "./engine/pitch.js", "./engine/voicing.js",
   "./ai/chat.js", "./ai/check.js", "./ai/link.js", "./ai/phrases.js", "./ai/prompt.js", "./ai/speech.js", "./ai/styles.js", "./ai/ui.js",
   "./example.json", "./manifest.webmanifest", "./icon.svg",

@@ -133,6 +133,14 @@ progressão você escolhe **ouvir e exportar** *acorde + frase*, *mão esquerda 
 dela) ou *só acorde*. No `.mid`, os acordes ficam no canal 1 e a frase no **canal 2**, para separar na DAW. Cada acorde mostra
 também a **frase de função** que a IA escreveu (o que ele faz ali e por quê), que é obrigatória no pedido.
 
+**Banco de sons (.sf2).** Em *Som da pré-escuta* (acima dos acordes), carregue um SoundFont do aparelho e escolha o
+instrumento dos acordes e, se houver frases, o da frase (por exemplo, Rhodes nos acordes e piano na frase). O app toca
+**exatamente o arquivo MIDI que exporta** (no modo de frase escolhido), só com o instrumento travado em cada canal. O tocador é
+o [SpessaSynth](https://github.com/spessasus/spessasynth_lib) (Apache-2.0), incluído em `web/vendor/spessasynth/` e carregado
+só quando alguém usa um banco. O banco fica guardado só no aparelho (IndexedDB); arquivos cortados ou que não são bancos de
+sons são recusados antes de chegar ao tocador. Bancos de até algumas dezenas de MB vão bem no celular; acima de 200 MB o app
+pergunta antes, porque o arquivo inteiro vai para a memória.
+
 **Skill para o Claude.** A pasta [`skill/harmona-harmonia`](skill/harmona-harmonia) (e o `.zip` em
 `harmonalab/web/harmona-harmonia.zip`, que o app oferece para baixar) é uma skill: instruções, vocabulário de harmonia no
 estilo de livros-texto (modos da menor melódica, tensões, substituições, upper structures, voicings), pistas por artista,
@@ -351,7 +359,9 @@ harmona-lab/
 │   ├── cli.py          linha de comando
 │   └── web/            o app publicado (arquivos estáticos)
 │       ├── index.html, styles.css, app.js   interface
-│       ├── keyboard.js, audio.js            teclado visual e pré‑escuta
+│       ├── keyboard.js, audio.js            teclado visual e pré‑escuta (timbre simples)
+│       ├── sound.js    pré‑escuta com banco de sons (.sf2): carrega, guarda no aparelho e toca o MIDI exportado
+│       ├── vendor/spessasynth/   o tocador de SF2 (gerado por design/vendor_spessasynth.sh, versões fixas, Apache-2.0)
 │       ├── engine/     motor em JS: pitch, model, analysis, midi, phrase, voicing (espelho do Python)
 │       ├── ai/         assistente: instruções (prompt.js), levadas (styles.js), frases no prompt (phrases.js), pedido e resposta (chat.js), links (link.js),
 │       │               conferência (check.js), ditado (speech.js) e tela (ui.js)
@@ -359,7 +369,8 @@ harmona-lab/
 │       ├── harmona-harmonia.zip   a skill, para baixar (gerado por design/build_skill.py)
 │       ├── manifest.webmanifest, sw.js, icons/   instalação e modo offline
 │       └── example.json                    exemplo (cópia de examples/, conferida por teste)
-├── design/             logo.mjs (ícones), ia.mjs (ia.md e SKILL.md), build_skill.py (cópia do motor e .zip da skill)
+├── design/             logo.mjs (ícones), ia.mjs (ia.md e SKILL.md), build_skill.py (cópia do motor e .zip da skill),
+│                       vendor_spessasynth.sh (traz o tocador de SF2 com versões fixas)
 ├── skill/harmona-harmonia/   a skill do Claude: SKILL.md, scripts, referências e exemplo
 ├── examples/           projeto de exemplo (.json) e o .mid gerado
 ├── tests/              testes automatizados (pytest) + js_engine_runner.mjs (paridade)
@@ -427,7 +438,7 @@ cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes*
 - A ponta travada é **validada** (aviso); o app só reorganiza voicings quando você pede, pelos botões (fechado, aberto, drop 2, drop 3, ponta pedal).
 - Uma faixa MIDI única (sem separar mãos em faixas): os acordes ficam no canal 1 e a frase, no canal 2.
 - Das frases, o app confere só o que dá para medir (tempos, notas do acorde, semitom, escala, tamanho). Se o ritmo soa mesmo a salsa ou a neo-soul, só o seu ouvido diz; as descrições das levadas são generalizações. Tercinas e quiálteras de 5 existem na notação; outras divisões (por exemplo, setinas) não.
-- A pré‑escuta do navegador é um timbre simples; o objetivo dela é só conferir notas.
+- Sem banco de sons, a pré‑escuta é um timbre simples, só para conferir notas. Com um `.sf2`, o banco inteiro vai para a memória: bancos de centenas de MB podem travar o celular (o app pergunta antes). O tocador de SF2 foi testado com um banco gerado nos testes e no Chromium; o timbre de cada banco de verdade só o seu ouvido julga.
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").
 - Os projetos ficam no aparelho (rascunho automático) ou em arquivos `.json`; não há sincronização entre aparelhos.
 - No Android, o Chrome costuma não permitir compartilhar `.mid` direto (sem botão "Enviar"); o arquivo vai para Downloads.

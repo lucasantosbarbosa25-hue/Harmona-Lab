@@ -69,8 +69,10 @@ def test_arquivos_do_modo_offline_existem():
     for name in shell:
         assert (WEB_DIR / (name or "index.html")).is_file(), name
     # todo módulo JS do app precisa estar no cache offline
-    modules = {p.relative_to(WEB_DIR).as_posix() for p in WEB_DIR.rglob("*.js") if p.name != "sw.js"}
+    modules = {p.relative_to(WEB_DIR).as_posix() for p in WEB_DIR.rglob("*.js") if p.name != "sw.js" and "vendor" not in p.parts}
     assert modules <= set(shell)
+    # o tocador de SF2 não é pré-baixado: só quem usa um banco de sons paga os ~700 KB (e aí ele fica no cache)
+    assert not [name for name in shell if name.startswith("vendor/")]
 
 
 def test_icones_principais():
@@ -96,3 +98,17 @@ def test_manifesto_instalavel():
     assert any(i.get("purpose") == "maskable" for i in manifest["icons"])
     for icon in manifest["icons"]:
         assert (WEB_DIR / icon["src"]).is_file()
+
+
+def test_tocador_de_sf2_vem_com_licencas_e_versoes_fixas():
+    vendor = WEB_DIR / "vendor" / "spessasynth"
+    for name in ("spessasynth.min.js", "spessasynth_processor.min.js", "LICENSE-spessasynth_lib.txt", "LICENSE-spessasynth_core.txt", "VERSIONS.txt"):
+        assert (vendor / name).is_file(), name
+    assert "Apache License" in (vendor / "LICENSE-spessasynth_lib.txt").read_text(encoding="utf-8")
+    versions = (vendor / "VERSIONS.txt").read_text(encoding="utf-8")
+    script = (WEB_DIR.parent.parent / "design" / "vendor_spessasynth.sh").read_text(encoding="utf-8")
+    for package, var in (("spessasynth_lib", "LIB_VERSION"), ("spessasynth_core", "CORE_VERSION")):
+        version = re.search(rf'{var}="([^"]+)"', script).group(1)
+        assert f"{package} {version}" in versions, package
+    # a página só usa o que o pacote exporta: o sintetizador (AudioWorklet) e o sequenciador
+    assert re.search(r"export\{[^}]*as Sequencer[^}]*\}", (vendor / "spessasynth.min.js").read_text(encoding="utf-8"))

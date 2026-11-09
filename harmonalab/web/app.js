@@ -10,8 +10,10 @@ import { TICKS_PER_BEAT, beatsToTicks, midiBytes, strumPlan } from "./engine/mid
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 import { VOICINGS, revoiceChord } from "./engine/voicing.js";
+import { LARGE_BANK_BYTES, SAME, SIMPLE, SoundFontPlayer, formatSize, parsePatchValue, patchValue, suggestedPreset } from "./sound.js";
 
 const DRAFT_KEY = "harmonalab:draft:v1";
+const SOUND_KEY = "harmonalab:sound";
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
@@ -90,9 +92,13 @@ const state = {
   byId: new Map(), // id do acorde → { chord, issues }
   playing: false,
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
+  sound: { chords: SIMPLE, phrase: SAME }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
 const player = new Player();
+const soundFont = new SoundFontPlayer(); // banco de sons (.sf2): só carrega a biblioteca quando alguém usa
+let soundTimers = [];
+let soundRestored = false; // o banco guardado já foi lido (antes disso, não descartamos a escolha salva)
 let nextId = 1;
 
 const beatsPerBar = () => {
@@ -651,6 +657,7 @@ function renderAnalysis() {
   }
 
   renderPhraseMode();
+  updateSoundPhraseField();
   renderSummary();
   assistant?.refresh();
 }
@@ -802,6 +809,9 @@ function renderPlayButton() {
 
 function stopPlayback() {
   player.stop();
+  soundFont.stop();
+  soundTimers.forEach(clearTimeout);
+  soundTimers = [];
   state.playing = false;
   setPlaying(-1);
   renderPlayButton();
@@ -809,10 +819,12 @@ function stopPlayback() {
 
 async function playAll() {
   if (state.playing) return stopPlayback();
+  if (usingSoundFont()) soundFont.unlock(); // no toque, antes de esperar qualquer coisa (exigência do iPhone)
   await validateNow();
   const bpm = toNumber(state.project.tempo);
   state.playing = true;
   renderPlayButton();
+  if (usingSoundFont() && (await playWithSoundFont())) return;
   player.play(chordsForPlayback(), bpm > 0 ? bpm : 80, {
     onStep: (i) => setPlaying(i),
     onEnd: () => stopPlayback(),
@@ -821,13 +833,155 @@ async function playAll() {
 
 async function playOne(chord) {
   stopPlayback();
+  if (usingSoundFont()) soundFont.unlock();
   await validateNow();
+  if (usingSoundFont() && (await playWithSoundFont(chord))) return;
   const bpm = toNumber(state.project.tempo);
   const [data] = chordsForPlayback(chord);
   if (!data.midis.length && !data.phrase.length) { toast("Este acorde ainda não tem notas válidas."); return; }
   const index = state.project.chords.indexOf(chord);
   if (!data.phrase.length) data.beats = Math.min(data.beats, (bpm > 0 ? bpm : 80) / 60 * 4); // no máximo ~4 s
   player.play([data], bpm > 0 ? bpm : 80, { onStep: () => setPlaying(index), onEnd: () => setPlaying(-1) });
+}
+
+// ---------------------------------------------------------------- banco de sons (.sf2)
+const usingSoundFont = () => Boolean(soundFont.bank) && parsePatchValue(state.sound.chords) !== null;
+
+/**
+ * Toca com o banco de sons o mesmo MIDI que "Gerar MIDI" exporta (no modo de frase escolhido).
+ * Devolve false quando não dá (há erros na progressão): aí quem chamou usa o timbre simples.
+ */
+async function playWithSoundFont(only = null) {
+  if (!state.report?.ok) {
+    toast("Há erros na progressão: por enquanto, ela toca com o timbre simples.");
+    return false;
+  }
+  const { project } = readProject(toPayload());
+  const index = only ? state.project.chords.indexOf(only) : -1;
+  if (only) {
+    project.chords = [project.chords[index]];
+    const [chord] = project.chords;
+    if (!chord.phrase_events.length) chord.duration_beats = Math.min(chord.duration_beats, (project.tempo / 60) * 4); // ~4 s
+  }
+  const bytes = midiBytes(project, { phraseMode: state.phraseMode });
+  const slow = setTimeout(() => toast("Carregando o banco de sons…"), 500);
+  try {
+    await soundFont.play(bytes, {
+      chords: state.sound.chords, phrase: state.sound.phrase,
+      onEnd: () => (only ? setPlaying(-1) : stopPlayback()),
+    });
+  } catch (err) {
+    clearTimeout(slow);
+    toast(err.message, { error: true, timeout: 8000 });
+    stopPlayback();
+    return true;
+  }
+  clearTimeout(slow);
+  // destaca o acorde que está soando (os tempos vêm do próprio projeto, como no arquivo)
+  const secondsPerBeat = 60 / project.tempo;
+  let start = 0;
+  project.chords.forEach((chord, i) => {
+    soundTimers.push(setTimeout(() => setPlaying(only ? index : i), start * secondsPerBeat * 1000));
+    start += chord.duration_beats;
+  });
+  return true;
+}
+
+function saveSoundChoice() {
+  try { localStorage.setItem(SOUND_KEY, JSON.stringify(state.sound)); } catch { /* sem armazenamento */ }
+}
+
+function loadSoundChoice() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SOUND_KEY) || "null");
+    if (saved && typeof saved.chords === "string") state.sound = { chords: saved.chords, phrase: typeof saved.phrase === "string" ? saved.phrase : SAME };
+  } catch { /* fica o padrão */ }
+}
+
+/** Os dois menus de som, o resumo e os botões, a partir do banco guardado. */
+function renderSound() {
+  const bank = soundFont.bank;
+  const presets = bank?.presets ?? [];
+  const valid = new Set(presets.map(patchValue));
+  if (soundRestored) {
+    if (!valid.has(state.sound.chords)) state.sound.chords = SIMPLE;
+    if (state.sound.phrase !== SAME && !valid.has(state.sound.phrase)) state.sound.phrase = SAME;
+  }
+  const presetOptions = () => presets.map((p) => h("option", { value: patchValue(p) }, `${p.name}${p.isDrum ? " (bateria)" : ""}`));
+  const chords = $("#sound-chords");
+  chords.replaceChildren(
+    h("option", { value: SIMPLE }, "Timbre simples do app"),
+    ...(presets.length ? [h("optgroup", { label: `${bank.name} · ${formatSize(bank.size)}` }, ...presetOptions())] : []),
+  );
+  chords.value = state.sound.chords;
+  const phrase = $("#sound-phrase");
+  phrase.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...presetOptions());
+  phrase.value = state.sound.phrase;
+  updateSoundPhraseField();
+  $("#sound-remove").hidden = !bank;
+  $("#sound-load").textContent = bank ? "Trocar o banco de sons" : "Carregar banco de sons (.sf2)";
+  const current = presets.find((p) => patchValue(p) === state.sound.chords);
+  $("#sound-summary").textContent = current ? current.name : "timbre simples";
+}
+
+/** "Som da frase" só aparece com banco carregado, instrumento escolhido e alguma frase na progressão. */
+function updateSoundPhraseField() {
+  const anyPhrase = (state.report?.chords || []).some((c) => c.phrase);
+  $("#sound-phrase-field").hidden = !soundFont.bank?.presets?.length || !anyPhrase || state.sound.chords === SIMPLE;
+}
+
+async function chooseSoundFile(file) {
+  if (!file) return;
+  if (file.size > LARGE_BANK_BYTES
+    && !window.confirm(`Este banco tem ${formatSize(file.size)}. No celular, bancos grandes podem travar o app. Carregar mesmo assim?`)) return;
+  stopPlayback();
+  const slow = setTimeout(() => toast(`Lendo ${file.name}…`), 300);
+  try {
+    const { bank, saved } = await soundFont.loadFile(file);
+    clearTimeout(slow);
+    soundRestored = true;
+    const preset = suggestedPreset(bank.presets);
+    state.sound = { chords: preset ? patchValue(preset) : SIMPLE, phrase: SAME };
+    saveSoundChoice();
+    renderSound();
+    toast(saved
+      ? `${bank.name}: ${bank.presets.length} instrumento(s). Tocando com ${preset?.name ?? "o primeiro"}.`
+      : `${bank.name} carregado, mas não coube para guardar neste aparelho: vale só até fechar o app.`);
+  } catch (err) {
+    clearTimeout(slow);
+    toast(err.message, { error: true, timeout: 8000 });
+  }
+}
+
+function bindSound() {
+  loadSoundChoice();
+  $("#sound-chords").addEventListener("change", (e) => {
+    state.sound.chords = e.target.value;
+    if (state.playing) stopPlayback();
+    saveSoundChoice();
+    renderSound();
+  });
+  $("#sound-phrase").addEventListener("change", (e) => {
+    state.sound.phrase = e.target.value;
+    if (state.playing) stopPlayback();
+    saveSoundChoice();
+  });
+  $("#sound-load").addEventListener("click", () => $("#sound-file").click());
+  $("#sound-file").addEventListener("change", (e) => {
+    const [file] = e.target.files;
+    e.target.value = "";
+    chooseSoundFile(file);
+  });
+  $("#sound-remove").addEventListener("click", async () => {
+    if (!window.confirm(`Remover ${soundFont.bank?.name ?? "o banco de sons"} deste aparelho?`)) return;
+    await soundFont.removeBank();
+    state.sound = { chords: SIMPLE, phrase: SAME };
+    saveSoundChoice();
+    renderSound();
+    toast("Banco de sons removido. A pré-escuta voltou ao timbre simples.");
+  });
+  renderSound();
+  soundFont.restore().catch(() => null).then(() => { soundRestored = true; renderSound(); });
 }
 
 function focusFirstError() {
@@ -1017,6 +1171,7 @@ function bindUi() {
     e.target.value = "";
   });
   bindSettings();
+  bindSound();
 }
 
 // ---------------------------------------------------------------- links

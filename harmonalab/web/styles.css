@@ -468,3 +468,7 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .phrase-mode .segmented button { white-space: normal; line-height: 1.15; padding: 6px 4px; }
 .ai-style { margin: 4px 0 0; }
 .ai-style select { width: 100%; }
+
+/* Som da pré-escuta (banco de sons) */
+.sound-tools summary #sound-summary { font-weight: 600; color: var(--text); }
+.sound-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
