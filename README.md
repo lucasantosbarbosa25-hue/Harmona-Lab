@@ -41,6 +41,10 @@ outra pessoa, a Cloudflare acrescenta um sufixo; o painel mostra o endereço fin
 Daí em diante, todo `git push` na `main` publica sozinho (o `wrangler.jsonc` diz o que publicar). Outras branches
 ganham um endereço de prévia próprio, bom para testar antes.
 
+Se o painel mostrar *“This project is disconnected from your Git account”* e os deploys pararem, o app do GitHub da
+Cloudflare perdeu o acesso: em https://github.com/settings/installations abra *Cloudflare Workers & Pages → Configure*,
+liberte o repositório e salve. O próximo `git push` na `main` volta a publicar.
+
 Sem painel, dá para publicar à mão, na pasta do projeto: `npx wrangler login && npx wrangler pages deploy`.
 
 **Endereço próprio (opcional).** Para algo como `harmonalab.app` ou `harmonalab.com.br`, registre o domínio (a
