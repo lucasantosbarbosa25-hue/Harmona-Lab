@@ -453,3 +453,18 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* Frase de função do acorde, frase melódica e modo de ouvir */
+.chord-note { margin: 8px 0 0; font-size: .92rem; line-height: 1.45; color: var(--text); }
+.chord-note[hidden] { display: none; }
+.chord-phrase { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; margin: 8px 0 0; font-size: .85rem; color: var(--muted); }
+.chord-phrase[hidden] { display: none; }
+.chord-phrase .icon { width: 16px; height: 16px; flex: none; }
+.chord-phrase .pn { padding: 1px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-variant-numeric: tabular-nums; }
+.chord-phrase .pn.is-alvo { background: var(--rh-soft); border-color: transparent; color: var(--rh); font-weight: 700; }
+.chord-phrase .pn.is-aprox { font-style: italic; border-style: dashed; }
+.phrase-mode { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
+.phrase-mode[hidden] { display: none; }
+.phrase-mode .segmented button { white-space: normal; line-height: 1.15; padding: 6px 4px; }
+.ai-style { margin: 4px 0 0; }
+.ai-style select { width: 100%; }

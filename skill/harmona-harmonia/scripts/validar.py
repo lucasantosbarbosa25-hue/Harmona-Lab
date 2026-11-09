@@ -4,8 +4,9 @@
 Uso:  python scripts/validar.py projeto.json      (ou: python scripts/validar.py - < projeto.json)
 
 Sai com código 0 e imprime OK + um resumo (ponta e baixo de cada acorde) quando está tudo certo.
-Sai com código 1 e lista os PROBLEMAS quando há nota inválida, BPM fora do limite ou ponta travada
-que não é a nota mais aguda. Corrija e rode de novo, até dar OK.
+Sai com código 1 e lista os PROBLEMAS quando há nota inválida, BPM fora do limite, ponta travada que não é a
+nota mais aguda, frase com problema (alvo fora do tempo, aproximação que não resolve, nota fora da escala...)
+ou acorde sem a frase de função (campo "comment"). Corrija e rode de novo, até dar OK.
 """
 
 import sys
@@ -40,6 +41,8 @@ def main() -> int:
         baixos.append(c["bottom"]["name"])
         notas = " ".join(n["name"] for n in c["notes"])
         print(f"{c['index'] + 1}. {c['symbol'] or '(sem nome)'} — {notas} — ponta {c['top']['name']}, baixo {c['bottom']['name']}")
+        if c.get("phrase"):
+            print("   frase: " + " ".join(n["name"] + (f"*{n['role']}" if n["role"] else "") for n in c["phrase"]["events"]))
     print("Linha da ponta:", " → ".join(pontas))
     print("Linha do baixo:", " → ".join(baixos))
     avisos = [i for i in relatorio["issues"] if i["level"] in ("warning", "info")]

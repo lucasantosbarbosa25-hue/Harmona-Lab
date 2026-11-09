@@ -15,7 +15,8 @@ const DRAFT_KEY = "harmonalab:draft:v1";
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
-const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted"];
+const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale"];
+const PHRASE_MODES = ["both", "line", "chords"]; // acorde + frase · mão esquerda + frase · só acorde
 const STRUM_LABEL = { up: "grave → agudo", down: "agudo → grave" };
 const DEFAULT_STRUM_DELAY_MS = 20;
 
@@ -88,6 +89,7 @@ const state = {
   report: null, // última análise do servidor
   byId: new Map(), // id do acorde → { chord, issues }
   playing: false,
+  phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
 const player = new Player();
@@ -118,7 +120,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", ...extra,
   };
 }
 
@@ -140,6 +142,7 @@ function toEditable(data) {
       bass: text(c.bass), notes: text(c.notes),
       top_note: text(c.top_note), velocity: c.velocity ?? "", strum: text(c.strum),
       omitted: text(c.omitted), comment: text(c.comment), function: text(c.function), scale: text(c.scale),
+      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale),
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -154,6 +157,7 @@ function toEditable(data) {
     strum: { direction: rawStrum.direction ?? "off", delay_ms: rawStrum.delay_ms ?? DEFAULT_STRUM_DELAY_MS },
     comment: data.comment ?? "",
     key: typeof data.key === "string" ? data.key : "",
+    style: typeof data.style === "string" ? data.style : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     chords,
   };
@@ -231,6 +235,7 @@ function renderMeta() {
   const box = $("#project-meta");
   box.replaceChildren(
     ...(p.key && String(p.key).trim() ? [h("span", { class: "meta-chip key" }, `Tom: ${String(p.key).trim()}`)] : []),
+    ...(p.style && String(p.style).trim() ? [h("span", { class: "meta-chip key" }, `Levada: ${String(p.style).trim()}`)] : []),
     ...refs.map((name) => h("span", { class: "meta-chip" }, name)),
   );
   box.hidden = !box.children.length;
@@ -245,6 +250,7 @@ function renderSettings() {
   $("#project-comment").value = p.comment || "";
   $("#project-key").value = p.key || "";
   $("#project-refs").value = p.references || "";
+  $("#project-style").value = p.style || "";
   renderMeta();
   const select = $("#time-signature");
   const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
@@ -281,6 +287,7 @@ function bindSettings() {
   bind("#project-comment", "comment");
   bind("#project-key", "key", renderMeta);
   bind("#project-refs", "references", renderMeta);
+  bind("#project-style", "style", renderMeta);
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
@@ -348,6 +355,8 @@ function chordCard(chord, index, total) {
   });
   r.pos = h("span", { class: "chord-pos" });
   r.fn = h("span", { class: "chord-fn" });
+  r.note = h("p", { class: "chord-note" }); // a frase de função do acorde: o que ele faz ali
+  r.phraseLine = h("p", { class: "chord-phrase", hidden: true });
   r.badge = h("span", { class: "ponta-badge", title: "Ponta: a nota mais aguda" });
   const head = h("div", { class: "chord-head" },
     h("span", { class: "chord-index", "aria-hidden": "true" }, n),
@@ -432,7 +441,7 @@ function chordCard(chord, index, total) {
   r.msgs.omitted = h("span", { class: "field-msg" });
   r.comment = h("textarea", {
     rows: "2", placeholder: "Ideia, origem da escala, o que testar…",
-    oninput: (e) => { chord.comment = e.target.value; saveDraftSoon(); },
+    oninput: (e) => { chord.comment = e.target.value; updateFn(chord); saveDraftSoon(); },
   });
   r.comment.value = chord.comment;
   r.strum = h("select", {
@@ -447,12 +456,23 @@ function chordCard(chord, index, total) {
     type: "text", value: chord[key], placeholder, autocomplete: "off",
     oninput: (e) => { chord[key] = e.target.value; updateFn(chord); saveDraftSoon(); },
   }));
-  const hasMore = Boolean(chord.strum || chord.bass || chord.notes || chord.omitted || chord.comment);
+  const phraseField = (label, key, placeholder, wide = false) => {
+    const id = `f-${chord.id}-${key}`;
+    r.inputs[key] = h("input", {
+      id, type: "text", class: "notes", value: chord[key], placeholder, autocomplete: "off", autocapitalize: "off", spellcheck: false,
+      oninput: (e) => { chord[key] = e.target.value; scheduleValidate(); },
+    });
+    r.msgs[key] = h("span", { class: "field-msg" });
+    return h("label", { class: `field${wide ? " wide" : ""}`, for: id }, h("span", { class: "label" }, label), r.inputs[key], r.msgs[key]);
+  };
+  const hasMore = Boolean(chord.strum || chord.bass || chord.notes || chord.omitted); // o comentário e a frase já aparecem no cartão
   r.more = h("details", { class: "more", open: hasMore },
-    h("summary", null, "Mais: função, escala, strum, baixo/pedal e comentário"),
+    h("summary", null, "Mais: função, escala, frase, strum, baixo/pedal e comentário"),
     h("div", { class: "more-body" },
       textField("Função (graus)", "function", "ex.: V7alt/ii"),
       textField("Escala ou modo", "scale", "ex.: menor melódica a partir de B"),
+      phraseField("Frase (nota/duração, * para o papel)", "phrase", "ex.: G5/8 F5/8 Eb5/4*alvo", true),
+      phraseField("Escala da frase (sem oitava)", "phrase_scale", "ex.: B C D Eb F G A", true),
       h("label", { class: "field wide", for: `f-${chord.id}-strum` }, h("span", { class: "label" }, "Strum deste acorde"), r.strum, r.msgs.strum),
       noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
       noteField(chord, r, "notes", "ex.: G3 B3"),
@@ -470,20 +490,37 @@ function chordCard(chord, index, total) {
     h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
   );
 
-  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, view, hands, voicingRow, params, r.more, r.issues, actions);
+  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, r.note, view, r.phraseLine, hands, voicingRow, params, r.more, r.issues, actions);
   updateDuration(chord);
   updateLock(chord);
   updateFn(chord);
   return r.card;
 }
 
-/** Função e escala logo abaixo do nome do acorde: é o que o app ensina em cada acorde. */
+/** Função e escala logo abaixo do nome do acorde, e a frase que diz o que ele faz ali: é o que o app ensina em cada acorde. */
 function updateFn(chord) {
   const r = refs.get(chord);
   if (!r) return;
   const text = [chord.function, chord.scale].map((t) => String(t || "").trim()).filter(Boolean).join(" · ");
   r.fn.textContent = text;
   r.fn.hidden = !text;
+  const note = String(chord.comment || "").trim();
+  r.note.textContent = note;
+  r.note.hidden = !note;
+}
+
+/** A frase melódica do acorde numa linha: as notas, com os alvos em destaque. */
+function renderPhraseLine(r, phrase) {
+  r.phraseLine.hidden = !phrase;
+  if (!phrase) { r.phraseLine.replaceChildren(); return; }
+  r.phraseLine.replaceChildren(
+    icon("note"),
+    ...phrase.events.map((e) => h("span", {
+      class: `pn${e.role === "alvo" ? " is-alvo" : e.role === "aprox" ? " is-aprox" : ""}`,
+      title: `${e.role ? `${e.role} · ` : ""}MIDI ${e.midi}`,
+    }, e.name)),
+  );
+  r.phraseLine.setAttribute("aria-label", `Frase: ${phrase.events.map((e) => e.name).join(" ")}`);
 }
 
 function updateDuration(chord) {
@@ -567,6 +604,8 @@ function renderAnalysis() {
     if (info?.top) r.badge.append(icon(info.top_locked ? "lock" : "note"), info.top.name);
     r.top.placeholder = info?.top ? `auto · ${info.top.name}` : "auto";
 
+    renderPhraseLine(r, info?.phrase ?? null);
+
     // Fichas
     if (!info) {
       r.chips.replaceChildren();
@@ -595,7 +634,7 @@ function renderAnalysis() {
       if (r.inputs[field]) r.inputs[field].setAttribute("aria-invalid", String(messages.length > 0));
       if (messages.length) {
         hasError = true;
-        if (["bass", "notes", "omitted", "strum"].includes(field)) r.more.open = true;
+        if (["bass", "notes", "omitted", "strum", "phrase", "phrase_scale"].includes(field)) r.more.open = true;
       }
     }
     const rest = issues.filter((i) => !(i.level === "error" && CHORD_FIELDS.includes(i.field)));
@@ -611,8 +650,16 @@ function renderAnalysis() {
     $(selector).setAttribute("aria-invalid", String(projectIssues.some((i) => i.field === field && i.level === "error")));
   }
 
+  renderPhraseMode();
   renderSummary();
   assistant?.refresh();
+}
+
+/** O seletor "ouvir e exportar" só aparece quando alguma frase tem notas. */
+function renderPhraseMode() {
+  const any = (state.report?.chords || []).some((c) => c.phrase);
+  $("#phrase-mode-box").hidden = !any;
+  document.querySelectorAll("#phrase-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.phraseMode)));
 }
 
 function renderSummary() {
@@ -725,7 +772,12 @@ function chordsForPlayback(only = null) {
     .filter((c) => !only || c === only)
     .map((c) => {
       const info = state.byId.get(c.id)?.chord;
-      let midis = info ? info.notes.map((n) => n.midi) : [];
+      const mode = state.phraseMode;
+      // "mão esquerda + frase": a mão direita sai e a frase canta no lugar dela (o mesmo que o MIDI exporta)
+      let midis = info ? info.notes.filter((n) => mode !== "line" || n.part !== "right_hand").map((n) => n.midi) : [];
+      const secondsPerTick = 60 / bpm / TICKS_PER_BEAT;
+      const phrase = mode === "chords" || !info?.phrase ? []
+        : info.phrase.events.map((e) => ({ midi: e.midi, start: e.start * secondsPerTick, length: e.length * secondsPerTick }));
       let offsets = midis.map(() => 0); // segundos depois do início do acorde
       if (info && info.strum !== "off" && delay > 0) {
         // o mesmo cálculo do MIDI: o que você ouve aqui é o que sai no arquivo
@@ -733,7 +785,7 @@ function chordsForPlayback(only = null) {
         offsets = plan.offsets.map((ticks) => (ticks / TICKS_PER_BEAT) * (60 / bpm));
         if (info.strum === "down") midis = midis.slice().reverse();
       }
-      return { midis, offsets, velocity: info?.velocity ?? 80, beats: info?.duration_beats ?? bpb };
+      return { midis, offsets, phrase, velocity: info?.velocity ?? 80, beats: info?.duration_beats ?? bpb };
     });
 }
 
@@ -772,9 +824,9 @@ async function playOne(chord) {
   await validateNow();
   const bpm = toNumber(state.project.tempo);
   const [data] = chordsForPlayback(chord);
-  if (!data.midis.length) { toast("Este acorde ainda não tem notas válidas."); return; }
+  if (!data.midis.length && !data.phrase.length) { toast("Este acorde ainda não tem notas válidas."); return; }
   const index = state.project.chords.indexOf(chord);
-  data.beats = Math.min(data.beats, (bpm > 0 ? bpm : 80) / 60 * 4); // no máximo ~4 s
+  if (!data.phrase.length) data.beats = Math.min(data.beats, (bpm > 0 ? bpm : 80) / 60 * 4); // no máximo ~4 s
   player.play([data], bpm > 0 ? bpm : 80, { onStep: () => setPlaying(index), onEnd: () => setPlaying(-1) });
 }
 
@@ -824,7 +876,7 @@ async function exportMidi() {
     return;
   }
   const { project } = readProject(toPayload());
-  const bytes = midiBytes(project);
+  const bytes = midiBytes(project, { phraseMode: state.phraseMode });
   const filename = `${slugify(state.project.title)}.mid`;
   const saved = await saveFile(new Blob([bytes], { type: "audio/midi" }), filename, "Arquivo MIDI", "audio/midi", ".mid");
   if (!saved) return;
@@ -926,6 +978,12 @@ function bindUi() {
     revoiceChords({ pedal });
   });
   $("#export").addEventListener("click", exportMidi);
+  document.querySelectorAll("#phrase-mode button").forEach((b) => b.addEventListener("click", () => {
+    if (!PHRASE_MODES.includes(b.dataset.mode)) return;
+    state.phraseMode = b.dataset.mode;
+    if (state.playing) stopPlayback();
+    renderPhraseMode();
+  }));
 
   const menu = $("#menu");
   $("#menu-button").addEventListener("click", () => menu.showModal());

@@ -3,13 +3,17 @@
 import { analyzeData } from "../engine/analysis.js";
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+const BLOCKING_WARNING_FIELDS = ["top_note", "phrase", "phrase_scale"];
+const list = (numbers) => numbers.join(", ");
 
 /**
  * Confere o que a IA entregou. Devolve { ok, problems, report, explanation }.
- * Bloqueia: erros do motor (nota inexistente, BPM inválido...), ponta travada que não é a nota mais aguda
- * e o que não bate com o que o pedido disse (número de acordes, BPM).
+ * Bloqueia: erros do motor (nota inexistente, BPM inválido...), ponta travada que não é a nota mais aguda,
+ * avisos da frase (alvo fora do tempo, aproximação que não resolve, nota fora da escala...) e o que não bate com o que
+ * o pedido disse (número de acordes, BPM, frases). `requireFunctionNotes`: cobra a frase de função (comment) de cada acorde,
+ * o que vale para respostas de IA e não para links de compartilhamento.
  */
-export function checkDelivery(input, { requireExplanation = true } = {}) {
+export function checkDelivery(input, { requireExplanation = true, requireFunctionNotes = false } = {}) {
   const problems = [];
   const data = isObject(input) ? input : {};
   const project = data.projeto;
@@ -21,7 +25,7 @@ export function checkDelivery(input, { requireExplanation = true } = {}) {
   if (isObject(project)) {
     report = analyzeData(project);
     for (const issue of report.issues) {
-      const blocking = issue.level === "error" || (issue.level === "warning" && issue.field === "top_note");
+      const blocking = issue.level === "error" || (issue.level === "warning" && BLOCKING_WARNING_FIELDS.includes(issue.field));
       if (!blocking) continue;
       let where = "";
       if (issue.chord != null) {
@@ -38,6 +42,19 @@ export function checkDelivery(input, { requireExplanation = true } = {}) {
     }
     if (typeof asked.bpm === "number" && asked.bpm > 0 && Number(project.tempo) !== asked.bpm) {
       problems.push(`O pedido pedia ${asked.bpm} BPM, mas o projeto está com tempo ${project.tempo}.`);
+    }
+    const rawChords = Array.isArray(project.chords) ? project.chords : [];
+    const filled = (c, key) => isObject(c) && typeof c[key] === "string" ? c[key].trim() !== "" : isObject(c) && Array.isArray(c[key]) && c[key].length > 0;
+    const noScale = rawChords.flatMap((c, i) => (filled(c, "phrase") && !filled(c, "phrase_scale") ? [i + 1] : []));
+    if (noScale.length) problems.push(`Acorde(s) ${list(noScale)}: a frase precisa vir com "phrase_scale" (as notas da escala, sem oitava).`);
+    if (typeof asked.frases === "string" && asked.frases.trim() && !rawChords.some((c) => filled(c, "phrase"))) {
+      problems.push(`O pedido pedia frases (${asked.frases}), mas nenhum acorde tem o campo "phrase".`);
+    }
+    if (requireFunctionNotes) {
+      const silent = report.chords.flatMap((c, i) => (!c.is_rest && !filled(rawChords[i], "comment") ? [i + 1] : []));
+      if (silent.length) {
+        problems.push(`Falta a frase de função (campo "comment": o que o acorde faz ali e por quê) no(s) acorde(s) ${list(silent)}.`);
+      }
     }
   }
   return { ok: problems.length === 0, problems, report, explanation };

@@ -12,16 +12,19 @@ from typing import Any
 
 from .timing import TICKS_PER_BEAT, beats_to_ticks, strum_plan
 from .model import PART_LABELS, PARTS, ChordEvent, Issue, Project, load_project
+from .phrase import SCALE_EXEMPT_ROLES
+from .pitch import midi_to_name
 
 PIANO_LOW, PIANO_HIGH = 21, 108  # A0 a C8
 HAND_SPAN_LIMIT = 16  # semitons (uma 10ª maior)
+PHRASE_LOW, PHRASE_HIGH = 48, 96  # tessitura confortável de uma frase (C3 a C7, com C4 = 60)
 
 
 def _fmt_beats(beats: float) -> str:
     return str(int(beats)) if float(beats).is_integer() else f"{beats:g}"
 
 
-def chord_issues(project: Project, chord: ChordEvent, index: int) -> list[Issue]:
+def chord_issues(project: Project, chord: ChordEvent, index: int, next_chord: ChordEvent | None = None) -> list[Issue]:
     mc = project.middle_c
     issues: list[Issue] = []
 
@@ -87,6 +90,74 @@ def chord_issues(project: Project, chord: ChordEvent, index: int) -> list[Issue]
     outside = [n.name(mc) for n, _ in chord.sounding() if not PIANO_LOW <= n.midi <= PIANO_HIGH]
     if outside:
         add("info", f"Fora da extensão do piano de 88 teclas: {' '.join(outside)}.")
+    issues.extend(phrase_issues(project, chord, index, next_chord))
+    return issues
+
+
+def _chord_pc_names(chord: ChordEvent) -> dict[int, str]:
+    """Classe de altura → nome (a grafia da primeira nota do acorde que a tem)."""
+    names: dict[int, str] = {}
+    for note, _ in chord.sounding():
+        names.setdefault(note.pitch_class, note.pitch_class_name())
+    return names
+
+
+def phrase_issues(project: Project, chord: ChordEvent, index: int, next_chord: ChordEvent | None) -> list[Issue]:
+    """Confere a frase com o acorde: tessitura, alvos no tempo e no acorde, aproximações e escala.
+
+    Só avisa (``warning``/``info``): erros de escrita já foram apontados na leitura do projeto. Os papéis
+    ``alvo`` e ``aprox`` são conferidos; qualquer outro papel é livre. Novas conferências entram aqui.
+    """
+    events = chord.phrase_events
+    if not events:
+        return []
+    mc = project.middle_c
+    issues: list[Issue] = []
+
+    def add(level: str, message: str) -> None:
+        issues.append(Issue(level, message, index, "phrase"))
+
+    out = [e.note.name(mc) for e in events if not PHRASE_LOW <= e.note.midi <= PHRASE_HIGH]
+    if out:
+        add("warning", f"Notas fora da tessitura confortável da frase ({midi_to_name(PHRASE_LOW, mc)} a "
+                       f"{midi_to_name(PHRASE_HIGH, mc)}): {' '.join(dict.fromkeys(out))}.")
+
+    chord_names = _chord_pc_names(chord)
+    for i, event in enumerate(events):
+        name = event.note.name(mc)
+        if event.role == "alvo":
+            if event.start % TICKS_PER_BEAT:
+                add("warning", f"O alvo {name} não cai num tempo: começa em {event.start / TICKS_PER_BEAT + 1:g}.")
+            if chord_names and event.note.pitch_class not in chord_names:
+                add("warning", f"O alvo {name} não é nota do acorde.")
+        elif event.role == "aprox":
+            following = events[i + 1] if i + 1 < len(events) else None
+            if following is not None and following.role == "aprox":
+                continue  # só a última aproximação da sequência precisa resolver (ex.: envolvente)
+            if following is not None:
+                distance = abs(following.note.midi - event.note.midi)
+                if distance != 1:
+                    add("warning", f"A aproximação {name} não resolve por semitom: a nota seguinte é "
+                                   f"{following.note.name(mc)} ({distance} semitons).")
+            elif next_chord is not None and not next_chord.is_rest:
+                pcs = {n.pitch_class for n, _ in next_chord.sounding()}
+                if not any((event.note.pitch_class - pc) % 12 in (1, 11) for pc in pcs):
+                    add("warning", f"A aproximação {name} termina a frase, mas nenhuma nota do próximo acorde fica a um semitom dela.")
+
+    if not chord.phrase_pcs:
+        add("info", "A frase não declara a escala (phrase_scale): não dá para conferir se as notas são dela.")
+        return issues
+    scale = {pc for pc, _ in chord.phrase_pcs}
+    shown = " ".join(name for _, name in chord.phrase_pcs)
+    missing = [name for pc, name in chord_names.items() if pc not in scale]
+    if missing:
+        add("warning", f"A escala da frase ({shown}) não tem {', '.join(missing)}, "
+                       f"{'que é nota do acorde' if len(missing) == 1 else 'que são notas do acorde'}.")
+    outside_scale = list(dict.fromkeys(
+        e.note.pitch_class_name() for e in events if e.note.pitch_class not in scale and e.role not in SCALE_EXEMPT_ROLES))
+    if outside_scale:
+        add("warning", f"Notas fora da escala da frase ({shown}): {', '.join(outside_scale)}. "
+                       "Se são cromáticas de propósito, marque como *aprox, *passagem ou *blue.")
     return issues
 
 
@@ -114,6 +185,10 @@ def analyze_chord(project: Project, chord: ChordEvent, index: int, start_beats: 
         "duration_beats": chord.duration_beats,
         "velocity": project.velocity_for(chord),
         "strum": project.strum_for(chord) if len(notes) >= 2 else "off",
+        "phrase": {
+            "events": [{"midi": e.note.midi, "name": e.note.name(mc), "start": e.start, "length": e.length, "role": e.role}
+                       for e in chord.phrase_events],
+        } if chord.phrase_events else None,
     }
 
 
@@ -128,7 +203,8 @@ def analyze(project: Project, issues: list[Issue] | None = None) -> dict[str, An
     chords = []
     start = 0.0
     for i, chord in enumerate(project.chords):
-        all_issues.extend(chord_issues(project, chord, i))
+        following = project.chords[i + 1] if i + 1 < len(project.chords) else None
+        all_issues.extend(chord_issues(project, chord, i, following))
         chords.append(analyze_chord(project, chord, i, start))
         start += chord.duration_beats
 
@@ -175,6 +251,8 @@ def describe(report: dict[str, Any]) -> str:
         if c["strum"] != "off":
             arrow = "grave → agudo" if c["strum"] == "up" else "agudo → grave"
             lines.append(f"   strum: {arrow}, {report['strum_delay_ms']:g} ms entre as notas")
+        if c.get("phrase"):
+            lines.append("   frase: " + " ".join(n["name"] + (f"*{n['role']}" if n["role"] else "") for n in c["phrase"]["events"]))
     icons = {"error": "ERRO", "warning": "aviso", "info": "nota"}
     for issue in report["issues"]:
         where = f"acorde {issue['chord'] + 1}: " if issue["chord"] is not None else ""

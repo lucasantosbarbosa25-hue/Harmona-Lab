@@ -6,18 +6,21 @@ import {
   PARTS, PART_LABELS, beatsPerBar, highest, isRest, issue, loadProject, lowest, pitches, projectToDict, sounding,
   strumFor, totalBeats, velocityFor,
 } from "./model.js";
-import { noteName, pitchClass, pitchClassName } from "./pitch.js";
+import { makeNote, noteName, pitchClass, pitchClassName } from "./pitch.js";
 import { TICKS_PER_BEAT, beatsToTicks, strumPlan } from "./midi.js";
+import { SCALE_EXEMPT_ROLES } from "./phrase.js";
 
 const PIANO_LOW = 21; // A0
 const PIANO_HIGH = 108; // C8
 const HAND_SPAN_LIMIT = 16; // semitons (uma 10ª maior)
+const PHRASE_LOW = 48; // tessitura confortável de uma frase: C3 a C7 (com C4 = 60)
+const PHRASE_HIGH = 96;
 
 // max()/min() do Python com key: em empate fica o primeiro.
 const maxBy = (notes) => notes.reduce((best, n) => (n.midi > best.midi ? n : best));
 const minBy = (notes) => notes.reduce((best, n) => (n.midi < best.midi ? n : best));
 
-export function chordIssues(project, chord, index) {
+export function chordIssues(project, chord, index, nextChord = null) {
   const mc = project.middle_c;
   const issues = [];
   const add = (level, message, field = null) => issues.push(issue(level, message, index, field));
@@ -93,6 +96,79 @@ export function chordIssues(project, chord, index) {
 
   const outside = voices.filter((v) => v.note.midi < PIANO_LOW || v.note.midi > PIANO_HIGH).map((v) => noteName(v.note, mc));
   if (outside.length) add("info", `Fora da extensão do piano de 88 teclas: ${outside.join(" ")}.`);
+  issues.push(...phraseIssues(project, chord, index, nextChord));
+  return issues;
+}
+
+/** Classe de altura → nome (a grafia da primeira nota do acorde que a tem). */
+function chordPcNames(chord) {
+  const names = new Map();
+  for (const { note } of sounding(chord)) if (!names.has(pitchClass(note))) names.set(pitchClass(note), pitchClassName(note));
+  return names;
+}
+
+const unique = (items) => [...new Set(items)];
+
+/**
+ * Confere a frase com o acorde: tessitura, alvos no tempo e no acorde, aproximações e escala.
+ * Só avisa (warning/info): erros de escrita já foram apontados na leitura do projeto. Os papéis "alvo" e "aprox"
+ * são conferidos; qualquer outro papel é livre. Novas conferências entram aqui.
+ */
+export function phraseIssues(project, chord, index, nextChord) {
+  const events = chord.phrase_events;
+  if (!events.length) return [];
+  const mc = project.middle_c;
+  const issues = [];
+  const add = (level, message) => issues.push(issue(level, message, index, "phrase"));
+
+  const out = events.filter((e) => e.note.midi < PHRASE_LOW || e.note.midi > PHRASE_HIGH).map((e) => noteName(e.note, mc));
+  if (out.length) {
+    add("warning", `Notas fora da tessitura confortável da frase (${noteName(makeNote(PHRASE_LOW), mc)} a `
+      + `${noteName(makeNote(PHRASE_HIGH), mc)}): ${unique(out).join(" ")}.`);
+  }
+
+  const chordNames = chordPcNames(chord);
+  events.forEach((event, i) => {
+    const name = noteName(event.note, mc);
+    if (event.role === "alvo") {
+      if (event.start % TICKS_PER_BEAT) add("warning", `O alvo ${name} não cai num tempo: começa em ${fmtG(event.start / TICKS_PER_BEAT + 1)}.`);
+      if (chordNames.size && !chordNames.has(pitchClass(event.note))) add("warning", `O alvo ${name} não é nota do acorde.`);
+    } else if (event.role === "aprox") {
+      const following = i + 1 < events.length ? events[i + 1] : null;
+      if (following && following.role === "aprox") return; // só a última aproximação da sequência precisa resolver (ex.: envolvente)
+      if (following) {
+        const distance = Math.abs(following.note.midi - event.note.midi);
+        if (distance !== 1) {
+          add("warning", `A aproximação ${name} não resolve por semitom: a nota seguinte é `
+            + `${noteName(following.note, mc)} (${distance} semitons).`);
+        }
+      } else if (nextChord && !isRest(nextChord)) {
+        const pcs = sounding(nextChord).map((v) => pitchClass(v.note));
+        if (!pcs.some((pc) => [1, 11].includes((((pitchClass(event.note) - pc) % 12) + 12) % 12))) {
+          add("warning", `A aproximação ${name} termina a frase, mas nenhuma nota do próximo acorde fica a um semitom dela.`);
+        }
+      }
+    }
+  });
+
+  if (!chord.phrase_pcs.length) {
+    add("info", "A frase não declara a escala (phrase_scale): não dá para conferir se as notas são dela.");
+    return issues;
+  }
+  const scale = new Set(chord.phrase_pcs.map((s) => s.pc));
+  const shown = chord.phrase_pcs.map((s) => s.name).join(" ");
+  const missing = [...chordNames].filter(([pc]) => !scale.has(pc)).map(([, name]) => name);
+  if (missing.length) {
+    add("warning", `A escala da frase (${shown}) não tem ${missing.join(", ")}, `
+      + `${missing.length === 1 ? "que é nota do acorde" : "que são notas do acorde"}.`);
+  }
+  const outsideScale = unique(events
+    .filter((e) => !scale.has(pitchClass(e.note)) && !SCALE_EXEMPT_ROLES.has(e.role))
+    .map((e) => pitchClassName(e.note)));
+  if (outsideScale.length) {
+    add("warning", `Notas fora da escala da frase (${shown}): ${outsideScale.join(", ")}. `
+      + "Se são cromáticas de propósito, marque como *aprox, *passagem ou *blue.");
+  }
   return issues;
 }
 
@@ -122,6 +198,11 @@ export function analyzeChord(project, chord, index, startBeats) {
     duration_beats: chord.duration_beats,
     velocity: velocityFor(project, chord),
     strum: notes.length >= 2 ? strumFor(project, chord) : "off",
+    phrase: chord.phrase_events.length ? {
+      events: chord.phrase_events.map((e) => ({
+        midi: e.note.midi, name: noteName(e.note, mc), start: e.start, length: e.length, role: e.role,
+      })),
+    } : null,
   };
 }
 
@@ -134,7 +215,7 @@ export function analyze(project, issues = []) {
   const chords = [];
   let start = 0;
   project.chords.forEach((chord, i) => {
-    all.push(...chordIssues(project, chord, i));
+    all.push(...chordIssues(project, chord, i, project.chords[i + 1] ?? null));
     chords.push(analyzeChord(project, chord, i, start));
     start += chord.duration_beats;
   });

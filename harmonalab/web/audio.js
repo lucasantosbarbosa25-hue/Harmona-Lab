@@ -26,9 +26,9 @@ export class Player {
   }
 
   /** Um acorde: timbre de piano elétrico simples (senoide + harmônico suave). */
-  #chord(midis, velocity, start, seconds, offsets) {
+  #chord(midis, velocity, start, seconds, offsets, gain = 1) {
     const ctx = this.ctx;
-    const peak = ((velocity / 127) ** 1.6 * 0.42) / Math.sqrt(Math.max(1, midis.length));
+    const peak = (((velocity / 127) ** 1.6 * 0.42) / Math.sqrt(Math.max(1, midis.length))) * gain;
     const end = start + Math.max(0.08, seconds - 0.03);
     for (const [i, midi] of midis.entries()) {
       const t0 = start + (offsets?.[i] ?? 0); // strum: cada nota entra no seu momento
@@ -61,7 +61,8 @@ export class Player {
 
   /**
    * Toca uma sequência de acordes.
-   * chords: [{midis, offsets (s, opcional: strum), velocity, beats}], bpm; onStep(i) / onEnd() para destacar a tela.
+   * chords: [{midis, offsets (s, opcional: strum), velocity, beats, phrase (opcional: [{midi, start, length}] em segundos)}], bpm;
+   * onStep(i) / onEnd() para destacar a tela.
    */
   play(chords, bpm, { onStep, onEnd } = {}) {
     this.stop();
@@ -71,6 +72,7 @@ export class Player {
     chords.forEach((c, i) => {
       const seconds = c.beats * spb;
       if (c.midis.length) this.#chord(c.midis, c.velocity, t, seconds, c.offsets);
+      for (const note of c.phrase ?? []) this.#chord([note.midi], c.velocity, t + note.start, note.length, null, 0.8); // a frase: uma nota de cada vez
       const delay = Math.max(0, (t - ctx.currentTime) * 1000);
       this.timers.push(setTimeout(() => onStep?.(i), delay));
       t += seconds;

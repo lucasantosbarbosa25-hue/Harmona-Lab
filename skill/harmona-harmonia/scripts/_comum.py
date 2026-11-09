@@ -26,11 +26,20 @@ def ler_projeto(origem: str) -> dict:
     return dados
 
 
-def problemas(relatorio: dict) -> list[str]:
-    """O que bloqueia: erros do motor e ponta travada que não é a nota mais aguda (o mesmo critério do app)."""
+CAMPOS_QUE_BLOQUEIAM = ("top_note", "phrase", "phrase_scale")  # avisos desses campos também bloqueiam (como no app)
+
+
+def _preenchido(acorde, chave) -> bool:
+    valor = acorde.get(chave) if isinstance(acorde, dict) else None
+    return bool(valor.strip()) if isinstance(valor, str) else bool(valor) if isinstance(valor, list) else False
+
+
+def problemas(relatorio: dict, projeto: dict | None = None) -> list[str]:
+    """O que bloqueia: erros do motor, ponta travada que não é a nota mais aguda, avisos da frase e, com o projeto,
+    a frase de função (comment) que falta em acordes e a escala que falta numa frase. É o mesmo critério do app."""
     saida = []
     for item in relatorio["issues"]:
-        if item["level"] == "error" or (item["level"] == "warning" and item["field"] == "top_note"):
+        if item["level"] == "error" or (item["level"] == "warning" and item["field"] in CAMPOS_QUE_BLOQUEIAM):
             onde = ""
             if item["chord"] is not None:
                 simbolo = relatorio["chords"][item["chord"]]["symbol"] if item["chord"] < len(relatorio["chords"]) else ""
@@ -39,12 +48,22 @@ def problemas(relatorio: dict) -> list[str]:
             elif item["field"]:
                 onde = f"Projeto, campo {item['field']}: "
             saida.append(onde + item["message"])
+    acordes = projeto.get("chords") if isinstance(projeto, dict) and isinstance(projeto.get("chords"), list) else []
+    sem_escala = [i + 1 for i, c in enumerate(acordes) if _preenchido(c, "phrase") and not _preenchido(c, "phrase_scale")]
+    if sem_escala:
+        saida.append(f'Acorde(s) {", ".join(map(str, sem_escala))}: a frase precisa vir com "phrase_scale" (as notas da escala, sem oitava).')
+    if projeto is not None:
+        mudos = [c["index"] + 1 for c in relatorio["chords"]
+                 if not c["is_rest"] and not (c["index"] < len(acordes) and _preenchido(acordes[c["index"]], "comment"))]
+        if mudos:
+            saida.append('Falta a frase de função (campo "comment": o que o acorde faz ali e por quê) no(s) acorde(s) '
+                         + ", ".join(map(str, mudos)) + ".")
     return saida
 
 
 def conferir(projeto: dict) -> tuple[dict, list[str]]:
     relatorio = analyze_data(projeto)
-    return relatorio, problemas(relatorio)
+    return relatorio, problemas(relatorio, projeto)
 
 
 # ------------------------------------------------------------------ links
@@ -82,6 +101,20 @@ def _nota_link(nota: str) -> str:
     return f"{m.group(1)}{m.group(2).replace('#', 's')}{m.group(3)}" if m else _codificar(nota)
 
 
+def _frase_link(frase: str) -> str:
+    """Frase no link: fichas separadas por "_" e "s" no lugar do "#" (o mesmo que o app lê)."""
+    fichas = []
+    for ficha in str(frase).split():
+        cabeca, estrela, papel = ficha.partition("*")
+        nome, barra, duracao = cabeca.partition("/")
+        fichas.append(f"{_nota_link(nome)}{barra}{_codificar(duracao)}{estrela}{_codificar(papel)}")
+    return "_".join(fichas)
+
+
+def _escala_link(escala: str) -> str:
+    return "_".join(re.sub(r"#", "s", n) if re.fullmatch(r"[A-Ga-g][#b]*", n) else _codificar(n) for n in str(escala).split())
+
+
 def link_compacto(projeto: dict, base: str = BASE_PADRAO) -> str:
     """Link legível (#t=...&p=...), no formato que qualquer IA consegue escrever à mão."""
     if projeto.get("middle_c", "C4") != "C4":
@@ -99,6 +132,8 @@ def link_compacto(projeto: dict, base: str = BASE_PADRAO) -> str:
     refs = projeto.get("references") or []
     if refs:
         partes.append("ref=" + ",".join(texto(r) for r in refs))
+    if projeto.get("style"):
+        partes.append(f"st={texto(projeto['style'])}")
     acordes = []
     for acorde in projeto.get("chords", []):
         mao = lambda chave: ",".join(_nota_link(n) for n in acorde.get(chave) or [])  # noqa: E731
@@ -111,6 +146,9 @@ def link_compacto(projeto: dict, base: str = BASE_PADRAO) -> str:
             f"{duracao:g}" if isinstance(duracao, (int, float)) else "",
             texto(acorde.get("function", "")),
             texto(acorde.get("scale", "")),
+            texto(acorde.get("comment", "")),
+            _frase_link(acorde.get("phrase", "")),
+            _escala_link(acorde.get("phrase_scale", "")),
         ]
         while campos and not campos[-1]:
             campos.pop()

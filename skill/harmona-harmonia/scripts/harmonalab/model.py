@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from .phrase import PhraseEvent, parse_phrase, parse_scale, phrase_text, rename_phrase_text
 from .pitch import (
     DEFAULT_MIDDLE_C,
     MIDDLE_C_OFFSETS,
@@ -23,6 +24,7 @@ from .pitch import (
     rename_note_text,
     split_note_list,
 )
+from .timing import TICKS_PER_BEAT, beats_to_ticks
 
 SCHEMA_VERSION = 1
 
@@ -90,7 +92,12 @@ class ChordEvent:
     function: str = ""  # função harmônica em graus (ex.: "V7alt/ii"), só informativa
     scale: str = ""  # escala ou modo (ex.: "menor melódica a partir de B"), só informativa
     omitted: list[str] = field(default_factory=list)  # informativo (ex.: ["5"])
-    comment: str = ""
+    comment: str = ""  # a frase de função do acorde: o que ele faz ali e por quê
+    phrase: str = ""  # frase melódica: "G5/8 F5/8 Eb5/4*alvo ..." (ver phrase.py)
+    phrase_scale: str = ""  # classes de altura da escala da frase ("B C D Eb F G A")
+    # Derivados da frase e da escala, preenchidos na leitura (não fazem parte do JSON).
+    phrase_events: list[PhraseEvent] = field(default_factory=list)
+    phrase_pcs: list[tuple[int, str]] = field(default_factory=list)
 
     def part(self, name: str) -> list[Note]:
         return getattr(self, name)
@@ -143,6 +150,10 @@ class ChordEvent:
             d["omitted"] = list(self.omitted)
         if self.comment:
             d["comment"] = self.comment
+        if self.phrase:
+            d["phrase"] = self.phrase
+        if self.phrase_scale:
+            d["phrase_scale"] = self.phrase_scale
         return d
 
 
@@ -155,6 +166,7 @@ class Project:
     default_velocity: int = 80
     key: str = ""  # tonalidade (ex.: "Em"), só informativa
     references: list[str] = field(default_factory=list)  # artistas e músicas de referência
+    style: str = ""  # levada das frases (ex.: "Neo-soul"), só informativa
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
@@ -192,6 +204,8 @@ class Project:
             d["key"] = self.key
         if self.references:
             d["references"] = list(self.references)
+        if self.style:
+            d["style"] = self.style
         if self.comment:
             d["comment"] = self.comment
         return d
@@ -271,6 +285,8 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         project.comment = str(data["comment"])
     if isinstance(data.get("key"), str):
         project.key = data["key"].strip()
+    if isinstance(data.get("style"), str):
+        project.style = data["style"].strip()
     refs = data.get("references")
     if isinstance(refs, str):
         refs = [t for t in re.split(r"[,;]", refs)]
@@ -392,7 +408,35 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
     omitted = raw.get("omitted")
     if omitted:
         chord.omitted = [str(t) for t in split_note_list(omitted)]
+
+    _load_phrase(raw, chord, index, project, issues)
     return chord
+
+
+def _load_phrase(raw: dict[str, Any], chord: ChordEvent, index: int, project: Project, issues: list[Issue]) -> None:
+    """Frase e escala da frase: erros de escrita e frase mais longa que o acorde bloqueiam; o resto é conferido na análise."""
+    phrase = raw.get("phrase")
+    if phrase not in (None, ""):
+        if isinstance(phrase, (str, list, tuple)):
+            chord.phrase = phrase_text(phrase)
+            events, total, errors = parse_phrase(chord.phrase, project.middle_c)
+            for message in errors:
+                issues.append(Issue("error", message, index, "phrase"))
+            if total > beats_to_ticks(chord.duration_beats):
+                issues.append(Issue("error", f"A frase dura {total / TICKS_PER_BEAT:g} tempos, mais que os "
+                                             f"{chord.duration_beats:g} do acorde.", index, "phrase"))
+            chord.phrase_events = events
+        else:
+            issues.append(Issue("error", 'A frase ("phrase") deve ser um texto, por exemplo "G5/8 F5/8 Eb5/4*alvo".', index, "phrase"))
+    scale = raw.get("phrase_scale")
+    if scale not in (None, ""):
+        if isinstance(scale, (str, list, tuple)):
+            chord.phrase_pcs, errors = parse_scale(scale)
+            chord.phrase_scale = " ".join(name for _, name in chord.phrase_pcs)
+            for message in errors:
+                issues.append(Issue("error", message, index, "phrase_scale"))
+        else:
+            issues.append(Issue("error", 'A escala da frase ("phrase_scale") deve ser um texto, por exemplo "B C D Eb F G A".', index, "phrase_scale"))
 
 
 def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, Any]:
@@ -416,6 +460,8 @@ def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, An
         for key in (*PARTS, "top_note"):
             if c.get(key) not in (None, ""):
                 c[key] = rename_note_text(c[key], from_middle_c, to_middle_c)
+        if c.get("phrase") not in (None, ""):
+            c["phrase"] = rename_phrase_text(c["phrase"], from_middle_c, to_middle_c)
         chords.append(c)
     out["chords"] = chords
     return out

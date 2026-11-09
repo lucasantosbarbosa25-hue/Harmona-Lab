@@ -4,10 +4,12 @@
 import { CHATS, buildChatPrompt, correctionPrompt, readChatAnswer } from "./chat.js";
 import { checkDelivery } from "./check.js";
 import { findLinkInText, parseLinkHash } from "./link.js";
-import { instructions } from "./prompt.js";
+import { PERMANENT_INSTRUCTIONS } from "./prompt.js";
 import { createDictation, mergeDictation, speechSupported } from "./speech.js";
+import { AUTO_STYLE, NO_PHRASES, STYLE_OPTIONS, isStyleId, styleLabel } from "./styles.js";
 
 const PROMPT_KEY = "harmonalab:ai:prompt";
+const STYLE_KEY = "harmonalab:ai:style";
 const EXAMPLES = [
   "8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E",
   "4 acordes resolvendo B7alt em Em9 com ponta fixa em F#, estilo Dirty Loops",
@@ -21,6 +23,8 @@ const appUrl = () => `${location.origin}${location.pathname.replace(/[^/]*$/, ""
 const truncate = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
 const loadPrompt = () => { try { return localStorage.getItem(PROMPT_KEY) || ""; } catch { return ""; } };
 const savePrompt = (text) => { try { localStorage.setItem(PROMPT_KEY, text); } catch { /* sem armazenamento */ } };
+const loadStyle = () => { try { const id = localStorage.getItem(STYLE_KEY); return isStyleId(id) ? id : NO_PHRASES; } catch { return NO_PHRASES; } };
+const saveStyle = (id) => { try { localStorage.setItem(STYLE_KEY, id); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
   const { $, h, icon, toast, getProjectJson, hasProgression, applyGenerated } = api;
@@ -28,15 +32,22 @@ export function initAssistant(api) {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
     mic: $("#ai-mic"), mode: $("#ai-mode"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
     chatPrompt: $("#ai-chat-prompt"), answer: $("#ai-answer"), fixActions: $("#ai-fix-actions"),
+    style: $("#ai-style"), styleHelp: $("#ai-style-help"),
   };
   let mode = "new";
   let chatRequest = ""; // o pedido que foi copiado (vai para as notas do projeto)
+  let chatStyle = NO_PHRASES; // a levada das frases do pedido que foi copiado
   let pending = null; // resposta recusada pela conferência: { project, explanation, problems }
   let dictation = null;
 
   // ------------------------------------------------------------ pedido
   els.prompt.value = loadPrompt();
   els.prompt.addEventListener("input", () => savePrompt(els.prompt.value));
+  els.style.replaceChildren(...STYLE_OPTIONS.map((o) => h("option", { value: o.id }, o.label)));
+  els.style.value = loadStyle();
+  const refreshStyle = () => { els.styleHelp.hidden = els.style.value === NO_PHRASES; };
+  els.style.addEventListener("change", () => { saveStyle(els.style.value); refreshStyle(); });
+  refreshStyle();
   els.examples.replaceChildren(...EXAMPLES.map((text) => h("button", {
     type: "button", class: "chip-button", onclick: () => { els.prompt.value = text; savePrompt(text); els.prompt.focus(); },
   }, truncate(text, 56))));
@@ -82,7 +93,10 @@ export function initAssistant(api) {
     dictation?.stop();
     savePrompt(request);
     const adjust = mode === "adjust" && hasProgression();
-    const text = buildChatPrompt({ request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null, appUrl: appUrl() });
+    chatStyle = els.style.value;
+    const text = buildChatPrompt({
+      request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null, appUrl: appUrl(), phrases: chatStyle,
+    });
     chatRequest = request;
     els.chatPrompt.hidden = true;
     els.chatStep.hidden = false;
@@ -92,7 +106,7 @@ export function initAssistant(api) {
   }
 
   $("#ai-copy-instructions").addEventListener("click", async () => {
-    const copied = await copyText(instructions(appUrl()));
+    const copied = await copyText(PERMANENT_INSTRUCTIONS(appUrl()));
     toast(copied ? "Instruções copiadas. Cole nas instruções permanentes da sua IA." : "Não consegui copiar sozinho: copie o texto que apareceu na tela.", { error: !copied });
   });
 
@@ -108,6 +122,12 @@ export function initAssistant(api) {
       warnings.length ? h("ul", { class: "issues" }, ...warnings.map((w) => h("li", { class: "issue warning" }, icon("warning"), h("span", null, w)))) : null,
     );
     els.result.hidden = false;
+  }
+
+  /** A resposta de chat sem "style" herda a levada que a pessoa escolheu no menu (na automática, só a IA sabe qual usou). */
+  function withStyle(project) {
+    const chosen = chatStyle !== NO_PHRASES && chatStyle !== AUTO_STYLE ? styleLabel(chatStyle) : "";
+    return chosen && !project.style && project.chords?.some((c) => c && c.phrase) ? { ...project, style: chosen } : project;
   }
 
   function accept(project, explanation, problems, message, request = chatRequest || els.prompt.value.trim()) {
@@ -165,7 +185,7 @@ export function initAssistant(api) {
       setStatus("error", err.message);
       return;
     }
-    if (read.ok) { accept(read.project, read.explanation, []); return; }
+    if (read.ok) { accept(withStyle(read.project), read.explanation, []); return; }
     const loadable = read.project && typeof read.project === "object";
     pending = loadable ? read : { problems: read.problems };
     els.fixActions.hidden = false;
@@ -179,7 +199,7 @@ export function initAssistant(api) {
     setStatus("info", copied ? "Correções copiadas: cole na mesma conversa, envie e cole a nova resposta aqui." : "Não consegui copiar sozinho: copie o texto da caixa acima.");
   });
   $("#ai-load-anyway").addEventListener("click", () => {
-    if (pending?.project) accept(pending.project, pending.explanation, pending.problems, "Progressão carregada com problemas a corrigir.");
+    if (pending?.project) accept(withStyle(pending.project), pending.explanation, pending.problems, "Progressão carregada com problemas a corrigir.");
   });
 
   // ------------------------------------------------------------ ditado

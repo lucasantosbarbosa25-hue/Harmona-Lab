@@ -1,14 +1,18 @@
 // Projeto → bytes de um arquivo MIDI (.mid) — espelho de harmonalab/midi_io.py.
 // Gera exatamente os mesmos bytes que o mido gera no Python (há teste comparando).
 //
-// Tipo 0 (uma faixa), 480 ticks por semínima, canal 1, sem program change.
+// Tipo 0 (uma faixa), 480 ticks por semínima, sem program change: acordes no canal 1 e frases no canal 2.
 // Nota comum entre acordes: o note_off vem antes do note_on no mesmo tick.
 
 import { roundHalfEven } from "./numbers.js";
-import { pitches, strumFor, velocityFor } from "./model.js";
+import { pitches, sounding, strumFor, velocityFor } from "./model.js";
+import { TICKS_PER_BEAT } from "./phrase.js";
 
-export const TICKS_PER_BEAT = 480;
+export { TICKS_PER_BEAT };
 const CHANNEL = 0;
+const PHRASE_CHANNEL = 1;
+/** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
+export const PHRASE_MODES = ["both", "chords", "line"];
 
 const TEXT_REPLACEMENTS = [
   ["→", "->"], ["♭", "b"], ["♯", "#"], ["𝄪", "##"], ["𝄫", "bb"], ["♮", ""],
@@ -58,16 +62,18 @@ function varInt(value) {
 const meta = (type, data) => ({ meta: true, bytes: [0xff, type, ...varInt(data.length), ...data] });
 
 /** Gera o .mid exatamente com as notas, oitavas e durações do projeto. */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true } = {}) {
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both" } = {}) {
+  if (!PHRASE_MODES.includes(phraseMode)) throw new Error(`phraseMode deve ser um de ${PHRASE_MODES.join(", ")} (recebido ${phraseMode}).`);
   const [num, den] = project.time_signature;
-  // [tick, prioridade, altura, mensagem]. Prioridade: note_off < marcador < note_on.
+  // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
   const events = [];
   let tick = 0;
   for (const chord of project.chords) {
     const length = beatsToTicks(chord.duration_beats, ticksPerBeat);
     const velocity = velocityFor(project, chord);
-    if (markers && chord.symbol) events.push([tick, 1, 0, meta(0x06, metaTextBytes(chord.symbol))]);
+    if (markers && chord.symbol) events.push([tick, 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
     let notes = pitches(chord); // do grave ao agudo
+    if (phraseMode === "line") notes = sounding(chord).filter((v) => v.part !== "right_hand").map((v) => v.note.midi);
     let offsets = notes.map(() => 0);
     const direction = strumFor(project, chord);
     if (direction !== "off") {
@@ -75,13 +81,20 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
       if (direction === "down") notes = notes.slice().reverse(); // a nota mais aguda entra primeiro
     }
     for (const [i, pitch] of notes.entries()) {
-      events.push([tick + offsets[i], 2, pitch, { bytes: [0x90 | CHANNEL, pitch, velocity] }]);
-      events.push([tick + length, 0, pitch, { bytes: [0x80 | CHANNEL, pitch, 0] }]);
+      events.push([tick + offsets[i], 2, pitch, { bytes: [0x90 | CHANNEL, pitch, velocity] }, CHANNEL]);
+      events.push([tick + length, 0, pitch, { bytes: [0x80 | CHANNEL, pitch, 0] }, CHANNEL]);
+    }
+    if (phraseMode !== "chords") {
+      for (const e of chord.phrase_events) {
+        const pitch = e.note.midi;
+        events.push([tick + e.start, 2, pitch, { bytes: [0x90 | PHRASE_CHANNEL, pitch, velocity] }, PHRASE_CHANNEL]);
+        events.push([tick + e.start + e.length, 0, pitch, { bytes: [0x80 | PHRASE_CHANNEL, pitch, 0] }, PHRASE_CHANNEL]);
+      }
     }
     tick += length;
   }
   const endTick = tick;
-  events.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+  events.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[4] - b[4]);
 
   const tempo = roundHalfEven(((60 * 1e6) / project.tempo) * 4 / 4);
   const messages = [

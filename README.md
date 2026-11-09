@@ -123,6 +123,16 @@ todos os acordes**, os mesmos botões valem para a progressão inteira, e a **po
 os acordes (o app avisa em quantos ela não fazia parte do acorde: é a tensão que você vai ouvir). Só mudam as oitavas da
 mão direita; tudo pode ser desfeito.
 
+**Frases melódicas.** Embaixo do pedido há o menu **Frases melódicas** (começa em *Sem frases*). Escolha uma levada
+(Salsa, Samba, Bossa nova, Neo-soul, Jazz fusion, Gospel americano, Funk, Jazz swing, Rock, Ska) ou *Automática*, e a sua IA
+escreve também uma frase curta para cada acorde, dentro da escala dele: aproximações cromáticas, notas da escala,
+pentatônica, notas-alvo nos tempos certos, o que o pedido descrever em linguagem natural. A levada manda no **ritmo**; os
+artistas citados no pedido continuam mandando no **vocabulário**. Cada frase é conferida pelo app: o alvo cai num tempo e é
+nota do acorde, a aproximação resolve por semitom, as notas são da escala declarada, tudo cabe no acorde. Na barra da
+progressão você escolhe **ouvir e exportar** *acorde + frase*, *mão esquerda + frase* (a direita sai e a frase canta no lugar
+dela) ou *só acorde*. No `.mid`, os acordes ficam no canal 1 e a frase no **canal 2**, para separar na DAW. Cada acorde mostra
+também a **frase de função** que a IA escreveu (o que ele faz ali e por quê), que é obrigatória no pedido.
+
 **Skill para o Claude.** A pasta [`skill/harmona-harmonia`](skill/harmona-harmonia) (e o `.zip` em
 `harmonalab/web/harmona-harmonia.zip`, que o app oferece para baixar) é uma skill: instruções, vocabulário de harmonia no
 estilo de livros-texto (modos da menor melódica, tensões, substituições, upper structures, voicings), pistas por artista,
@@ -242,7 +252,20 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].strum` | não (segue o projeto) | `"off"`, `"up"` ou `"down"`: troca o strum só neste acorde. O atraso é o do projeto. |
 | `key`, `references` | não | Tom (`"Em"`) e artistas ou músicas de referência (lista): aparecem em destaque na progressão. |
 | `chords[].function`, `scale` | não | Função em graus (`"V7alt"`) e escala ou modo: aparecem sob o nome do acorde. |
-| `chords[].symbol`, `omitted`, `comment` | não | Informativos. |
+| `chords[].comment` | não (a IA sempre preenche) | A frase de função do acorde: o que ele faz ali e por quê. Aparece sob o nome do acorde. |
+| `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. |
+| `chords[].phrase_scale` | não | Notas da escala da frase, sem oitava (`"B C D Eb F G A"`): o app confere as notas da frase com ela. |
+| `style` | não | Nome da levada das frases (`"Neo-soul"`): aparece em destaque na progressão. |
+| `chords[].symbol`, `omitted` | não | Informativos. |
+
+**Papéis das notas da frase.** `*alvo` (nota de chegada: cai num tempo e é nota do acorde) e `*aprox` (aproximação: resolve por
+semitom na nota seguinte, ou no próximo acorde se for a última) são conferidos. Qualquer outro papel (`*passagem`, `*blue`,
+`*tensao`… o que a IA quiser explicar) é livre e não é conferido; `*aprox`, `*passagem`, `*cromatica` e `*blue` podem sair da escala.
+
+**Como crescer.** As levadas são dados em [`ai/styles.js`](harmonalab/web/ai/styles.js) (menu, prompt, `ia.md` e skill leem de
+lá); cada recurso de prompt é uma entrada de `FEATURES` em [`ai/phrases.js`](harmonalab/web/ai/phrases.js); durações e papéis
+têm tabelas em `phrase.py` / `engine/phrase.js`, e as conferências musicais ficam em `phrase_issues` (`analysis.py` /
+`analysis.js`). Arpejos, outros tipos de frase e novos papéis entram acrescentando uma entrada, sem mexer no resto.
 
 Acorde sem nenhuma nota = pausa. Um exemplo completo está em
 [`examples/resolucao_em_fsharp_ponta.json`](examples/resolucao_em_fsharp_ponta.json) (e o `.mid` gerado ao lado,
@@ -320,7 +343,8 @@ harmona-lab/
 ├── harmonalab/
 │   ├── pitch.py        notas ↔ MIDI, convenções de oitava, grafia enarmônica
 │   ├── model.py        Project / ChordEvent, leitura tolerante do JSON com lista de erros
-│   ├── analysis.py     ponta, baixo, espaçamento, dobras, avisos musicais
+│   ├── analysis.py     ponta, baixo, espaçamento, dobras, avisos musicais e conferência das frases
+│   ├── phrase.py       frases melódicas: notação NOTA/DURAÇÃO*papel → notas com tempo (ticks)
 │   ├── midi_io.py      gera .mid e lê de volta (conferência/testes)
 │   ├── voicing.py      geradores automáticos — hoje: voicing fechado sob ponta travada
 │   ├── server.py       servidor local que entrega o app (uso no computador)
@@ -328,8 +352,8 @@ harmona-lab/
 │   └── web/            o app publicado (arquivos estáticos)
 │       ├── index.html, styles.css, app.js   interface
 │       ├── keyboard.js, audio.js            teclado visual e pré‑escuta
-│       ├── engine/     motor em JS: pitch, model, analysis, midi (espelho do Python)
-│       ├── ai/         assistente: instruções (prompt.js), pedido e resposta (chat.js), links (link.js),
+│       ├── engine/     motor em JS: pitch, model, analysis, midi, phrase, voicing (espelho do Python)
+│       ├── ai/         assistente: instruções (prompt.js), levadas (styles.js), frases no prompt (phrases.js), pedido e resposta (chat.js), links (link.js),
 │       │               conferência (check.js), ditado (speech.js) e tela (ui.js)
 │       ├── ia.md       instruções para IAs (gerado por design/ia.mjs)
 │       ├── harmona-harmonia.zip   a skill, para baixar (gerado por design/build_skill.py)
@@ -401,7 +425,8 @@ cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes*
 ## Limitações conhecidas desta versão
 
 - A ponta travada é **validada** (aviso); o app só reorganiza voicings quando você pede, pelos botões (fechado, aberto, drop 2, drop 3, ponta pedal).
-- Uma faixa MIDI única (sem separar mãos em faixas).
+- Uma faixa MIDI única (sem separar mãos em faixas): os acordes ficam no canal 1 e a frase, no canal 2.
+- Das frases, o app confere só o que dá para medir (tempos, notas do acorde, semitom, escala, tamanho). Se o ritmo soa mesmo a salsa ou a neo-soul, só o seu ouvido diz; as descrições das levadas são generalizações. Tercinas e quiálteras de 5 existem na notação; outras divisões (por exemplo, setinas) não.
 - A pré‑escuta do navegador é um timbre simples; o objetivo dela é só conferir notas.
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").
 - Os projetos ficam no aparelho (rascunho automático) ou em arquivos `.json`; não há sincronização entre aparelhos.

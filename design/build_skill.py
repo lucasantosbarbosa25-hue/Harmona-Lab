@@ -16,7 +16,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / "skill" / "harmona-harmonia"
-MODULOS = ("__init__", "pitch", "model", "analysis", "timing")
+MODULOS = ("__init__", "pitch", "model", "analysis", "timing", "phrase")
 ZIP = ROOT / "harmonalab" / "web" / "harmona-harmonia.zip"
 DATA_FIXA = (2026, 1, 1, 0, 0, 0)  # o .zip sai sempre igual para o mesmo conteúdo
 

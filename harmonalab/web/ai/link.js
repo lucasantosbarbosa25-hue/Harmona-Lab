@@ -2,7 +2,8 @@
 // O que fica depois do "#" nunca vai para o servidor: a progressão não sai do aparelho de quem abre.
 //
 // Formatos (parâmetros separados por &):
-//   #t=título&k=tom&bpm=80&ts=4/4&ref=A,B&x=explicação&p=cifra:notas:duração:função:escala;...   compacto, para qualquer IA
+//   #t=título&k=tom&bpm=80&ts=4/4&ref=A,B&st=Levada&x=explicação&p=cifra:notas:duração:função:escala:comentário:frase:escala_da_frase;...
+//                                                                                                compacto, para qualquer IA
 //   #json=<JSON do projeto, com % codificado>                                                   para quem monta com código
 //   #z=<JSON comprimido com deflate e escrito em base64url>                                     o mais curto (o app e o script geram)
 //   #pedido=<texto>                                                                             só preenche o pedido; nunca gera sozinho
@@ -25,6 +26,22 @@ function normalizeNote(token) {
 
 const noteList = (raw) => (raw || "").split(",").map(normalizeNote).filter(Boolean);
 
+/** Frase no link: fichas separadas por "_", notas com "s" no lugar do "#" ("Fs5/8*alvo"). A notação em si é a do motor (engine/phrase.js). */
+function normalizePhrase(raw) {
+  return decode(raw).split(/[_\s+]+/).filter(Boolean).map((token) => {
+    const m = token.match(/^([A-Ga-g])([sb#♯♭]*)(-?\d+)(\/.*)$/);
+    return m ? `${m[1]}${m[2].replace(/s/g, "#")}${m[3]}${m[4]}` : token;
+  }).join(" ");
+}
+
+/** Escala da frase no link: "B_C_D_Eb_F_G_A", com "s" no lugar do "#". */
+function normalizeScale(raw) {
+  return decode(raw).split(/[_\s,+]+/).filter(Boolean).map((token) => {
+    const m = token.match(/^([A-Ga-g])([sb#♯♭]*)$/);
+    return m ? `${m[1]}${m[2].replace(/s/g, "#")}` : token;
+  }).join(" ");
+}
+
 function highestNote(lists) {
   let best = null;
   for (const token of lists.flat()) {
@@ -37,7 +54,7 @@ function highestNote(lists) {
 }
 
 function chordFromSpec(spec) {
-  const [symbol = "", notes = "", beats = "", fn = "", scale = ""] = spec.split(":");
+  const [symbol = "", notes = "", beats = "", fn = "", scale = "", comment = "", phrase = "", phraseScale = ""] = spec.split(":");
   const parts = notes.split("/");
   // 1 parte = só mão direita; 2 = esquerda/direita; 3 = baixo/esquerda/direita
   const [bass, left, right] = parts.length >= 3 ? parts : parts.length === 2 ? [null, parts[0], parts[1]] : [null, null, parts[0]];
@@ -51,6 +68,9 @@ function chordFromSpec(spec) {
   if (top) chord.top_note = top;
   if (fn.trim()) chord.function = textOf(fn);
   if (scale.trim()) chord.scale = textOf(scale);
+  if (comment.trim()) chord.comment = textOf(comment);
+  if (phrase.trim()) chord.phrase = normalizePhrase(phrase);
+  if (phraseScale.trim()) chord.phrase_scale = normalizeScale(phraseScale);
   return chord;
 }
 
@@ -61,6 +81,7 @@ export function compactToProject(params) {
   if (params.k) project.key = textOf(params.k);
   if (params.bpm) project.tempo = Number(decode(params.bpm).replace(",", ".")) || decode(params.bpm);
   if (params.ts) project.time_signature = decode(params.ts).trim();
+  if (params.st) project.style = textOf(params.st);
   if (params.ref) project.references = textOf(params.ref).split(",").map((t) => t.trim()).filter(Boolean);
   if (params.x) project.comment = textOf(params.x);
   project.chords = (params.p || "").split(";").map((s) => s.trim()).filter(Boolean).map(chordFromSpec);

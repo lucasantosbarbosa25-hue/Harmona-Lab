@@ -97,6 +97,38 @@ CASES = [
     {"time_signature": "4/5", "middle_c": ["C4"], "chords": [{"right_hand": "C4", "velocity": 80.5, "duration_beats": "abc"}]},
     {"tempo": "inf", "chords": [{"right_hand": 60.5}]},
     {"tempo": 3.5, "chords": [{"right_hand": "C4"}]},
+    # frases: notação NOTA/DURAÇÃO*papel, duas vozes (acorde no canal 1 e frase no canal 2), conferências
+    {"style": " Neo-soul ", "tempo": 76, "chords": [
+        {"symbol": "B7alt", "duration_beats": 4, "left_hand": "B2 A3", "right_hand": "D4 Eb4 G4 C5", "comment": "dominante",
+         "phrase": "G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo", "phrase_scale": "B C D Eb F G A"},
+        {"symbol": "Em9", "duration_beats": 4, "left_hand": "E2 B2 D3", "right_hand": "G3 F#4",
+         "phrase": "F#5/8 F5/8*aprox E5/4*alvo r/4 G5/4*ALVO", "phrase_scale": ["E", "F#", "G", "A", "B", "C", "D"]}]},
+    {"chords": [{"notes": "C4 E4 G4", "duration_beats": 2, "phrase": "C5/8t E5/8t G5/8t C6/4. r/16 B5/16 A5/16q G5/16q"}]},  # tercinas, ponto, quiálteras
+    {"chords": [{"notes": "C4 E4 G4", "duration_beats": 1, "phrase": ["C5/32", "D5/32", "E5/32", "F5/32", "G5/32", "A5/32", "B5/32", "C6/32"]}]},
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/16, D5/16; E5/16 | F5/16 G5/4*Passagem A5/8*cromática B5/8*Blue"}]},  # separadores e papéis livres
+    {"middle_c": "C3", "chords": [{"left_hand": "E1", "right_hand": "E2 G2 B2", "phrase": "B3/8 Eb4/8*aprox E4/4*alvo", "phrase_scale": "E F# G A B"}]},
+    {"strum": {"direction": "up", "delay_ms": 20}, "chords": [{"left_hand": "C3", "right_hand": "E3 G3 B3", "phrase": "B4/4 C5/4*alvo D5/2"}]},
+    {"chords": [{"phrase": "C5/4 D5/4"}, {"notes": "C4", "duration_beats": 2, "phrase": "r/2"}]},  # frase sem acorde e frase só de pausas
+    # frases: avisos
+    {"chords": [{"left_hand": "C3", "right_hand": "E3 G3 B3", "phrase": "D5/8 E5/8*alvo F5/8*alvo", "phrase_scale": "C D E F G A B"}]},  # alvo fora do tempo
+    {"chords": [{"left_hand": "C3", "right_hand": "E3 G3 B3", "phrase": "D5/4*alvo", "phrase_scale": "C D E F G A B"}]},  # alvo que não é do acorde
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "A4/4*aprox C5/4 D5/4*aprox Eb5/8*aprox F5/8"}]},  # aproximações que não resolvem
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/4 B4/2*aprox"}, {"notes": "C4 E4 G4"}]},  # última nota aprox: confere o próximo acorde
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/4 D5/2*aprox"}, {"notes": "C4 E4 G4"}]},
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/4 D5/2*aprox"}, {}]},  # próximo acorde é pausa
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "F5/8*aprox E5/8*aprox Eb5/8*aprox D5/8*alvo"}]},  # sequência de aproximações
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C2/8 D5/8 C7/8 C8/4"}]},  # fora da tessitura
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/8 Db5/8 Eb5/8 F#5/8 Db5/8", "phrase_scale": "C D E F G"}]},  # fora da escala e acorde fora dela
+    {"chords": [{"notes": "C4 E4 G4 Bb4", "phrase": "C5/8", "phrase_scale": "C D E F"}]},  # várias notas do acorde fora da escala
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/8 D5/8", "phrase_scale": "C C c D E E F G G A B"}]},  # escala com repetição
+    # frases: erros
+    {"chords": [{"notes": "C4", "duration_beats": 1, "phrase": "C5/4 D5/4"}]},  # mais longa que o acorde
+    {"chords": [{"notes": "C4", "duration_beats": 4, "phrase": "C5 D5/9 E5/4. F5/5q G5/7 H5/8 C/8 C5/ /8 C5/8* C5/4t.x r/3 C5/0"}]},
+    {"chords": [{"notes": "C4", "phrase": {"x": 1}, "phrase_scale": {"y": 2}}, {"notes": "C4", "phrase": 5, "phrase_scale": 7}]},
+    {"chords": [{"notes": "C4", "phrase": "C5/8", "phrase_scale": "C D H4 5 E"}]},
+    {"chords": [{"notes": "C4", "phrase": "C5/1 C5/2"}]},  # 1 e 2 cabem só num acorde longo
+    {"chords": [{"notes": "C4", "duration_beats": 8, "phrase": "C5/1 C5/2 C5/1t C5/64 C5/64q C5/64t."}]},
+    {"style": 5, "chords": [{"notes": "C4", "phrase": ""}]},
 ]
 
 
@@ -114,8 +146,10 @@ def test_mesma_analise_e_mesmo_midi(index, js_results):
     expected = json.loads(json.dumps(analyze_data(data)))
     assert js["report"] == expected
     if expected["ok"]:
-        python_bytes = midi_bytes(load_project(data)[0])
-        assert base64.b64decode(js["midi"]) == python_bytes
+        project = load_project(data)[0]
+        assert base64.b64decode(js["midi"]) == midi_bytes(project)
+        for mode in ("chords", "line"):  # frase no canal 2: os três jeitos de exportar
+            assert base64.b64decode(js["midi_modes"][mode]) == midi_bytes(project, phrase_mode=mode), mode
     else:
         assert js["midi"] is None
     if isinstance(data, dict):

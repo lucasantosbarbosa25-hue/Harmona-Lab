@@ -22,6 +22,17 @@ test("o link de exemplo das instruções abre exatamente o projeto de exemplo", 
   assert.deepEqual(mine.chords.map((c) => c.symbol), ["F#m7(b5)", "B7alt", "Em9"]);
   assert.deepEqual(project.chords.map((c) => [c.function, c.scale]), [["iiø7", "Lócrio"], ["V7alt", "C menor melódica a partir de B"], ["i9", "Eólio"]]);
   assert.deepEqual(project.chords.map((c) => c.top_note), ["E4", "C5", "F#4"]); // a ponta é a nota mais aguda
+  assert.deepEqual(project.chords.map((c) => c.comment), EXAMPLE_PROJECT.chords.map((c) => c.comment)); // a frase de função de cada acorde
+});
+
+test("o link leva a frase de função, a frase melódica, a escala e a levada", async () => {
+  const link = await parseLinkHash("#t=X&st=Neo-soul&p=B7alt:B2,A3/D4,Eb4,G4,C5:4:V7alt:C_menor:Dominante_alterado,_resolve_no_Em9.:G5/8_F5/8_Eb5/4*alvo_Fs5/8*aprox_r/8_Gs5/4:B_C_D_Eb_F_G_A");
+  const [chord] = link.project.chords;
+  assert.equal(link.project.style, "Neo-soul");
+  assert.equal(chord.comment, "Dominante alterado, resolve no Em9.");
+  assert.equal(chord.phrase, "G5/8 F5/8 Eb5/4*alvo F#5/8*aprox r/8 G#5/4"); // s vira #, _ vira espaço
+  assert.equal(chord.phrase_scale, "B C D Eb F G A");
+  assert.equal(compactToProject({ p: "X:C4:4:::só_o_comentário" }).chords[0].comment, "só o comentário");
 });
 
 test("tolera o que as IAs costumam fazer: símbolos sem codificar, acentos e 3 partes", () => {

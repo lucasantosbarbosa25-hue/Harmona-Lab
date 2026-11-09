@@ -31,3 +31,29 @@ test("o exemplo do prompt é um projeto válido, sem avisos", () => {
   assert.equal(report.ok, true);
   assert.deepEqual(report.issues, []);
 });
+
+const withPhrases = (chords, extra = {}) => delivery({ projeto: { ...GOOD_PROJECT, chords }, ...extra });
+const SCALES = ["F F# G A B C D E", "B C D Eb F G A", "E F# G A B C D"]; // a escala de cada acorde do projeto de teste
+const phraseChords = GOOD_PROJECT.chords.map((c, i) => ({ ...c, phrase: "C5/4 D5/4", phrase_scale: SCALES[i] }));
+
+test("frase de função (comment) é cobrada nas respostas de IA, não nos links", () => {
+  const silent = delivery({ projeto: { ...GOOD_PROJECT, chords: GOOD_PROJECT.chords.map(({ comment, ...c }) => c) } });
+  assert.equal(checkDelivery(silent).ok, true);
+  const strict = checkDelivery(silent, { requireFunctionNotes: true });
+  assert.equal(strict.ok, false);
+  assert.match(strict.problems.join("\n"), /Falta a frase de função \(campo "comment".*acorde\(s\) 1, 2, 3/);
+  const rest = GOOD_PROJECT.chords.map(({ comment, ...c }) => c).concat([{ symbol: "Pausa" }]);
+  assert.match(checkDelivery(delivery({ projeto: { ...GOOD_PROJECT, chords: rest }, pedido_extraido: null }), { requireFunctionNotes: true }).problems.join("\n"), /acorde\(s\) 1, 2, 3\./); // pausa não conta
+});
+
+test("avisos da frase bloqueiam, e a escala da frase e o pedido de frases são conferidos", () => {
+  assert.equal(checkDelivery(withPhrases(phraseChords), { requireFunctionNotes: true }).ok, true);
+  const offBeat = phraseChords.map((c) => ({ ...c, phrase: "C5/8 D5/8*alvo" }));
+  assert.match(checkDelivery(withPhrases(offBeat)).problems.join("\n"), /Acorde 1 \(Fmaj7\(#11\)\), campo phrase: O alvo D5 não é nota do acorde/);
+  const noScale = phraseChords.map(({ phrase_scale, ...c }) => c);
+  assert.match(checkDelivery(withPhrases(noScale)).problems.join("\n"), /Acorde\(s\) 1, 2, 3: a frase precisa vir com "phrase_scale"/);
+  const asked = checkDelivery(delivery({ pedido_extraido: { acordes: 3, bpm: 76, frases: "Neo-soul" } }));
+  assert.match(asked.problems.join("\n"), /pedia frases \(Neo-soul\), mas nenhum acorde tem o campo "phrase"/);
+  assert.equal(checkDelivery(withPhrases(phraseChords, { pedido_extraido: { acordes: 3, bpm: 76, frases: "Neo-soul" } })).ok, true);
+  assert.equal(checkDelivery(delivery({ pedido_extraido: { acordes: 3, bpm: 76, frases: null } })).ok, true);
+});

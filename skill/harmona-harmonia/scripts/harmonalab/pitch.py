@@ -166,6 +166,19 @@ def parse_pitch_class(token: str | int) -> int:
     return (LETTER_PC[m.group(1).upper()] + _parse_accidentals(m.group(2), text)) % 12
 
 
+def pitch_class_spelling(token) -> tuple[int, str]:
+    """Classe de altura e nome, sem oitava: "f#" → (6, "F#"), "Db" → (1, "Db")."""
+    if not isinstance(token, str):
+        raise NoteParseError("Use nomes de nota sem oitava, como F#, Eb ou B.")
+    text = token.strip()
+    m = _PITCH_CLASS_RE.match(text)
+    if not m:
+        raise NoteParseError(f'Não entendi a nota "{token}" (sem oitava, ex.: F#, Eb, B).')
+    accidental = _parse_accidentals(m.group(2), text)
+    letter = m.group(1).upper()
+    return (LETTER_PC[letter] + accidental) % 12, letter + _ACCIDENTAL_TEXT[accidental]
+
+
 def split_note_list(value: str | int | Iterable[str | int] | None) -> list[str | int]:
     """Divide um texto de notas em fichas; listas passam direto."""
     if value is None:

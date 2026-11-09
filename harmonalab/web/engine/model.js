@@ -1,7 +1,8 @@
 // Modelo interno: projeto → acordes → voicings — espelho de harmonalab/model.py.
 // As notas explícitas mandam; o símbolo do acorde é só um rótulo.
 
-import { toNumber } from "./numbers.js";
+import { fmtG, roundHalfEven, toNumber } from "./numbers.js";
+import { TICKS_PER_BEAT, parsePhrase, parseScale, phraseText, renamePhraseText } from "./phrase.js";
 import {
   DEFAULT_MIDDLE_C, NoteParseError, isMiddleC, noteName, parseNote, parseNoteList, renameNoteText, splitNoteList,
 } from "./pitch.js";
@@ -37,6 +38,8 @@ export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
     top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
+    phrase: "", phrase_scale: "",
+    phrase_events: [], phrase_pcs: [], // derivados da frase e da escala, preenchidos na leitura
   };
 }
 
@@ -68,6 +71,8 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   if (chord.scale) d.scale = chord.scale;
   if (chord.omitted.length) d.omitted = [...chord.omitted];
   if (chord.comment) d.comment = chord.comment;
+  if (chord.phrase) d.phrase = chord.phrase;
+  if (chord.phrase_scale) d.phrase_scale = chord.phrase_scale;
   return d;
 }
 
@@ -76,7 +81,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, key: "", references: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
+    default_velocity: 80, key: "", references: [], style: "", strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -100,6 +105,7 @@ export function projectToDict(project) {
   };
   if (project.key) d.key = project.key;
   if (project.references.length) d.references = [...project.references];
+  if (project.style) d.style = project.style;
   if (project.comment) d.comment = project.comment;
   return d;
 }
@@ -151,6 +157,7 @@ export function loadProject(data) {
   if (has(data, "title")) project.title = String(data.title);
   if (data.comment) project.comment = String(data.comment);
   if (typeof data.key === "string") project.key = data.key.trim();
+  if (typeof data.style === "string") project.style = data.style.trim();
   let refs = data.references;
   if (typeof refs === "string") refs = refs.split(/[,;]/);
   if (Array.isArray(refs)) project.references = refs.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim());
@@ -277,7 +284,40 @@ function loadChord(raw, index, project, issues) {
   }
 
   if (raw.omitted) chord.omitted = splitNoteList(raw.omitted).map(String);
+
+  loadPhrase(raw, chord, index, project, issues);
   return chord;
+}
+
+/** Frase e escala da frase: erros de escrita e frase mais longa que o acorde bloqueiam; o resto é conferido na análise. */
+function loadPhrase(raw, chord, index, project, issues) {
+  const isText = (v) => typeof v === "string" || Array.isArray(v);
+  const phrase = raw.phrase;
+  if (phrase !== undefined && phrase !== null && phrase !== "") {
+    if (isText(phrase)) {
+      chord.phrase = phraseText(phrase);
+      const { events, ticks, errors } = parsePhrase(chord.phrase, project.middle_c);
+      for (const message of errors) issues.push(issue("error", message, index, "phrase"));
+      if (ticks > roundHalfEven(chord.duration_beats * TICKS_PER_BEAT)) {
+        issues.push(issue("error", `A frase dura ${fmtG(ticks / TICKS_PER_BEAT)} tempos, mais que os `
+          + `${fmtG(chord.duration_beats)} do acorde.`, index, "phrase"));
+      }
+      chord.phrase_events = events;
+    } else {
+      issues.push(issue("error", 'A frase ("phrase") deve ser um texto, por exemplo "G5/8 F5/8 Eb5/4*alvo".', index, "phrase"));
+    }
+  }
+  const scale = raw.phrase_scale;
+  if (scale !== undefined && scale !== null && scale !== "") {
+    if (isText(scale)) {
+      const parsed = parseScale(scale);
+      chord.phrase_pcs = parsed.scale;
+      chord.phrase_scale = parsed.scale.map((s) => s.name).join(" ");
+      for (const message of parsed.errors) issues.push(issue("error", message, index, "phrase_scale"));
+    } else {
+      issues.push(issue("error", 'A escala da frase ("phrase_scale") deve ser um texto, por exemplo "B C D Eb F G A".', index, "phrase_scale"));
+    }
+  }
 }
 
 /** Troca a convenção de oitava mantendo as alturas MIDI (funciona com campos incompletos). */
@@ -292,6 +332,7 @@ export function renameProjectNotes(data, toMiddleC) {
     for (const key of [...PARTS, "top_note"]) {
       if (c[key] !== undefined && c[key] !== null && c[key] !== "") c[key] = renameNoteText(c[key], fromMiddleC, toMiddleC);
     }
+    if (c.phrase !== undefined && c.phrase !== null && c.phrase !== "") c.phrase = renamePhraseText(c.phrase, fromMiddleC, toMiddleC);
     return c;
   });
   return out;

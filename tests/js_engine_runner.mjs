@@ -8,8 +8,10 @@ import { loadProject, renameProjectNotes } from "../harmonalab/web/engine/model.
 const cases = JSON.parse(readFileSync(0, "utf8"));
 const out = cases.map((data) => {
   const report = analyzeData(data);
-  const midi = report.ok ? Buffer.from(midiBytes(loadProject(data).project)).toString("base64") : null;
+  const bytes = (mode) => Buffer.from(midiBytes(loadProject(data).project, { phraseMode: mode })).toString("base64");
+  const midi = report.ok ? bytes("both") : null;
+  const midi_modes = report.ok ? { chords: bytes("chords"), line: bytes("line") } : null;
   const renamed = data && typeof data === "object" && !Array.isArray(data) ? renameProjectNotes(data, "C3") : null;
-  return { report, midi, renamed };
+  return { report, midi, midi_modes, renamed };
 });
 process.stdout.write(JSON.stringify(out));

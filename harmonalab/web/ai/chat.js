@@ -13,9 +13,9 @@ export const CHATS = [
 
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
-/** Texto completo para colar no chat: instruções + pedido (+ progressão atual, no ajuste). */
-export function buildChatPrompt({ request, mode, currentProject, appUrl }) {
-  return `${instructions(appUrl)}\n\n---\n\n${buildUserMessage({ request, mode, currentProject })}`;
+/** Texto completo para colar no chat: instruções + pedido (+ progressão atual, no ajuste). `phrases`: id da levada, "auto" ou "none". */
+export function buildChatPrompt({ request, mode, currentProject, appUrl, phrases = "none" }) {
+  return `${instructions(appUrl, { phrases })}\n\n---\n\n${buildUserMessage({ request, mode, currentProject, phrases })}`;
 }
 
 /** Acha o JSON na resposta do chat: bloco ```json``` (o maior que for válido) ou o trecho entre a primeira { e a última }. */
@@ -47,7 +47,7 @@ export function readChatAnswer(text) {
   if (isObject(data) && !("projeto" in data) && Array.isArray(data.chords)) {
     input = { projeto: data, explicacao: typeof data.comment === "string" ? data.comment : "" };
   }
-  const check = checkDelivery(input, { requireExplanation: false });
+  const check = checkDelivery(input, { requireExplanation: false, requireFunctionNotes: true });
   return { ok: check.ok, problems: check.problems, project: isObject(input) ? input.projeto : undefined, explanation: check.explanation };
 }
 

@@ -93,6 +93,17 @@ export function parseNote(token, middleC = DEFAULT_MIDDLE_C) {
   return makeNote(midi, letter, accidental);
 }
 
+/** Classe de altura e nome, sem oitava: "f#" → { pc: 6, name: "F#" }. */
+export function pitchClassSpelling(token) {
+  if (typeof token !== "string") throw new NoteParseError("Use nomes de nota sem oitava, como F#, Eb ou B.");
+  const text = token.trim();
+  const m = text.match(PITCH_CLASS_RE);
+  if (!m) throw new NoteParseError(`Não entendi a nota "${token}" (sem oitava, ex.: F#, Eb, B).`);
+  const accidental = parseAccidentals(m[2], text);
+  const letter = m[1].toUpperCase();
+  return { pc: (((LETTER_PC[letter] + accidental) % 12) + 12) % 12, name: letter + ACCIDENTAL_TEXT[accidental] };
+}
+
 /** Divide um texto de notas em fichas ("F#2 – C3", "E3, A3"); listas passam direto. */
 export function splitNoteList(value) {
   if (value == null) return [];

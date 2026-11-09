@@ -17,7 +17,7 @@ import webbrowser
 from pathlib import Path
 
 from .analysis import analyze, describe
-from .midi_io import load_midi, save_midi, summarize_midi
+from .midi_io import PHRASE_MODES, load_midi, save_midi, summarize_midi
 from .model import load_project
 from .pitch import DEFAULT_MIDDLE_C, MIDDLE_C_OFFSETS, midi_to_name
 
@@ -63,7 +63,7 @@ def cmd_export(args: argparse.Namespace) -> int:
         print("\nNada foi gerado: corrija os erros acima.", file=sys.stderr)
         return 1
     out = Path(args.output) if args.output else Path(args.project).with_suffix(".mid")
-    save_midi(project, out)
+    save_midi(project, out, phrase_mode=args.phrase)
     print(describe(report))
     print(f"\nMIDI salvo em: {out}")
     return 0
@@ -109,6 +109,8 @@ def build_parser() -> argparse.ArgumentParser:
     export = sub.add_parser("export", help="gera o .mid de um projeto JSON")
     export.add_argument("project")
     export.add_argument("-o", "--output", help="caminho do .mid (padrão: mesmo nome do JSON)")
+    export.add_argument("--phrase", choices=PHRASE_MODES, default="both",
+                        help="both = acordes + frases (padrão); chords = só os acordes; line = mão esquerda/baixo + frases")
     export.set_defaults(func=cmd_export)
 
     check = sub.add_parser("check", help="confere um projeto JSON sem gerar MIDI")

@@ -47,7 +47,7 @@ def test_copia_do_motor_na_skill_esta_em_dia(build):
 
 
 def test_motor_da_skill_nao_depende_de_mido():
-    for nome in ("pitch", "model", "analysis", "timing", "__init__"):
+    for nome in ("pitch", "model", "analysis", "timing", "phrase", "__init__"):
         codigo = (SCRIPTS / "harmonalab" / f"{nome}.py").read_text(encoding="utf-8")
         assert not re.search(r"^\s*(from|import)\s+mido", codigo, re.M), nome
 
@@ -86,8 +86,8 @@ def test_validar_aprova_o_exemplo_e_resume_ponta_e_baixo():
 
 def test_validar_recusa_nota_invalida_e_ponta_errada():
     projeto = {"tempo": 80, "chords": [
-        {"symbol": "Em9", "right_hand": ["E3", "H4"]},
-        {"symbol": "Am7", "right_hand": ["A3", "C4", "E4"], "top_note": "A3"},
+        {"symbol": "Em9", "right_hand": ["E3", "H4"], "comment": "Repouso."},
+        {"symbol": "Am7", "right_hand": ["A3", "C4", "E4"], "top_note": "A3", "comment": "Subdominante."},
     ]}
     r = rodar("validar.py", "-", entrada=json.dumps(projeto))
     assert r.returncode == 1
@@ -96,6 +96,22 @@ def test_validar_recusa_nota_invalida_e_ponta_errada():
     assert "Acorde 2 (Am7), campo top_note: A ponta travada é A3" in r.stdout
     assert rodar("validar.py", "nao-existe.json").returncode == 2
     assert rodar("validar.py").returncode == 2
+
+
+def test_validar_cobra_a_frase_de_funcao_e_a_escala_da_frase_e_mostra_a_frase():
+    sem_comentario = {"tempo": 80, "chords": [{"symbol": "Em9", "right_hand": ["E3", "G3"]}, {"symbol": "Pausa"}, {"symbol": "Am7", "right_hand": "A3 C4", "comment": "ok"}]}
+    r = rodar("validar.py", "-", entrada=json.dumps(sem_comentario))
+    assert r.returncode == 1 and 'Falta a frase de função (campo "comment"' in r.stdout and "acorde(s) 1." in r.stdout  # pausa não conta
+    sem_escala = {"tempo": 80, "chords": [{"symbol": "Em9", "right_hand": ["E3", "G3"], "comment": "ok", "phrase": "E5/4*alvo"}]}
+    r = rodar("validar.py", "-", entrada=json.dumps(sem_escala))
+    assert r.returncode == 1 and 'a frase precisa vir com "phrase_scale"' in r.stdout
+    com_frase = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    r = rodar("validar.py", "-", entrada=json.dumps(com_frase))
+    assert r.returncode == 0, r.stdout
+    assert "frase: G5 F5 Eb5*alvo D5 C5 B4*alvo" in r.stdout
+    com_frase["chords"][1]["phrase"] = "G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 A4/8*aprox r/8"  # aproximação sem resolver
+    r = rodar("validar.py", "-", entrada=json.dumps(com_frase))
+    assert r.returncode == 1 and "A aproximação A4 termina a frase" in r.stdout
 
 
 def test_gerar_link_so_gera_com_projeto_valido():
