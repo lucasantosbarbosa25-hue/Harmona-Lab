@@ -23,6 +23,8 @@ test("o link de exemplo das instruções abre exatamente o projeto de exemplo", 
   assert.deepEqual(project.chords.map((c) => [c.function, c.scale]), [["iiø7", "Lócrio"], ["V7alt", "C menor melódica a partir de B"], ["i9", "Eólio"]]);
   assert.deepEqual(project.chords.map((c) => c.top_note), ["E4", "C5", "F#4"]); // a ponta é a nota mais aguda
   assert.deepEqual(project.chords.map((c) => c.comment), EXAMPLE_PROJECT.chords.map((c) => c.comment)); // a frase de função de cada acorde
+  assert.deepEqual(project.chords.map((c) => c.phrase_scale), EXAMPLE_PROJECT.chords.map((c) => c.phrase_scale)); // e as notas da escala
+  assert.equal(compactToProject({ p: "B7alt:B2/D4,Eb4:4:V7::tensão::B_C_D_Eb_F_G_A:Outside" }).chords[0].phrase_color, "outside");
 });
 
 test("o link leva a frase de função, a frase melódica, a escala e a levada", async () => {

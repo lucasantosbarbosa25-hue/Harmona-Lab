@@ -2,7 +2,7 @@
 // As notas explícitas mandam; o símbolo do acorde é só um rótulo.
 
 import { fmtG, roundHalfEven, toNumber } from "./numbers.js";
-import { TICKS_PER_BEAT, parsePhrase, parseScale, phraseText, renamePhraseText } from "./phrase.js";
+import { TICKS_PER_BEAT, compText, parseComp, parsePhrase, parseScale, phraseText, renamePhraseText } from "./phrase.js";
 import {
   DEFAULT_MIDDLE_C, NoteParseError, isMiddleC, noteName, parseNote, parseNoteList, renameNoteText, splitNoteList,
 } from "./pitch.js";
@@ -38,8 +38,8 @@ export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
     top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
-    phrase: "", phrase_scale: "",
-    phrase_events: [], phrase_pcs: [], // derivados da frase e da escala, preenchidos na leitura
+    phrase: "", phrase_scale: "", phrase_color: "", comp: "",
+    phrase_events: [], phrase_pcs: [], comp_layers: [], // derivados da frase, da escala e da levada, preenchidos na leitura
   };
 }
 
@@ -73,6 +73,8 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   if (chord.comment) d.comment = chord.comment;
   if (chord.phrase) d.phrase = chord.phrase;
   if (chord.phrase_scale) d.phrase_scale = chord.phrase_scale;
+  if (chord.phrase_color) d.phrase_color = chord.phrase_color;
+  if (chord.comp) d.comp = chord.comp;
   return d;
 }
 
@@ -234,7 +236,7 @@ function loadChord(raw, index, project, issues) {
   }
   chord.symbol = String(raw.symbol || "").trim();
   chord.comment = String(raw.comment || "");
-  for (const name of ["function", "scale"]) if (typeof raw[name] === "string") chord[name] = raw[name].trim();
+  for (const name of ["function", "scale", "phrase_color"]) if (typeof raw[name] === "string") chord[name] = raw[name].trim();
 
   if (has(raw, "duration_beats")) {
     const beats = toNumber(raw.duration_beats);
@@ -316,6 +318,17 @@ function loadPhrase(raw, chord, index, project, issues) {
       for (const message of parsed.errors) issues.push(issue("error", message, index, "phrase_scale"));
     } else {
       issues.push(issue("error", 'A escala da frase ("phrase_scale") deve ser um texto, por exemplo "B C D Eb F G A".', index, "phrase_scale"));
+    }
+  }
+  const comp = raw.comp;
+  if (comp !== undefined && comp !== null && comp !== "") {
+    if (isText(comp)) {
+      chord.comp = compText(comp);
+      const parsed = parseComp(chord.comp);
+      chord.comp_layers = parsed.layers;
+      for (const message of parsed.errors) issues.push(issue("error", message, index, "comp"));
+    } else {
+      issues.push(issue("error", 'A levada ("comp") deve ser um texto, por exemplo "E/4 D/8 D/8 E/4 D/4".', index, "comp"));
     }
   }
 }

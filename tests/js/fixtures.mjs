@@ -6,9 +6,9 @@ export const GOOD_PROJECT = {
   time_signature: "4/4",
   middle_c: "C4",
   chords: [
-    { symbol: "Fmaj7(#11)", duration_beats: 4, bass: ["F2"], left_hand: ["C3"], right_hand: ["E3", "A3", "B3", "F#4"], top_note: "F#4", comment: "Subdominante lídio: a #11 empurra para o dominante." },
-    { symbol: "B7alt", duration_beats: 4, left_hand: ["B2", "A3"], right_hand: ["D4", "Eb4", "G4", "C5"], top_note: "C5", comment: "Dominante alterado, resolve no Em9." },
-    { symbol: "Em9", duration_beats: 8, left_hand: ["E2", "B2", "D3"], right_hand: ["G3", "F#4"], top_note: "F#4", comment: "Resolução com a 9 na ponta." },
+    { symbol: "Fmaj7(#11)", duration_beats: 4, bass: ["F2"], left_hand: ["C3"], right_hand: ["E3", "A3", "B3", "F#4"], top_note: "F#4", comment: "Subdominante lídio: a #11 empurra para o dominante.", phrase_scale: "F G A B C D E F#" },
+    { symbol: "B7alt", duration_beats: 4, left_hand: ["B2", "A3"], right_hand: ["D4", "Eb4", "G4", "C5"], top_note: "C5", comment: "Dominante alterado, resolve no Em9.", phrase_scale: "B C D Eb F G A" },
+    { symbol: "Em9", duration_beats: 8, left_hand: ["E2", "B2", "D3"], right_hand: ["G3", "F#4"], top_note: "F#4", comment: "Resolução com a 9 na ponta.", phrase_scale: "E F# G A B C D" },
   ],
 };
 

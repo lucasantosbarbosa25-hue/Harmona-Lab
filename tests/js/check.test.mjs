@@ -32,28 +32,25 @@ test("o exemplo do prompt é um projeto válido, sem avisos", () => {
   assert.deepEqual(report.issues, []);
 });
 
-const withPhrases = (chords, extra = {}) => delivery({ projeto: { ...GOOD_PROJECT, chords }, ...extra });
-const SCALES = ["F F# G A B C D E", "B C D Eb F G A", "E F# G A B C D"]; // a escala de cada acorde do projeto de teste
-const phraseChords = GOOD_PROJECT.chords.map((c, i) => ({ ...c, phrase: "C5/4 D5/4", phrase_scale: SCALES[i] }));
+const withChords = (chords, extra = {}) => delivery({ projeto: { ...GOOD_PROJECT, chords }, ...extra });
 
-test("frase de função (comment) é cobrada nas respostas de IA, não nos links", () => {
-  const silent = delivery({ projeto: { ...GOOD_PROJECT, chords: GOOD_PROJECT.chords.map(({ comment, ...c }) => c) } });
-  assert.equal(checkDelivery(silent).ok, true);
-  const strict = checkDelivery(silent, { requireFunctionNotes: true });
+test("respostas de IA precisam da frase de função e das notas da escala em cada acorde; links, não", () => {
+  const bare = withChords(GOOD_PROJECT.chords.map(({ comment, phrase_scale, ...c }) => c));
+  assert.equal(checkDelivery(bare).ok, true);
+  const strict = checkDelivery(bare, { requireFunctionNotes: true });
   assert.equal(strict.ok, false);
-  assert.match(strict.problems.join("\n"), /Falta a frase de função \(campo "comment".*acorde\(s\) 1, 2, 3/);
-  const rest = GOOD_PROJECT.chords.map(({ comment, ...c }) => c).concat([{ symbol: "Pausa" }]);
-  assert.match(checkDelivery(delivery({ projeto: { ...GOOD_PROJECT, chords: rest }, pedido_extraido: null }), { requireFunctionNotes: true }).problems.join("\n"), /acorde\(s\) 1, 2, 3\./); // pausa não conta
+  assert.match(strict.problems.join("\n"), /Falta a frase de função \(campo "comment".*acorde\(s\) 1, 2, 3\./);
+  assert.match(strict.problems.join("\n"), /Faltam as notas da escala \(campo "phrase_scale".*acorde\(s\) 1, 2, 3\./);
+  const rest = withChords([...GOOD_PROJECT.chords, { symbol: "Pausa" }], { pedido_extraido: null });
+  assert.equal(checkDelivery(rest, { requireFunctionNotes: true }).ok, true); // pausa não precisa de nada
+  assert.equal(checkDelivery(delivery(), { requireFunctionNotes: true }).ok, true);
 });
 
-test("avisos da frase bloqueiam, e a escala da frase e o pedido de frases são conferidos", () => {
-  assert.equal(checkDelivery(withPhrases(phraseChords), { requireFunctionNotes: true }).ok, true);
-  const offBeat = phraseChords.map((c) => ({ ...c, phrase: "C5/8 D5/8*alvo" }));
-  assert.match(checkDelivery(withPhrases(offBeat)).problems.join("\n"), /Acorde 1 \(Fmaj7\(#11\)\), campo phrase: O alvo D5 não é nota do acorde/);
-  const noScale = phraseChords.map(({ phrase_scale, ...c }) => c);
-  assert.match(checkDelivery(withPhrases(noScale)).problems.join("\n"), /Acorde\(s\) 1, 2, 3: a frase precisa vir com "phrase_scale"/);
-  const asked = checkDelivery(delivery({ pedido_extraido: { acordes: 3, bpm: 76, frases: "Neo-soul" } }));
-  assert.match(asked.problems.join("\n"), /pedia frases \(Neo-soul\), mas nenhum acorde tem o campo "phrase"/);
-  assert.equal(checkDelivery(withPhrases(phraseChords, { pedido_extraido: { acordes: 3, bpm: 76, frases: "Neo-soul" } })).ok, true);
-  assert.equal(checkDelivery(delivery({ pedido_extraido: { acordes: 3, bpm: 76, frases: null } })).ok, true);
+test("a escala precisa conter o acorde, e avisos de frase escrita à mão também bloqueiam", () => {
+  const wrongScale = withChords(GOOD_PROJECT.chords.map((c, i) => (i === 1 ? { ...c, phrase_scale: "C D E F G A B" } : c)));
+  assert.match(checkDelivery(wrongScale).problems.join("\n"), /Acorde 2 \(B7alt\), campo phrase_scale: A escala \(C D E F G A B\) não tem Eb, que é nota do acorde/);
+  const offChord = withChords(GOOD_PROJECT.chords.map((c) => ({ ...c, phrase: "C5/8 D5/8*alvo" })));
+  assert.match(checkDelivery(offChord).problems.join("\n"), /Acorde 1 \(Fmaj7\(#11\)\), campo phrase: O alvo D5 não é nota do acorde/);
+  const noScale = withChords(GOOD_PROJECT.chords.map(({ phrase_scale, ...c }) => ({ ...c, phrase: "C5/4" })));
+  assert.match(checkDelivery(noScale).problems.join("\n"), /Acorde\(s\) 1, 2, 3: a frase precisa vir com "phrase_scale"/);
 });

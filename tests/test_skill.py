@@ -86,8 +86,8 @@ def test_validar_aprova_o_exemplo_e_resume_ponta_e_baixo():
 
 def test_validar_recusa_nota_invalida_e_ponta_errada():
     projeto = {"tempo": 80, "chords": [
-        {"symbol": "Em9", "right_hand": ["E3", "H4"], "comment": "Repouso."},
-        {"symbol": "Am7", "right_hand": ["A3", "C4", "E4"], "top_note": "A3", "comment": "Subdominante."},
+        {"symbol": "Em9", "right_hand": ["E3", "H4"], "comment": "Repouso.", "phrase_scale": "E F# G A B C D"},
+        {"symbol": "Am7", "right_hand": ["A3", "C4", "E4"], "top_note": "A3", "comment": "Subdominante.", "phrase_scale": "A B C D E F# G"},
     ]}
     r = rodar("validar.py", "-", entrada=json.dumps(projeto))
     assert r.returncode == 1
@@ -98,14 +98,17 @@ def test_validar_recusa_nota_invalida_e_ponta_errada():
     assert rodar("validar.py").returncode == 2
 
 
-def test_validar_cobra_a_frase_de_funcao_e_a_escala_da_frase_e_mostra_a_frase():
-    sem_comentario = {"tempo": 80, "chords": [{"symbol": "Em9", "right_hand": ["E3", "G3"]}, {"symbol": "Pausa"}, {"symbol": "Am7", "right_hand": "A3 C4", "comment": "ok"}]}
-    r = rodar("validar.py", "-", entrada=json.dumps(sem_comentario))
-    assert r.returncode == 1 and 'Falta a frase de função (campo "comment"' in r.stdout and "acorde(s) 1." in r.stdout  # pausa não conta
-    sem_escala = {"tempo": 80, "chords": [{"symbol": "Em9", "right_hand": ["E3", "G3"], "comment": "ok", "phrase": "E5/4*alvo"}]}
-    r = rodar("validar.py", "-", entrada=json.dumps(sem_escala))
-    assert r.returncode == 1 and 'a frase precisa vir com "phrase_scale"' in r.stdout
-    com_frase = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+def test_validar_cobra_a_frase_de_funcao_e_as_notas_da_escala():
+    cru = {"tempo": 80, "chords": [{"symbol": "Em9", "right_hand": ["E3", "G3"]}, {"symbol": "Pausa"},
+                                   {"symbol": "Am7", "right_hand": "A3 C4", "comment": "ok", "phrase_scale": "A B C D E F G"}]}
+    r = rodar("validar.py", "-", entrada=json.dumps(cru))
+    assert r.returncode == 1
+    assert 'Falta a frase de função (campo "comment"' in r.stdout and 'Faltam as notas da escala (campo "phrase_scale"' in r.stdout
+    assert r.stdout.count("acorde(s) 1.") == 2  # só o acorde 1: pausa não conta e o 3 está completo
+    escala_errada = {"tempo": 80, "chords": [{"symbol": "Em9", "right_hand": ["E3", "G3"], "comment": "ok", "phrase_scale": "C D F A"}]}
+    r = rodar("validar.py", "-", entrada=json.dumps(escala_errada))
+    assert r.returncode == 1 and "A escala (C D F A) não tem E, G, que são notas do acorde" in r.stdout
+    com_frase = json.loads(EXAMPLE.read_text(encoding="utf-8"))  # frases escritas à mão continuam conferidas
     r = rodar("validar.py", "-", entrada=json.dumps(com_frase))
     assert r.returncode == 0, r.stdout
     assert "frase: G5 F5 Eb5*alvo D5 C5 B4*alvo" in r.stdout

@@ -18,10 +18,17 @@ export const DURATION_MODIFIERS = { t: [2, 3], q: [4, 5] };
 /** Papéis com outro nome comum → nome canônico (sem acento e em minúsculas). */
 export const ROLE_ALIASES = { aproximacao: "aprox", approach: "aprox", target: "alvo" };
 /** Papéis cujas notas podem ficar fora da escala declarada da frase. */
-export const SCALE_EXEMPT_ROLES = new Set(["aprox", "passagem", "cromatica", "blue"]);
+export const SCALE_EXEMPT_ROLES = new Set(["aprox", "passagem", "cromatica", "blue", "outside"]);
+/**
+ * Levada do acorde: que notas do voicing cada toque usa. T = todas, E = mão esquerda e baixo, D = mão direita,
+ * B = a nota mais grave, P = a ponta; um número (1 a 9) = a enésima nota a partir do grave (dá a volta se passar).
+ */
+export const COMP_PARTS = ["T", "E", "D", "B", "P"];
+export const COMP_ACCENT = { "": 0, "!": 16, "?": -24 }; // ! = acento, ? = toque leve (somados à velocity)
 
 const SEPARATORS = /[\s,;|]+/u;
 const DURATION_RE = /^(\d+)([tq]?)(\.?)$/;
+const COMP_TOKEN_RE = /^([TEDBPtedbp]|[1-9]|[rR])([!?]?)$/;
 
 export class PhraseError extends Error {}
 
@@ -42,6 +49,7 @@ export function normalizeRole(text) {
 
 /** "8" → 240, "8t" → 160, "4." → 720 (em 480 ticks por semínima). */
 export function durationTicks(text) {
+  if (text.includes("+")) return text.split("+").reduce((sum, part) => sum + durationTicks(part), 0); // "8+4" liga duas figuras
   const m = text.trim().toLowerCase().match(DURATION_RE);
   if (!m || !DURATION_VALUES.includes(parseInt(m[1], 10))) {
     throw new PhraseError(`Duração "${text}" não existe: use 1, 2, 4, 8, 16, 32 ou 64 (4 = semínima), `
@@ -128,4 +136,52 @@ export function renamePhraseText(value, fromMiddleC, toMiddleC) {
     if (slash && name && name !== "r" && name !== "R") name = renameNoteText(name, fromMiddleC, toMiddleC);
     return `${name}${slash}${dur}${star}${role}`;
   }).join(" ");
+}
+
+// ---------------------------------------------------------------------------
+// Levada do acorde ("comp"): o ritmo em que as notas do voicing são tocadas.
+//   "E/4 D/8 D/8 E/4 D/4"              um toque depois do outro
+//   "B/4. B/8+2 ; r/8 D/8 r/4 D/4."    camadas separadas por ";" soam ao mesmo tempo (baixo + mão direita)
+// Cada camada se repete até o fim do acorde e é cortada onde ele acaba.
+// ---------------------------------------------------------------------------
+
+/** Camadas (separadas por ";") e, em cada uma, as fichas. */
+export function splitComp(value) {
+  if (value == null) return [];
+  const text = Array.isArray(value) ? value.map(String).join(" ; ") : String(value);
+  return text.split(";").map((layer) => layer.trim().split(/[\s,|]+/u).filter(Boolean)).filter((layer) => layer.length);
+}
+
+export const compText = (value) => splitComp(value).map((layer) => layer.join(" ")).join(" ; ");
+
+/** Lê a levada. Devolve { layers: [{ hits: [{part, start, length, accent}], ticks }], errors }. */
+export function parseComp(value) {
+  const layers = [];
+  const errors = [];
+  for (const tokens of splitComp(value)) {
+    const hits = [];
+    let tick = 0;
+    for (const token of tokens) {
+      const [head, slash, durText] = partition(token, "/");
+      const m = head.match(COMP_TOKEN_RE);
+      if (!slash || !durText || !m) {
+        errors.push(`Não entendi "${token}" na levada: escreva PARTE/DURAÇÃO, por exemplo E/4, D/8, T!/8 (acento) ou r/8 (pausa). `
+          + "Partes: T (todas), E (esquerda), D (direita), B (baixo), P (ponta) ou 1 a 9 (a enésima nota).");
+        continue;
+      }
+      let length;
+      try {
+        length = durationTicks(durText);
+      } catch (err) {
+        if (!(err instanceof PhraseError)) throw err;
+        errors.push(`${err.message} (em "${token}")`);
+        continue;
+      }
+      const part = m[1].toUpperCase();
+      if (part !== "R") hits.push({ part, start: tick, length, accent: COMP_ACCENT[m[2]] });
+      tick += length;
+    }
+    if (tick > 0) layers.push({ hits, ticks: tick });
+  }
+  return { layers, errors };
 }

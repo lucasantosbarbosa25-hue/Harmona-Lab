@@ -54,18 +54,15 @@ test("respostas sem JSON legível dão mensagens claras", () => {
   assert.equal(readChatAnswer('{"a": 1}').ok, false);
 });
 
-test("sem frases o prompt não leva o bloco de frases; com levada, leva só a escolhida", () => {
-  const plain = buildChatPrompt({ request: "x", mode: "new" });
-  assert.ok(!plain.includes("FRASES MELÓDICAS"));
-  const salsa = buildChatPrompt({ request: "x", mode: "new", phrases: "salsa" });
-  assert.match(salsa, /FRASES MELÓDICAS \(este pedido traz frases\)/);
-  assert.match(salsa, /LEVADA ESCOLHIDA: Salsa/);
-  assert.ok(!salsa.includes("LEVADA ESCOLHIDA: Samba"));
-  assert.match(salsa, /FRASES MELÓDICAS: sim\. Levada das frases: Salsa\./); // a linha que acompanha o pedido
-  const auto = buildChatPrompt({ request: "x", mode: "new", phrases: "auto" });
-  assert.match(auto, /LEVADAS \(o ritmo das frases\)/);
-  assert.ok(auto.includes("- Ska:") && auto.includes("- Gospel americano:") && auto.includes("- Rock:") && auto.includes("- Samba:"));
-  assert.match(auto, /levada automática/);
-  assert.match(salsa, /"frases": null/); // a resposta só-JSON informa a levada pedida
-  assert.ok(!plain.includes('"frases"'));
+test("a IA só faz harmonia: o pedido não fala de escrever frases e o interruptor de pesquisa muda uma linha", () => {
+  const fast = buildChatPrompt({ request: "x", mode: "new" });
+  assert.match(fast, /Não pesquise na internet: a pessoa quer a resposta rápida/);
+  assert.match(fast, /Você entrega só a HARMONIA/);
+  assert.match(fast, /phrase_scale \(obrigatório em TODOS os acordes/);
+  assert.match(fast, /phrase_color \(só quando o pedido falar do caráter das frases/);
+  assert.ok(!fast.includes("FRASES MELÓDICAS") && !fast.includes("LEVADA"));
+  const researched = buildChatPrompt({ request: "x", mode: "new", research: true });
+  assert.match(researched, /Pesquise na internet o vocabulário harmônico/);
+  assert.ok(!researched.includes("Não pesquise na internet"));
+  assert.ok(Math.abs(researched.length - fast.length) < 200); // é só uma linha de diferença
 });

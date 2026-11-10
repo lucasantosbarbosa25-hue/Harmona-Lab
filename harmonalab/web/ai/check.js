@@ -10,8 +10,8 @@ const list = (numbers) => numbers.join(", ");
  * Confere o que a IA entregou. Devolve { ok, problems, report, explanation }.
  * Bloqueia: erros do motor (nota inexistente, BPM inválido...), ponta travada que não é a nota mais aguda,
  * avisos da frase (alvo fora do tempo, aproximação que não resolve, nota fora da escala...) e o que não bate com o que
- * o pedido disse (número de acordes, BPM, frases). `requireFunctionNotes`: cobra a frase de função (comment) de cada acorde,
- * o que vale para respostas de IA e não para links de compartilhamento.
+ * o pedido disse (número de acordes, BPM). `requireFunctionNotes`: cobra de cada acorde a frase de função (comment) e as
+ * notas da escala (phrase_scale), o que vale para respostas de IA e não para links de compartilhamento.
  */
 export function checkDelivery(input, { requireExplanation = true, requireFunctionNotes = false } = {}) {
   const problems = [];
@@ -46,11 +46,12 @@ export function checkDelivery(input, { requireExplanation = true, requireFunctio
     const rawChords = Array.isArray(project.chords) ? project.chords : [];
     const filled = (c, key) => isObject(c) && typeof c[key] === "string" ? c[key].trim() !== "" : isObject(c) && Array.isArray(c[key]) && c[key].length > 0;
     const noScale = rawChords.flatMap((c, i) => (filled(c, "phrase") && !filled(c, "phrase_scale") ? [i + 1] : []));
-    if (noScale.length) problems.push(`Acorde(s) ${list(noScale)}: a frase precisa vir com "phrase_scale" (as notas da escala, sem oitava).`);
-    if (typeof asked.frases === "string" && asked.frases.trim() && !rawChords.some((c) => filled(c, "phrase"))) {
-      problems.push(`O pedido pedia frases (${asked.frases}), mas nenhum acorde tem o campo "phrase".`);
-    }
+    if (noScale.length && !requireFunctionNotes) problems.push(`Acorde(s) ${list(noScale)}: a frase precisa vir com "phrase_scale" (as notas da escala, sem oitava).`);
     if (requireFunctionNotes) {
+      const scaleless = report.chords.flatMap((c, i) => (!c.is_rest && !filled(rawChords[i], "phrase_scale") ? [i + 1] : []));
+      if (scaleless.length) {
+        problems.push(`Faltam as notas da escala (campo "phrase_scale", sem oitava, como "B C D Eb F G A") no(s) acorde(s) ${list(scaleless)}.`);
+      }
       const silent = report.chords.flatMap((c, i) => (!c.is_rest && !filled(rawChords[i], "comment") ? [i + 1] : []));
       if (silent.length) {
         problems.push(`Falta a frase de função (campo "comment": o que o acorde faz ali e por quê) no(s) acorde(s) ${list(silent)}.`);

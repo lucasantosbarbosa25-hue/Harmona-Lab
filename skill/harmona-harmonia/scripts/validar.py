@@ -5,8 +5,8 @@ Uso:  python scripts/validar.py projeto.json      (ou: python scripts/validar.py
 
 Sai com código 0 e imprime OK + um resumo (ponta e baixo de cada acorde) quando está tudo certo.
 Sai com código 1 e lista os PROBLEMAS quando há nota inválida, BPM fora do limite, ponta travada que não é a
-nota mais aguda, frase com problema (alvo fora do tempo, aproximação que não resolve, nota fora da escala...)
-ou acorde sem a frase de função (campo "comment"). Corrija e rode de novo, até dar OK.
+nota mais aguda, escala que não contém as notas do acorde, ou acorde sem a frase de função (campo "comment")
+ou sem as notas da escala (campo "phrase_scale"). Corrija e rode de novo, até dar OK.
 """
 
 import sys

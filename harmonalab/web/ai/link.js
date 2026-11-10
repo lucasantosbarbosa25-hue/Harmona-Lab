@@ -2,7 +2,7 @@
 // O que fica depois do "#" nunca vai para o servidor: a progressão não sai do aparelho de quem abre.
 //
 // Formatos (parâmetros separados por &):
-//   #t=título&k=tom&bpm=80&ts=4/4&ref=A,B&st=Levada&x=explicação&p=cifra:notas:duração:função:escala:comentário:frase:escala_da_frase;...
+//   #t=título&k=tom&bpm=80&ts=4/4&ref=A,B&st=Levada&x=explicação&p=cifra:notas:duração:função:escala:comentário:frase:notas_da_escala:cor;...
 //                                                                                                compacto, para qualquer IA
 //   #json=<JSON do projeto, com % codificado>                                                   para quem monta com código
 //   #z=<JSON comprimido com deflate e escrito em base64url>                                     o mais curto (o app e o script geram)
@@ -28,7 +28,7 @@ const noteList = (raw) => (raw || "").split(",").map(normalizeNote).filter(Boole
 
 /** Frase no link: fichas separadas por "_", notas com "s" no lugar do "#" ("Fs5/8*alvo"). A notação em si é a do motor (engine/phrase.js). */
 function normalizePhrase(raw) {
-  return decode(raw).split(/[_\s+]+/).filter(Boolean).map((token) => {
+  return decode(raw).split(/[_\s]+/).filter(Boolean).map((token) => { // "+" fica: é a ligadura de durações (8+4)
     const m = token.match(/^([A-Ga-g])([sb#♯♭]*)(-?\d+)(\/.*)$/);
     return m ? `${m[1]}${m[2].replace(/s/g, "#")}${m[3]}${m[4]}` : token;
   }).join(" ");
@@ -54,7 +54,7 @@ function highestNote(lists) {
 }
 
 function chordFromSpec(spec) {
-  const [symbol = "", notes = "", beats = "", fn = "", scale = "", comment = "", phrase = "", phraseScale = ""] = spec.split(":");
+  const [symbol = "", notes = "", beats = "", fn = "", scale = "", comment = "", phrase = "", phraseScale = "", color = ""] = spec.split(":");
   const parts = notes.split("/");
   // 1 parte = só mão direita; 2 = esquerda/direita; 3 = baixo/esquerda/direita
   const [bass, left, right] = parts.length >= 3 ? parts : parts.length === 2 ? [null, parts[0], parts[1]] : [null, null, parts[0]];
@@ -71,6 +71,7 @@ function chordFromSpec(spec) {
   if (comment.trim()) chord.comment = textOf(comment);
   if (phrase.trim()) chord.phrase = normalizePhrase(phrase);
   if (phraseScale.trim()) chord.phrase_scale = normalizeScale(phraseScale);
+  if (color.trim()) chord.phrase_color = textOf(color).toLowerCase();
   return chord;
 }
 

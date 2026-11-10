@@ -472,3 +472,21 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 /* Som da pré-escuta (banco de sons) */
 .sound-tools summary #sound-summary { font-weight: 600; color: var(--text); }
 .sound-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Interruptor (liga/desliga) */
+.switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; min-height: 44px; }
+.switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-track { flex: none; width: 46px; height: 28px; border-radius: 999px; background: var(--border-strong); position: relative; transition: background .15s; }
+.switch-track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: var(--shadow); transition: transform .15s; }
+.switch input:checked + .switch-track { background: var(--primary); }
+.switch input:checked + .switch-track::after { transform: translateX(18px); }
+.switch input:focus-visible + .switch-track { outline: 3px solid color-mix(in srgb, var(--focus) 45%, transparent); outline-offset: 2px; }
+.switch-text { font-weight: 600; line-height: 1.25; }
+.switch-text small { display: block; font-weight: 400; font-size: .8rem; color: var(--muted); }
+
+/* Ritmo e frases */
+.groove { display: grid; gap: 10px; margin: 0 0 12px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.groove-title { margin: 0; font-weight: 700; }
+.groove-title small { font-weight: 400; color: var(--muted); font-size: .8rem; margin-left: 4px; }
+.groove .ai-help { margin: -4px 0 0; }
+.groove-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }

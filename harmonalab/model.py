@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .phrase import PhraseEvent, parse_phrase, parse_scale, phrase_text, rename_phrase_text
+from .phrase import CompHit, PhraseEvent, comp_text, parse_comp, parse_phrase, parse_scale, phrase_text, rename_phrase_text
 from .pitch import (
     DEFAULT_MIDDLE_C,
     MIDDLE_C_OFFSETS,
@@ -94,7 +94,10 @@ class ChordEvent:
     omitted: list[str] = field(default_factory=list)  # informativo (ex.: ["5"])
     comment: str = ""  # a frase de função do acorde: o que ele faz ali e por quê
     phrase: str = ""  # frase melódica: "G5/8 F5/8 Eb5/4*alvo ..." (ver phrase.py)
-    phrase_scale: str = ""  # classes de altura da escala da frase ("B C D Eb F G A")
+    phrase_scale: str = ""  # classes de altura da escala do acorde ("B C D Eb F G A")
+    phrase_color: str = ""  # cor pedida para a frase: "dentro", "cromatico" ou "outside" (só informativa para o motor)
+    comp: str = ""  # levada: o ritmo em que o voicing é tocado ("E/4 D/8 D/8 ..."; ver phrase.py)
+    comp_layers: list[tuple[list[CompHit], int]] = field(default_factory=list)  # derivado de comp
     # Derivados da frase e da escala, preenchidos na leitura (não fazem parte do JSON).
     phrase_events: list[PhraseEvent] = field(default_factory=list)
     phrase_pcs: list[tuple[int, str]] = field(default_factory=list)
@@ -154,6 +157,10 @@ class ChordEvent:
             d["phrase"] = self.phrase
         if self.phrase_scale:
             d["phrase_scale"] = self.phrase_scale
+        if self.phrase_color:
+            d["phrase_color"] = self.phrase_color
+        if self.comp:
+            d["comp"] = self.comp
         return d
 
 
@@ -364,7 +371,7 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
 
     chord.symbol = str(raw.get("symbol") or "").strip()
     chord.comment = str(raw.get("comment") or "")
-    for name in ("function", "scale"):
+    for name in ("function", "scale", "phrase_color"):
         if isinstance(raw.get(name), str):
             setattr(chord, name, raw[name].strip())
 
@@ -437,6 +444,15 @@ def _load_phrase(raw: dict[str, Any], chord: ChordEvent, index: int, project: Pr
                 issues.append(Issue("error", message, index, "phrase_scale"))
         else:
             issues.append(Issue("error", 'A escala da frase ("phrase_scale") deve ser um texto, por exemplo "B C D Eb F G A".', index, "phrase_scale"))
+    comp = raw.get("comp")
+    if comp not in (None, ""):
+        if isinstance(comp, (str, list, tuple)):
+            chord.comp = comp_text(comp)
+            chord.comp_layers, errors = parse_comp(chord.comp)
+            for message in errors:
+                issues.append(Issue("error", message, index, "comp"))
+        else:
+            issues.append(Issue("error", 'A levada ("comp") deve ser um texto, por exemplo "E/4 D/8 D/8 E/4 D/4".', index, "comp"))
 
 
 def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, Any]:

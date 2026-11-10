@@ -116,10 +116,21 @@ const unique = (items) => [...new Set(items)];
  */
 export function phraseIssues(project, chord, index, nextChord) {
   const events = chord.phrase_events;
-  if (!events.length) return [];
   const mc = project.middle_c;
   const issues = [];
-  const add = (level, message) => issues.push(issue(level, message, index, "phrase"));
+  const add = (level, message, field = "phrase") => issues.push(issue(level, message, index, field));
+
+  const chordNames = chordPcNames(chord);
+  const scale = new Set(chord.phrase_pcs.map((s) => s.pc));
+  const shown = chord.phrase_pcs.map((s) => s.name).join(" ");
+  if (chord.phrase_pcs.length) {
+    const missing = [...chordNames].filter(([pc]) => !scale.has(pc)).map(([, name]) => name);
+    if (missing.length) {
+      add("warning", `A escala (${shown}) não tem ${missing.join(", ")}, `
+        + `${missing.length === 1 ? "que é nota do acorde" : "que são notas do acorde"}.`, "phrase_scale");
+    }
+  }
+  if (!events.length) return issues;
 
   const out = events.filter((e) => e.note.midi < PHRASE_LOW || e.note.midi > PHRASE_HIGH).map((e) => noteName(e.note, mc));
   if (out.length) {
@@ -127,7 +138,6 @@ export function phraseIssues(project, chord, index, nextChord) {
       + `${noteName(makeNote(PHRASE_HIGH), mc)}): ${unique(out).join(" ")}.`);
   }
 
-  const chordNames = chordPcNames(chord);
   events.forEach((event, i) => {
     const name = noteName(event.note, mc);
     if (event.role === "alvo") {
@@ -155,19 +165,12 @@ export function phraseIssues(project, chord, index, nextChord) {
     add("info", "A frase não declara a escala (phrase_scale): não dá para conferir se as notas são dela.");
     return issues;
   }
-  const scale = new Set(chord.phrase_pcs.map((s) => s.pc));
-  const shown = chord.phrase_pcs.map((s) => s.name).join(" ");
-  const missing = [...chordNames].filter(([pc]) => !scale.has(pc)).map(([, name]) => name);
-  if (missing.length) {
-    add("warning", `A escala da frase (${shown}) não tem ${missing.join(", ")}, `
-      + `${missing.length === 1 ? "que é nota do acorde" : "que são notas do acorde"}.`);
-  }
   const outsideScale = unique(events
     .filter((e) => !scale.has(pitchClass(e.note)) && !SCALE_EXEMPT_ROLES.has(e.role))
     .map((e) => pitchClassName(e.note)));
   if (outsideScale.length) {
     add("warning", `Notas fora da escala da frase (${shown}): ${outsideScale.join(", ")}. `
-      + "Se são cromáticas de propósito, marque como *aprox, *passagem ou *blue.");
+      + "Se são cromáticas de propósito, marque como *aprox, *passagem, *blue ou *outside.");
   }
   return issues;
 }
@@ -203,6 +206,7 @@ export function analyzeChord(project, chord, index, startBeats) {
         midi: e.note.midi, name: noteName(e.note, mc), start: e.start, length: e.length, role: e.role,
       })),
     } : null,
+    comp: chord.comp || null,
   };
 }
 

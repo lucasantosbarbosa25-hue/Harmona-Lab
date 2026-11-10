@@ -31,10 +31,15 @@ DURATION_MODIFIERS = {"t": (2, 3), "q": (4, 5)}
 #: Papéis com outro nome comum → nome canônico (sem acento e em minúsculas).
 ROLE_ALIASES = {"aproximacao": "aprox", "approach": "aprox", "target": "alvo"}
 #: Papéis cujas notas podem ficar fora da escala declarada da frase.
-SCALE_EXEMPT_ROLES = frozenset({"aprox", "passagem", "cromatica", "blue"})
+SCALE_EXEMPT_ROLES = frozenset({"aprox", "passagem", "cromatica", "blue", "outside"})
+#: Levada do acorde: que notas do voicing cada toque usa. T = todas, E = mão esquerda e baixo, D = mão direita,
+#: B = a nota mais grave, P = a ponta; um número (1 a 9) = a enésima nota a partir do grave (dá a volta se passar).
+COMP_PARTS = ("T", "E", "D", "B", "P")
+COMP_ACCENT = {"": 0, "!": 16, "?": -24}  # ! = acento, ? = toque leve (somados à velocity)
 
 _SEPARATORS = re.compile(r"[\s,;|]+")
 _DURATION_RE = re.compile(r"^(\d+)([tq]?)(\.?)$")
+_COMP_TOKEN_RE = re.compile(r"^([TEDBPtedbp]|[1-9]|[rR])([!?]?)$")
 
 
 class PhraseError(ValueError):
@@ -72,7 +77,9 @@ def normalize_role(text: str) -> str:
 
 
 def duration_ticks(text: str) -> int:
-    """"8" → 240, "8t" → 160, "4." → 720 (em 480 ticks por semínima)."""
+    """"8" → 240, "8t" → 160, "4." → 720 (em 480 ticks por semínima). "8+4" liga duas figuras (360 + ... = soma)."""
+    if "+" in text:
+        return sum(duration_ticks(part) for part in text.split("+"))
     m = _DURATION_RE.match(text.strip().lower())
     if not m or int(m.group(1)) not in DURATION_VALUES:
         raise PhraseError(f'Duração "{text}" não existe: use 1, 2, 4, 8, 16, 32 ou 64 (4 = semínima), '
@@ -146,3 +153,62 @@ def rename_phrase_text(value, from_middle_c: str, to_middle_c: str):
             name = rename_note_text(name, from_middle_c, to_middle_c)
         out.append(f"{name}{slash}{dur}{star}{role}")
     return " ".join(out)
+
+
+# ---------------------------------------------------------------------------
+# Levada do acorde ("comp"): o ritmo em que as notas do voicing são tocadas.
+#
+#   "E/4 D/8 D/8 E/4 D/4"              um toque depois do outro (E = esquerda, D = direita, T = todas...)
+#   "B/4. B/8+2 ; r/8 D/8 r/4 D/4."    camadas separadas por ";" soam ao mesmo tempo (baixo + mão direita)
+#
+# Cada camada se repete até o fim do acorde e é cortada onde ele acaba. As durações são as mesmas da frase.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CompHit:
+    part: str  # "T", "E", "D", "B", "P" ou "1".."9"
+    start: int  # ticks depois do início da camada
+    length: int
+    accent: int  # somado à velocity do acorde
+
+
+def split_comp(value) -> list[list[str]]:
+    """Camadas (separadas por ";") e, em cada uma, as fichas."""
+    if value is None:
+        return []
+    text = " ; ".join(str(v) for v in value) if isinstance(value, (list, tuple)) else str(value)
+    layers = [[t for t in re.split(r"[\s,|]+", layer.strip()) if t] for layer in text.split(";")]
+    return [layer for layer in layers if layer]
+
+
+def comp_text(value) -> str:
+    return " ; ".join(" ".join(layer) for layer in split_comp(value))
+
+
+def parse_comp(value) -> tuple[list[tuple[list[CompHit], int]], list[str]]:
+    """Lê a levada. Devolve ([(toques da camada, duração da camada em ticks)], erros)."""
+    layers: list[tuple[list[CompHit], int]] = []
+    errors: list[str] = []
+    for tokens in split_comp(value):
+        hits: list[CompHit] = []
+        tick = 0
+        for token in tokens:
+            head, slash, dur_text = token.partition("/")
+            m = _COMP_TOKEN_RE.match(head)
+            if not slash or not dur_text or not m:
+                errors.append(f'Não entendi "{token}" na levada: escreva PARTE/DURAÇÃO, por exemplo E/4, D/8, T!/8 (acento) ou r/8 (pausa). '
+                              "Partes: T (todas), E (esquerda), D (direita), B (baixo), P (ponta) ou 1 a 9 (a enésima nota).")
+                continue
+            try:
+                length = duration_ticks(dur_text)
+            except PhraseError as exc:
+                errors.append(f'{exc} (em "{token}")')
+                continue
+            part = m.group(1).upper()
+            if part != "R":
+                hits.append(CompHit(part, tick, length, COMP_ACCENT[m.group(2)]))
+            tick += length
+        if tick > 0:
+            layers.append((hits, tick))
+    return layers, errors

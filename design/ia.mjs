@@ -10,7 +10,6 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DEFAULT_APP_URL, PERMANENT_INSTRUCTIONS } from "../harmonalab/web/ai/prompt.js";
-import { STYLES } from "../harmonalab/web/ai/styles.js";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -27,7 +26,7 @@ ${PERMANENT_INSTRUCTIONS(DEFAULT_APP_URL)}
 
 export const skillMarkdown = () => `---
 name: harmona-harmonia
-description: Cria progressões de harmonia rebuscada para teclado (jazz/fusion, neo-soul, gospel, soul e MPB) com voicings nota por nota, explica a função de cada acorde (escalas, empréstimos modais, cromatismos, substituições), escreve frases melódicas por acorde em levadas como salsa, samba, neo-soul, fusion, gospel, rock e ska, e gera um link que abre a progressão no Harmona Lab. Use quando a pessoa pedir progressões de acordes, reharmonização ou voicings, citar artistas como Jesús Molina, Dirty Loops, Domi & JD Beck, Stevie Wonder ou Ed Motta, ou mencionar o Harmona Lab.
+description: Cria progressões de harmonia rebuscada para teclado (jazz/fusion, neo-soul, gospel, soul e MPB) com voicings nota por nota, explica a função de cada acorde (escalas, empréstimos modais, cromatismos, substituições), informa a escala de cada acorde (o Harmona Lab escreve o ritmo e as frases a partir dela) e gera um link que abre a progressão no Harmona Lab. Use quando a pessoa pedir progressões de acordes, reharmonização ou voicings, citar artistas como Jesús Molina, Dirty Loops, Domi & JD Beck, Stevie Wonder ou Ed Motta, ou mencionar o Harmona Lab.
 ---
 
 # Harmona Lab: harmonia rebuscada para teclado
@@ -45,24 +44,14 @@ Sem poder rodar código, siga as instruções abaixo e monte o link à mão.
 - \`references/vocabulario.md\`: modos da menor melódica, tensões, substituições, upper structures, voicings.
 - \`references/artistas.md\`: pistas por artista e como pesquisar (com a ressalva de confirmar).
 - \`references/exemplo.md\`: uma resposta completa, para servir de régua.
-- \`references/levadas.md\`: as levadas (ritmos) que a pessoa pode pedir para as frases melódicas.
 
 ---
 
 ${PERMANENT_INSTRUCTIONS(DEFAULT_APP_URL)}
 `;
 
-/** As levadas das frases, para a skill consultar (a única fonte é ai/styles.js). */
-export const levadasMarkdown = () => `# Levadas para as frases melódicas
-
-A pessoa escolhe uma levada (ou deixa a IA escolher pelo pedido). A levada manda no ritmo da frase; os artistas e as músicas citados mandam no vocabulário. São generalizações para guiar o ritmo, não regras rígidas: diga o que você aproveitou de cada uma.
-
-${STYLES.map((s) => `## ${s.label}\n\n${s.rhythm}`).join("\n\n")}
-`;
-
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   writeFileSync(join(ROOT, "harmonalab", "web", "ia.md"), iaMarkdown());
   writeFileSync(join(ROOT, "skill", "harmona-harmonia", "SKILL.md"), skillMarkdown());
-  writeFileSync(join(ROOT, "skill", "harmona-harmonia", "references", "levadas.md"), levadasMarkdown());
-  console.log("harmonalab/web/ia.md\nskill/harmona-harmonia/SKILL.md\nskill/harmona-harmonia/references/levadas.md");
+  console.log("harmonalab/web/ia.md\nskill/harmona-harmonia/SKILL.md");
 }

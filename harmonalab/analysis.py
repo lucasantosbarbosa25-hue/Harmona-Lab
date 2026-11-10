@@ -109,20 +109,28 @@ def phrase_issues(project: Project, chord: ChordEvent, index: int, next_chord: C
     ``alvo`` e ``aprox`` são conferidos; qualquer outro papel é livre. Novas conferências entram aqui.
     """
     events = chord.phrase_events
-    if not events:
-        return []
     mc = project.middle_c
     issues: list[Issue] = []
 
-    def add(level: str, message: str) -> None:
-        issues.append(Issue(level, message, index, "phrase"))
+    def add(level: str, message: str, field: str = "phrase") -> None:
+        issues.append(Issue(level, message, index, field))
+
+    chord_names = _chord_pc_names(chord)
+    scale = {pc for pc, _ in chord.phrase_pcs}
+    shown = " ".join(name for _, name in chord.phrase_pcs)
+    if chord.phrase_pcs:
+        missing = [name for pc, name in chord_names.items() if pc not in scale]
+        if missing:
+            add("warning", f"A escala ({shown}) não tem {', '.join(missing)}, "
+                           f"{'que é nota do acorde' if len(missing) == 1 else 'que são notas do acorde'}.", "phrase_scale")
+    if not events:
+        return issues
 
     out = [e.note.name(mc) for e in events if not PHRASE_LOW <= e.note.midi <= PHRASE_HIGH]
     if out:
         add("warning", f"Notas fora da tessitura confortável da frase ({midi_to_name(PHRASE_LOW, mc)} a "
                        f"{midi_to_name(PHRASE_HIGH, mc)}): {' '.join(dict.fromkeys(out))}.")
 
-    chord_names = _chord_pc_names(chord)
     for i, event in enumerate(events):
         name = event.note.name(mc)
         if event.role == "alvo":
@@ -147,17 +155,11 @@ def phrase_issues(project: Project, chord: ChordEvent, index: int, next_chord: C
     if not chord.phrase_pcs:
         add("info", "A frase não declara a escala (phrase_scale): não dá para conferir se as notas são dela.")
         return issues
-    scale = {pc for pc, _ in chord.phrase_pcs}
-    shown = " ".join(name for _, name in chord.phrase_pcs)
-    missing = [name for pc, name in chord_names.items() if pc not in scale]
-    if missing:
-        add("warning", f"A escala da frase ({shown}) não tem {', '.join(missing)}, "
-                       f"{'que é nota do acorde' if len(missing) == 1 else 'que são notas do acorde'}.")
     outside_scale = list(dict.fromkeys(
         e.note.pitch_class_name() for e in events if e.note.pitch_class not in scale and e.role not in SCALE_EXEMPT_ROLES))
     if outside_scale:
         add("warning", f"Notas fora da escala da frase ({shown}): {', '.join(outside_scale)}. "
-                       "Se são cromáticas de propósito, marque como *aprox, *passagem ou *blue.")
+                       "Se são cromáticas de propósito, marque como *aprox, *passagem, *blue ou *outside.")
     return issues
 
 
@@ -189,6 +191,7 @@ def analyze_chord(project: Project, chord: ChordEvent, index: int, start_beats: 
             "events": [{"midi": e.note.midi, "name": e.note.name(mc), "start": e.start, "length": e.length, "role": e.role}
                        for e in chord.phrase_events],
         } if chord.phrase_events else None,
+        "comp": chord.comp or None,
     }
 
 

@@ -5,7 +5,7 @@
 // Nota comum entre acordes: o note_off vem antes do note_on no mesmo tick.
 
 import { roundHalfEven } from "./numbers.js";
-import { pitches, sounding, strumFor, velocityFor } from "./model.js";
+import { sounding, strumFor, velocityFor } from "./model.js";
 import { TICKS_PER_BEAT } from "./phrase.js";
 
 export { TICKS_PER_BEAT };
@@ -61,39 +61,102 @@ function varInt(value) {
 
 const meta = (type, data) => ({ meta: true, bytes: [0xff, type, ...varInt(data.length), ...data] });
 
-/** Gera o .mid exatamente com as notas, oitavas e durações do projeto. */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both" } = {}) {
-  if (!PHRASE_MODES.includes(phraseMode)) throw new Error(`phraseMode deve ser um de ${PHRASE_MODES.join(", ")} (recebido ${phraseMode}).`);
-  const [num, den] = project.time_signature;
-  // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = [];
-  let tick = 0;
-  for (const chord of project.chords) {
-    const length = beatsToTicks(chord.duration_beats, ticksPerBeat);
-    const velocity = velocityFor(project, chord);
-    if (markers && chord.symbol) events.push([tick, 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
-    let notes = pitches(chord); // do grave ao agudo
-    if (phraseMode === "line") notes = sounding(chord).filter((v) => v.part !== "right_hand").map((v) => v.note.midi);
-    let offsets = notes.map(() => 0);
-    const direction = strumFor(project, chord);
+/** Alturas de um toque da levada, do grave ao agudo. `voices` = [{note, part}] já do grave ao agudo. */
+function hitNotes(voices, part) {
+  if (!voices.length) return [];
+  if (part === "T") return voices.map((v) => v.note.midi);
+  if (part === "E") return voices.filter((v) => v.part === "bass" || v.part === "left_hand").map((v) => v.note.midi);
+  if (part === "D") return voices.filter((v) => v.part === "right_hand" || v.part === "notes").map((v) => v.note.midi);
+  if (part === "B") return [voices[0].note.midi];
+  if (part === "P") return [voices.at(-1).note.midi];
+  return [voices[(parseInt(part, 10) - 1) % voices.length].note.midi];
+}
+
+/**
+ * Notas do acorde no canal 1: [[início, fim, altura, velocity]], em ticks a partir do começo do acorde.
+ * Sem levada: todas as notas juntas (com strum, se houver) até o fim. Com levada (comp): cada camada se repete até o
+ * fim do acorde; a mesma tecla pedida duas vezes no mesmo instante soa uma vez só, e um toque novo corta o anterior.
+ */
+export function chordNotes(project, chord, length, phraseMode = "both", ticksPerBeat = TICKS_PER_BEAT) {
+  let voices = sounding(chord);
+  if (phraseMode === "line") voices = voices.filter((v) => v.part !== "right_hand");
+  const velocity = velocityFor(project, chord);
+  const direction = strumFor(project, chord);
+  const block = (pitches, start, end, vel) => {
+    let offsets = pitches.map(() => 0);
     if (direction !== "off") {
-      offsets = strumPlan(notes.length, project.strum_delay_ms, project.tempo, length, ticksPerBeat).offsets;
-      if (direction === "down") notes = notes.slice().reverse(); // a nota mais aguda entra primeiro
+      offsets = strumPlan(pitches.length, project.strum_delay_ms, project.tempo, end - start, ticksPerBeat).offsets;
+      if (direction === "down") pitches = pitches.slice().reverse(); // a nota mais aguda entra primeiro
     }
-    for (const [i, pitch] of notes.entries()) {
-      events.push([tick + offsets[i], 2, pitch, { bytes: [0x90 | CHANNEL, pitch, velocity] }, CHANNEL]);
-      events.push([tick + length, 0, pitch, { bytes: [0x80 | CHANNEL, pitch, 0] }, CHANNEL]);
+    return pitches.map((pitch, i) => [start + offsets[i], end, pitch, vel]);
+  };
+  if (!chord.comp_layers.length) return block(voices.map((v) => v.note.midi), 0, length, velocity);
+
+  const notes = [];
+  for (const { hits, ticks } of chord.comp_layers) {
+    for (let base = 0; base < length; base += ticks) {
+      for (const hit of hits) {
+        const start = base + hit.start;
+        if (start >= length) break;
+        const vel = Math.max(1, Math.min(127, velocity + hit.accent));
+        notes.push(...block(hitNotes(voices, hit.part), start, Math.min(start + hit.length, length), vel));
+      }
+    }
+  }
+  const byPitch = new Map();
+  for (const note of notes.slice().sort((a, b) => a[0] - b[0])) {
+    if (!byPitch.has(note[2])) byPitch.set(note[2], []);
+    const same = byPitch.get(note[2]);
+    const last = same.at(-1);
+    if (last && last[0] === note[0]) {
+      if (note[1] > last[1]) same[same.length - 1] = [note[0], note[1], note[2], Math.max(note[3], last[3])];
+      continue;
+    }
+    if (last && last[1] > note[0]) last[1] = note[0];
+    same.push(note.slice());
+  }
+  return [...byPitch.values()].flat().filter((n) => n[1] > n[0]).sort((a, b) => a[0] - b[0] || a[2] - b[2]);
+}
+
+/**
+ * Todas as notas do projeto, com tempo: { notes: [{start, end, pitch, velocity, channel, chord}], starts (tick de cada
+ * acorde), end }. É a lista de onde sai o arquivo .mid, e a pré-escuta do app toca a mesma lista.
+ */
+export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode = "both" } = {}) {
+  if (!PHRASE_MODES.includes(phraseMode)) throw new Error(`phraseMode deve ser um de ${PHRASE_MODES.join(", ")} (recebido ${phraseMode}).`);
+  const notes = [];
+  const starts = [];
+  let tick = 0;
+  project.chords.forEach((chord, index) => {
+    const length = beatsToTicks(chord.duration_beats, ticksPerBeat);
+    starts.push(tick);
+    for (const [start, end, pitch, velocity] of chordNotes(project, chord, length, phraseMode, ticksPerBeat)) {
+      notes.push({ start: tick + start, end: tick + end, pitch, velocity, channel: CHANNEL, chord: index });
     }
     if (phraseMode !== "chords") {
+      const velocity = velocityFor(project, chord);
       for (const e of chord.phrase_events) {
-        const pitch = e.note.midi;
-        events.push([tick + e.start, 2, pitch, { bytes: [0x90 | PHRASE_CHANNEL, pitch, velocity] }, PHRASE_CHANNEL]);
-        events.push([tick + e.start + e.length, 0, pitch, { bytes: [0x80 | PHRASE_CHANNEL, pitch, 0] }, PHRASE_CHANNEL]);
+        notes.push({ start: tick + e.start, end: tick + e.start + e.length, pitch: e.note.midi, velocity, channel: PHRASE_CHANNEL, chord: index });
       }
     }
     tick += length;
+  });
+  return { notes, starts, end: tick };
+}
+
+/** Gera o .mid exatamente com as notas, oitavas e durações do projeto. */
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both" } = {}) {
+  const [num, den] = project.time_signature;
+  const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode });
+  // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
+  const events = [];
+  project.chords.forEach((chord, i) => {
+    if (markers && chord.symbol) events.push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
+  });
+  for (const n of notes) {
+    events.push([n.start, 2, n.pitch, { bytes: [0x90 | n.channel, n.pitch, n.velocity] }, n.channel]);
+    events.push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
   }
-  const endTick = tick;
   events.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[4] - b[4]);
 
   const tempo = roundHalfEven(((60 * 1e6) / project.tempo) * 4 / 4);

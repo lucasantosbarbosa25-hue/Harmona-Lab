@@ -123,15 +123,26 @@ todos os acordes**, os mesmos botões valem para a progressão inteira, e a **po
 os acordes (o app avisa em quantos ela não fazia parte do acorde: é a tensão que você vai ouvir). Só mudam as oitavas da
 mão direita; tudo pode ser desfeito.
 
-**Frases melódicas.** Embaixo do pedido há o menu **Frases melódicas** (começa em *Sem frases*). Escolha uma levada
-(Salsa, Samba, Bossa nova, Neo-soul, Jazz fusion, Gospel americano, Funk, Jazz swing, Rock, Ska) ou *Automática*, e a sua IA
-escreve também uma frase curta para cada acorde, dentro da escala dele: aproximações cromáticas, notas da escala,
-pentatônica, notas-alvo nos tempos certos, o que o pedido descrever em linguagem natural. A levada manda no **ritmo**; os
-artistas citados no pedido continuam mandando no **vocabulário**. Cada frase é conferida pelo app: o alvo cai num tempo e é
-nota do acorde, a aproximação resolve por semitom, as notas são da escala declarada, tudo cabe no acorde. Na barra da
-progressão você escolhe **ouvir e exportar** *acorde + frase*, *mão esquerda + frase* (a direita sai e a frase canta no lugar
-dela) ou *só acorde*. No `.mid`, os acordes ficam no canal 1 e a frase no **canal 2**, para separar na DAW. Cada acorde mostra
-também a **frase de função** que a IA escreveu (o que ele faz ali e por quê), que é obrigatória no pedido.
+**Ritmo e frases, escritos pelo app.** A sua IA entrega só a **harmonia**: os acordes, a função de cada um e as **notas da
+escala** de cada acorde. O pedido fica leve e a resposta, rápida. O interruptor **Pesquisar na internet** (embaixo do pedido,
+desligado por padrão) decide se a IA pesquisa os artistas citados antes de compor, o que é mais fiel e mais demorado.
+Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
+
+- **Estilo:** Jazz swing, Blues, Jazz fusion, Neo-soul, Gospel americano, Funk, Salsa, Samba, Bossa nova, Rock ou Ska.
+- **Levada dos acordes:** duas ou três levadas por estilo (shuffle, montuno, teleco-teco, skank, Charleston…) e arpejos
+  (subindo, descendo, sobe e desce). Desligada, cada acorde soa inteiro, como antes.
+- **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
+  conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
+- **Cor pedida no prompt:** se o pedido falar em frases cromáticas ou *outside* (até "só nos dominantes"), a IA marca esses
+  acordes (`phrase_color`) e o app obedece: `dentro` fica na escala, `cromatico` reforça as aproximações, `outside` desloca um
+  trecho meio tom e resolve no alvo.
+
+Tudo vem da **base de conhecimento** em [`kb/estilos.js`](harmonalab/web/kb/estilos.js): células rítmicas, levadas, costumes e
+influências de cada estilo, destilados de aulas e artigos abertos (as fontes estão no próprio arquivo), sem transcrição de
+música nenhuma. O que o app escreve passa pela mesma conferência das frases escritas à mão: o alvo cai num tempo e é nota do
+acorde, a aproximação resolve por semitom, as notas são da escala. Em **ouvir e exportar** você escolhe *acorde + frase*,
+*mão esquerda + frase* ou *só acorde*; no `.mid`, os acordes (com a levada) ficam no canal 1 e a frase no **canal 2**.
+Frases e levadas também podem ser escritas ou editadas à mão em *Mais*.
 
 **Banco de sons (.sf2).** Em *Som da pré-escuta* (acima dos acordes), carregue um SoundFont do aparelho e escolha o
 instrumento dos acordes e, se houver frases, o da frase (por exemplo, Rhodes nos acordes e piano na frase). O app toca
@@ -261,19 +272,22 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `key`, `references` | não | Tom (`"Em"`) e artistas ou músicas de referência (lista): aparecem em destaque na progressão. |
 | `chords[].function`, `scale` | não | Função em graus (`"V7alt"`) e escala ou modo: aparecem sob o nome do acorde. |
 | `chords[].comment` | não (a IA sempre preenche) | A frase de função do acorde: o que ele faz ali e por quê. Aparece sob o nome do acorde. |
-| `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. |
-| `chords[].phrase_scale` | não | Notas da escala da frase, sem oitava (`"B C D Eb F G A"`): o app confere as notas da frase com ela. |
-| `style` | não | Nome da levada das frases (`"Neo-soul"`): aparece em destaque na progressão. |
+| `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto, `+` ligadura, como em `8+4`); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. |
+| `chords[].phrase_scale` | não (a IA sempre preenche) | Notas da escala do acorde, sem oitava (`"B C D Eb F G A"`): o app escreve e confere as frases com ela, e avisa se ela não contém as notas do acorde. |
+| `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
+| `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
+| `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 
 **Papéis das notas da frase.** `*alvo` (nota de chegada: cai num tempo e é nota do acorde) e `*aprox` (aproximação: resolve por
 semitom na nota seguinte, ou no próximo acorde se for a última) são conferidos. Qualquer outro papel (`*passagem`, `*blue`,
 `*tensao`… o que a IA quiser explicar) é livre e não é conferido; `*aprox`, `*passagem`, `*cromatica` e `*blue` podem sair da escala.
 
-**Como crescer.** As levadas são dados em [`ai/styles.js`](harmonalab/web/ai/styles.js) (menu, prompt, `ia.md` e skill leem de
-lá); cada recurso de prompt é uma entrada de `FEATURES` em [`ai/phrases.js`](harmonalab/web/ai/phrases.js); durações e papéis
-têm tabelas em `phrase.py` / `engine/phrase.js`, e as conferências musicais ficam em `phrase_issues` (`analysis.py` /
-`analysis.js`). Arpejos, outros tipos de frase e novos papéis entram acrescentando uma entrada, sem mexer no resto.
+**Como crescer.** A base de conhecimento é um arquivo de dados, [`kb/estilos.js`](harmonalab/web/kb/estilos.js): um estilo
+novo, mais levadas, mais células rítmicas, mais influências ou fontes entram acrescentando linhas ali (um teste confere que
+toda levada fecha compassos inteiros e toda célula, tempos inteiros). O gerador fica em
+[`engine/groove.js`](harmonalab/web/engine/groove.js); durações, papéis e partes da levada têm tabelas em `phrase.py` /
+`engine/phrase.js`; as conferências musicais ficam em `phrase_issues` (`analysis.py` / `analysis.js`).
 
 Acorde sem nenhuma nota = pausa. Um exemplo completo está em
 [`examples/resolucao_em_fsharp_ponta.json`](examples/resolucao_em_fsharp_ponta.json) (e o `.mid` gerado ao lado,
@@ -362,8 +376,9 @@ harmona-lab/
 │       ├── keyboard.js, audio.js            teclado visual e pré‑escuta (timbre simples)
 │       ├── sound.js    pré‑escuta com banco de sons (.sf2): carrega, guarda no aparelho e toca o MIDI exportado
 │       ├── vendor/spessasynth/   o tocador de SF2 (gerado por design/vendor_spessasynth.sh, versões fixas, Apache-2.0)
-│       ├── engine/     motor em JS: pitch, model, analysis, midi, phrase, voicing (espelho do Python)
-│       ├── ai/         assistente: instruções (prompt.js), levadas (styles.js), frases no prompt (phrases.js), pedido e resposta (chat.js), links (link.js),
+│       ├── engine/     motor em JS: pitch, model, analysis, midi, phrase (espelho do Python), voicing e groove (gerador de levada e frases)
+│       ├── kb/         base de conhecimento dos estilos (estilos.js): levadas, células rítmicas, influências e fontes
+│       ├── ai/         assistente: instruções (prompt.js), pedido e resposta (chat.js), links (link.js),
 │       │               conferência (check.js), ditado (speech.js) e tela (ui.js)
 │       ├── ia.md       instruções para IAs (gerado por design/ia.mjs)
 │       ├── harmona-harmonia.zip   a skill, para baixar (gerado por design/build_skill.py)
@@ -437,7 +452,7 @@ cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes*
 
 - A ponta travada é **validada** (aviso); o app só reorganiza voicings quando você pede, pelos botões (fechado, aberto, drop 2, drop 3, ponta pedal).
 - Uma faixa MIDI única (sem separar mãos em faixas): os acordes ficam no canal 1 e a frase, no canal 2.
-- Das frases, o app confere só o que dá para medir (tempos, notas do acorde, semitom, escala, tamanho). Se o ritmo soa mesmo a salsa ou a neo-soul, só o seu ouvido diz; as descrições das levadas são generalizações. Tercinas e quiálteras de 5 existem na notação; outras divisões (por exemplo, setinas) não.
+- As frases e levadas do app seguem regras e a base de conhecimento: saem corretas e com o ritmo do estilo, como bons exercícios, não como um solo inspirado. O app confere o que dá para medir (tempos, notas do acorde, semitom, escala, tamanho); se soa mesmo a salsa ou a neo-soul, só o seu ouvido diz. As levadas foram escritas para 4/4: em outros compassos elas se repetem e são cortadas no fim do acorde. Há tercinas e quiálteras de 5; outras divisões (setinas) não. O atraso proposital do neo-soul ("atrás do tempo") não é imitado: o MIDI sai na grade.
 - Sem banco de sons, a pré‑escuta é um timbre simples, só para conferir notas. Com um `.sf2`, o banco inteiro vai para a memória: bancos de centenas de MB podem travar o celular (o app pergunta antes). O tocador de SF2 foi testado com um banco gerado nos testes e no Chromium; o timbre de cada banco de verdade só o seu ouvido julga.
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").
 - Os projetos ficam no aparelho (rascunho automático) ou em arquivos `.json`; não há sincronização entre aparelhos.

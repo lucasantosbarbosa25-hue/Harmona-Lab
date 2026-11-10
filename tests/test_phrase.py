@@ -5,10 +5,10 @@ import json
 import pytest
 
 from harmonalab.analysis import analyze_data
-from harmonalab.midi_io import PHRASE_MODES, TICKS_PER_BEAT, build_midi, load_midi, midi_bytes, summarize_midi
+from harmonalab.midi_io import PHRASE_MODES, TICKS_PER_BEAT, build_midi, chord_notes, load_midi, midi_bytes, summarize_midi
 from harmonalab.model import Project, rename_project_notes
 from harmonalab.phrase import (
-    PhraseError, duration_ticks, normalize_role, parse_phrase, parse_scale, phrase_text, rename_phrase_text, split_phrase,
+    PhraseError, comp_text, duration_ticks, normalize_role, parse_comp, parse_phrase, parse_scale, phrase_text, rename_phrase_text, split_phrase,
 )
 
 PPQ = TICKS_PER_BEAT
@@ -187,9 +187,9 @@ def test_aproximacao_no_fim_confere_o_proximo_acorde():
 def test_escala_confere_notas_e_acorde():
     data = one(phrase="C5/8 Db5/8 Eb5/8 F#5/8*passagem Db5/8*blue", phrase_scale="C D E F G")
     assert [m for _, m in messages(data)] == [
-        "Notas fora da escala da frase (C D E F G): Db, Eb. Se são cromáticas de propósito, marque como *aprox, *passagem ou *blue."]
-    data = one(notes="C4 E4 G4 Bb4", phrase="C5/8", phrase_scale="C D E F")
-    assert messages(data)[0][1] == "A escala da frase (C D E F) não tem G, Bb, que são notas do acorde."
+        "Notas fora da escala da frase (C D E F G): Db, Eb. Se são cromáticas de propósito, marque como *aprox, *passagem, *blue ou *outside."]
+    data = one(notes="C4 E4 G4 Bb4", phrase_scale="C D E F")  # vale mesmo sem frase: o gerador do app depende da escala
+    assert messages(data, "phrase_scale") == [("warning", "A escala (C D E F) não tem G, Bb, que são notas do acorde.")]
 
 
 def test_sem_escala_so_avisa_com_nota_informativa():
@@ -271,3 +271,58 @@ def test_exportar_pela_linha_de_comando(tmp_path, capsys):
     assert {n.channel for n in summarize_midi(load_midi(out)).notes} == {0, 1}
     assert main(["export", str(source), "-o", str(out), "--phrase", "chords"]) == 0
     assert {n.channel for n in summarize_midi(load_midi(out)).notes} == {0}
+
+
+# ------------------------------------------------------------------ levada do acorde (comp) e ligaduras
+
+
+def test_ligadura_soma_as_figuras():
+    assert duration_ticks("8+4") == 720
+    assert duration_ticks("8t+4+16") == 160 + 480 + 120
+    with pytest.raises(PhraseError):
+        duration_ticks("8+x")
+    events, total, errors = parse_phrase("C5/8+8 D5/4+4t", "C4")
+    assert errors == [] and [(e.start, e.length) for e in events] == [(0, 480), (480, 800)] and total == 1280
+
+
+def test_levada_camadas_partes_e_acentos():
+    layers, errors = parse_comp("E/4 D!/8 r/8 ; b/2 1?/8 9/8 P/4")
+    assert errors == []
+    (first, total1), (second, total2) = layers
+    assert [(h.part, h.start, h.length, h.accent) for h in first] == [("E", 0, 480, 0), ("D", 480, 240, 16)]
+    assert total1 == 960 and total2 == 1920
+    assert [h.part for h in second] == ["B", "1", "9", "P"] and second[1].accent == -24
+    assert comp_text(" E/4,D/8 | r/8 ;; T/1 ") == "E/4 D/8 r/8 ; T/1"
+    _, errors = parse_comp("X/4 T T/9 0/4 10/4 E!!/4")
+    assert len(errors) == 6
+
+
+def test_levada_vira_notas_no_canal_1_e_a_frase_segue_no_canal_2():
+    data = {"chords": [{"bass": "C2", "left_hand": "G2 E3", "right_hand": "B3 D4 G4", "duration_beats": 4,
+                        "comp": "B/4. B/8+2 ; r/8 D!/8 r/4 D?/4. D/8", "phrase": "G5/2 A5/2", "phrase_scale": "C D E G A B"}]}
+    project = Project.from_dict(data)
+    notes = chord_notes(project, project.chords[0], 4 * PPQ)
+    assert [n for n in notes if n[2] == 36] == [(0, 720, 36, 80), (720, 1920, 36, 80)]
+    assert [(n[0], n[1], n[3]) for n in notes if n[2] == 67] == [(240, 480, 96), (960, 1680, 56), (1680, 1920, 80)]
+    summary = summary_of(data)
+    assert len([n for n in summary.notes if n.channel == 0]) == len(notes)
+    assert [(n.pitch, n.start) for n in summary.notes if n.channel == 1] == [(79, 0), (81, 960)]
+    assert project.to_dict()["chords"][0]["comp"] == "B/4. B/8+2 ; r/8 D!/8 r/4 D?/4. D/8"
+
+
+def test_levada_repete_ate_o_fim_e_nao_sobrepoe_a_mesma_tecla():
+    looped = Project.from_dict({"chords": [{"notes": "C4 E4", "duration_beats": 3, "comp": "T/4 r/4"}]})
+    assert [n[0] for n in chord_notes(looped, looped.chords[0], 3 * PPQ)] == [0, 0, 960, 960]
+    overlap = Project.from_dict({"chords": [{"notes": "C4", "duration_beats": 2, "comp": "T/2 ; r/4 T/4"}]})
+    assert chord_notes(overlap, overlap.chords[0], 2 * PPQ) == [(0, 480, 60, 80), (480, 960, 60, 80)]
+    line = Project.from_dict({"chords": [{"left_hand": "C3", "right_hand": "E4 G4", "comp": "T/4 D/4 E/4 P/4"}]})
+    assert [n[2] for n in chord_notes(line, line.chords[0], 4 * PPQ, "line")] == [48, 48, 48]  # sem a mão direita
+
+
+def test_levada_com_erro_bloqueia_e_cor_da_frase_vai_e_volta():
+    report = analyze_data(one(comp="X/4 T/4"))
+    assert not report["ok"] and [i["field"] for i in report["issues"] if i["level"] == "error"] == ["comp"]
+    data = Project.from_dict(one(phrase_color=" outside ", comp="T/8")).to_dict()
+    assert data["chords"][0]["phrase_color"] == "outside" and data["chords"][0]["comp"] == "T/8"
+    assert analyze_data(one(comp="T/8"))["chords"][0]["comp"] == "T/8"
+    assert messages(one(phrase="C5/4 Db5/4*outside", phrase_scale="C D E G")) == []  # outside não é cobrado na escala

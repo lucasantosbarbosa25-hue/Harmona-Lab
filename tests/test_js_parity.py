@@ -129,6 +129,20 @@ CASES = [
     {"chords": [{"notes": "C4", "phrase": "C5/1 C5/2"}]},  # 1 e 2 cabem só num acorde longo
     {"chords": [{"notes": "C4", "duration_beats": 8, "phrase": "C5/1 C5/2 C5/1t C5/64 C5/64q C5/64t."}]},
     {"style": 5, "chords": [{"notes": "C4", "phrase": ""}]},
+    # levada do acorde (comp): partes, camadas, acentos, ligaduras, repetição até o fim do acorde e corte no fim
+    {"chords": [{"left_hand": "C2 G2", "right_hand": "E3 G3 B3 D4", "comp": "E/4 D/8 D/8 E/4 D!/4", "phrase_color": " outside "}]},
+    {"chords": [{"bass": "C2", "left_hand": "G2 E3", "right_hand": "B3 D4 G4", "duration_beats": 8,
+                 "comp": "B/4. B/8+2 ; r/8 D/8 r/4 D?/4. D/8", "phrase": "G5/4 A5/4*passagem B5/2", "phrase_scale": "C D E G A B"}]},
+    {"chords": [{"notes": "C4 E4 G4 B4", "comp": "1/16 2/16 3/16 4/16 5/16 9/16 P/8 B/8 T/8t T/8t T/8t", "duration_beats": 3}]},
+    {"chords": [{"left_hand": "C3", "right_hand": "E4 G4", "comp": "T/2 ; T/4 ; B/8 P/8", "duration_beats": 2.5}]},  # teclas repetidas entre camadas
+    {"strum": {"direction": "up", "delay_ms": 20}, "chords": [{"left_hand": "C3 G3", "right_hand": "E4 G4 B4", "comp": "E/4 D/4 T/2"},
+                                                               {"left_hand": "C3 G3", "right_hand": "E4 G4 B4", "comp": "T/8", "strum": "down", "duration_beats": 1}]},
+    {"default_velocity": 120, "chords": [{"notes": "C4 E4", "comp": "T!/4 T?/4 T/4", "velocity": 10}, {"notes": "C4 E4", "comp": "T!/1"}]},
+    {"chords": [{"comp": "T/4 D/4"}, {"notes": "C4", "comp": "r/4 ; ; r/8"}, {"notes": "C4", "comp": ["T/8", "r/8 B/8"]}]},  # pausa, só pausas, lista
+    {"chords": [{"notes": "C4 E4", "comp": "T/8t+4 T/4.+16 r/8+8"}]},  # ligaduras
+    {"chords": [{"notes": "C4", "comp": "X/4 T T/9 T/ /4 E!!/4 0/4 10/4 r!/4 T/4+x"}, {"notes": "C4", "comp": {"a": 1}}, {"notes": "C4", "comp": 3}]},  # erros
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/8+8 D5/4+4t E5/8t+8t*alvo", "phrase_scale": "C D E G"}]},  # ligaduras na frase
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/4 Db5/4*outside", "phrase_scale": "C D E G"}]},  # outside não é cobrado na escala
 ]
 
 

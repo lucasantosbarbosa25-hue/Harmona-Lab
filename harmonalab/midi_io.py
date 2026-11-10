@@ -45,6 +45,73 @@ def _meta_text(text: str) -> str:
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
+def _hit_notes(voices: list, part: str) -> list[int]:
+    """Alturas de um toque da levada, do grave ao agudo. ``voices`` = [(nota, parte)] já do grave ao agudo."""
+    if not voices:
+        return []
+    if part == "T":
+        return [n.midi for n, _ in voices]
+    if part == "E":
+        return [n.midi for n, p in voices if p in ("bass", "left_hand")]
+    if part == "D":
+        return [n.midi for n, p in voices if p in ("right_hand", "notes")]
+    if part == "B":
+        return [voices[0][0].midi]
+    if part == "P":
+        return [voices[-1][0].midi]
+    return [voices[(int(part) - 1) % len(voices)][0].midi]
+
+
+def chord_notes(project: Project, chord, length: int, phrase_mode: str = "both",
+                ticks_per_beat: int = TICKS_PER_BEAT) -> list[tuple[int, int, int, int]]:
+    """Notas do acorde no canal 1: [(início, fim, altura, velocity)], em ticks a partir do começo do acorde.
+
+    Sem levada: todas as notas juntas (com strum, se houver) até o fim. Com levada (``comp``): cada camada se repete
+    até o fim do acorde; se dois toques pedirem a mesma tecla ao mesmo tempo, ela soa uma vez só, e um toque novo
+    corta o anterior da mesma tecla.
+    """
+    voices = chord.sounding()
+    if phrase_mode == "line":
+        voices = [(n, p) for n, p in voices if p != "right_hand"]
+    velocity = project.velocity_for(chord)
+    direction = project.strum_for(chord)
+
+    def block(pitches: list[int], start: int, end: int, vel: int) -> list[tuple[int, int, int, int]]:
+        offsets = [0] * len(pitches)
+        if direction != "off":
+            offsets, _ = strum_plan(len(pitches), project.strum_delay_ms, project.tempo, end - start, ticks_per_beat)
+            if direction == "down":
+                pitches = pitches[::-1]  # a nota mais aguda entra primeiro
+        return [(start + offset, end, pitch, vel) for pitch, offset in zip(pitches, offsets)]
+
+    if not chord.comp_layers:
+        return block([n.midi for n, _ in voices], 0, length, velocity)
+
+    notes: list[tuple[int, int, int, int]] = []
+    for hits, total in chord.comp_layers:
+        base = 0
+        while base < length:
+            for hit in hits:
+                start = base + hit.start
+                if start >= length:
+                    break
+                vel = max(1, min(127, velocity + hit.accent))
+                notes.extend(block(_hit_notes(voices, hit.part), start, min(start + hit.length, length), vel))
+            base += total
+    # A mesma tecla pedida duas vezes: no mesmo instante, fica a mais longa; depois, o toque novo corta o anterior.
+    by_pitch: dict[int, list[tuple[int, int, int, int]]] = {}
+    for note in sorted(notes, key=lambda n: n[0]):
+        same = by_pitch.setdefault(note[2], [])
+        if same and same[-1][0] == note[0]:
+            if note[1] > same[-1][1]:
+                same[-1] = (note[0], note[1], note[2], max(note[3], same[-1][3]))
+            continue
+        if same and same[-1][1] > note[0]:
+            same[-1] = (same[-1][0], note[0], same[-1][2], same[-1][3])
+        same.append(note)
+    return sorted((n for group in by_pitch.values() for n in group if n[1] > n[0]), key=lambda n: (n[0], n[2]))
+
+
 def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, markers: bool = True,
                phrase_mode: str = "both") -> mido.MidiFile:
     """Gera o MidiFile exatamente com as notas, oitavas e durações do projeto."""
@@ -59,18 +126,9 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         velocity = project.velocity_for(chord)
         if markers and chord.symbol:
             events.append((tick, 1, 0, CHANNEL, mido.MetaMessage("marker", text=_meta_text(chord.symbol))))
-        pitches = chord.pitches  # do grave ao agudo
-        if phrase_mode == "line":
-            pitches = [n.midi for n, part in chord.sounding() if part != "right_hand"]
-        offsets = [0] * len(pitches)
-        direction = project.strum_for(chord)
-        if direction != "off":
-            offsets, _ = strum_plan(len(pitches), project.strum_delay_ms, project.tempo, length, ticks_per_beat)
-            if direction == "down":
-                pitches = pitches[::-1]  # a nota mais aguda entra primeiro
-        for pitch, offset in zip(pitches, offsets):
-            events.append((tick + offset, 2, pitch, CHANNEL, mido.Message("note_on", channel=CHANNEL, note=pitch, velocity=velocity)))
-            events.append((tick + length, 0, pitch, CHANNEL, mido.Message("note_off", channel=CHANNEL, note=pitch, velocity=0)))
+        for start, end, pitch, vel in chord_notes(project, chord, length, phrase_mode, ticks_per_beat):
+            events.append((tick + start, 2, pitch, CHANNEL, mido.Message("note_on", channel=CHANNEL, note=pitch, velocity=vel)))
+            events.append((tick + end, 0, pitch, CHANNEL, mido.Message("note_off", channel=CHANNEL, note=pitch, velocity=0)))
         if phrase_mode != "chords":
             for e in chord.phrase_events:
                 pitch = e.note.midi

@@ -6,7 +6,9 @@ import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { analyzeData } from "./engine/analysis.js";
-import { TICKS_PER_BEAT, beatsToTicks, midiBytes, strumPlan } from "./engine/midi.js";
+import { compOptions, generateGroove } from "./engine/groove.js";
+import { TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
+import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 import { VOICINGS, revoiceChord } from "./engine/voicing.js";
@@ -14,10 +16,12 @@ import { LARGE_BANK_BYTES, SAME, SIMPLE, SoundFontPlayer, formatSize, parsePatch
 
 const DRAFT_KEY = "harmonalab:draft:v1";
 const SOUND_KEY = "harmonalab:sound";
+const GROOVE_KEY = "harmonalab:groove";
+const CUSTOM_COMP = "custom"; // levada escrita à mão (ou vinda num projeto), que não é uma das opções do estilo
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
-const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale"];
+const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale", "comp"];
 const PHRASE_MODES = ["both", "line", "chords"]; // acorde + frase · mão esquerda + frase · só acorde
 const STRUM_LABEL = { up: "grave → agudo", down: "agudo → grave" };
 const DEFAULT_STRUM_DELAY_MS = 20;
@@ -93,6 +97,7 @@ const state = {
   playing: false,
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
   sound: { chords: SIMPLE, phrase: SAME }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
+  groove: { style: STYLES[0].id, variation: 0 }, // estilo do ritmo e das frases, e qual variação das frases
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
 const player = new Player();
@@ -126,7 +131,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", ...extra,
   };
 }
 
@@ -148,7 +153,8 @@ function toEditable(data) {
       bass: text(c.bass), notes: text(c.notes),
       top_note: text(c.top_note), velocity: c.velocity ?? "", strum: text(c.strum),
       omitted: text(c.omitted), comment: text(c.comment), function: text(c.function), scale: text(c.scale),
-      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale),
+      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color),
+      comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -164,6 +170,7 @@ function toEditable(data) {
     comment: data.comment ?? "",
     key: typeof data.key === "string" ? data.key : "",
     style: typeof data.style === "string" ? data.style : "",
+    groove: data.groove && typeof data.groove === "object" ? { comp: String(data.groove.comp || "") } : { comp: "" },
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     chords,
   };
@@ -249,6 +256,8 @@ function renderMeta() {
 
 function renderSettings() {
   const p = state.project;
+  const known = styleByLabel(p.style);
+  if (known && known.id !== state.groove.style) state.groove.style = known.id;
   $("#title").value = p.title;
   $("#tempo").value = p.tempo;
   $("#default-velocity").value = p.default_velocity;
@@ -473,12 +482,14 @@ function chordCard(chord, index, total) {
   };
   const hasMore = Boolean(chord.strum || chord.bass || chord.notes || chord.omitted); // o comentário e a frase já aparecem no cartão
   r.more = h("details", { class: "more", open: hasMore },
-    h("summary", null, "Mais: função, escala, frase, strum, baixo/pedal e comentário"),
+    h("summary", null, "Mais: função, escala, frase, levada, strum, baixo/pedal e comentário"),
     h("div", { class: "more-body" },
       textField("Função (graus)", "function", "ex.: V7alt/ii"),
       textField("Escala ou modo", "scale", "ex.: menor melódica a partir de B"),
       phraseField("Frase (nota/duração, * para o papel)", "phrase", "ex.: G5/8 F5/8 Eb5/4*alvo", true),
-      phraseField("Escala da frase (sem oitava)", "phrase_scale", "ex.: B C D Eb F G A", true),
+      phraseField("Notas da escala (sem oitava)", "phrase_scale", "ex.: B C D Eb F G A", true),
+      phraseField("Cor da frase (dentro, cromatico ou outside)", "phrase_color", "vazio = costume do estilo"),
+      phraseField("Levada (ritmo do acorde)", "comp", "ex.: E/4 D/8 D/8 E/4 D/4", true),
       h("label", { class: "field wide", for: `f-${chord.id}-strum` }, h("span", { class: "label" }, "Strum deste acorde"), r.strum, r.msgs.strum),
       noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
       noteField(chord, r, "notes", "ex.: G3 B3"),
@@ -627,6 +638,7 @@ function renderAnalysis() {
       }, h("b", null, note.name), h("small", null, note.midi === topMidi ? `${note.midi} · topo` : note.midi))));
       const parts = ["grave → agudo"];
       if (info.strum && info.strum !== "off") parts.push(`strum ${STRUM_LABEL[info.strum]}, ${fmt(report.strum_delay_ms)} ms`);
+      if (info.comp) parts.push("com levada");
       if (info.spacing.length) parts.push(`intervalos entre vozes: ${info.spacing.join(" · ")} semitons`);
       if (info.doublings.length) parts.push(`dobras: ${info.doublings.join(", ")}`);
       r.spacing.textContent = parts.join(" — ");
@@ -640,7 +652,7 @@ function renderAnalysis() {
       if (r.inputs[field]) r.inputs[field].setAttribute("aria-invalid", String(messages.length > 0));
       if (messages.length) {
         hasError = true;
-        if (["bass", "notes", "omitted", "strum", "phrase", "phrase_scale"].includes(field)) r.more.open = true;
+        if (["bass", "notes", "omitted", "strum", "phrase", "phrase_scale", "comp"].includes(field)) r.more.open = true;
       }
     }
     const rest = issues.filter((i) => !(i.level === "error" && CHORD_FIELDS.includes(i.field)));
@@ -657,6 +669,7 @@ function renderAnalysis() {
   }
 
   renderPhraseMode();
+  renderGroove();
   updateSoundPhraseField();
   renderSummary();
   assistant?.refresh();
@@ -770,30 +783,33 @@ function removeChord(chord) {
   toast(`Acorde ${index + 1}${chord.symbol ? ` (${chord.symbol})` : ""} removido.`, { action: { label: "Desfazer", run: undo } });
 }
 
-function chordsForPlayback(only = null) {
-  const bpb = beatsPerBar();
-  const tempo = toNumber(state.project.tempo);
-  const bpm = tempo > 0 ? tempo : 80;
-  const delay = toNumber(state.project.strum.delay_ms);
-  return state.project.chords
-    .filter((c) => !only || c === only)
-    .map((c) => {
-      const info = state.byId.get(c.id)?.chord;
-      const mode = state.phraseMode;
-      // "mão esquerda + frase": a mão direita sai e a frase canta no lugar dela (o mesmo que o MIDI exporta)
-      let midis = info ? info.notes.filter((n) => mode !== "line" || n.part !== "right_hand").map((n) => n.midi) : [];
-      const secondsPerTick = 60 / bpm / TICKS_PER_BEAT;
-      const phrase = mode === "chords" || !info?.phrase ? []
-        : info.phrase.events.map((e) => ({ midi: e.midi, start: e.start * secondsPerTick, length: e.length * secondsPerTick }));
-      let offsets = midis.map(() => 0); // segundos depois do início do acorde
-      if (info && info.strum !== "off" && delay > 0) {
-        // o mesmo cálculo do MIDI: o que você ouve aqui é o que sai no arquivo
-        const plan = strumPlan(midis.length, delay, bpm, beatsToTicks(info.duration_beats));
-        offsets = plan.offsets.map((ticks) => (ticks / TICKS_PER_BEAT) * (60 / bpm));
-        if (info.strum === "down") midis = midis.slice().reverse();
-      }
-      return { midis, offsets, phrase, velocity: info?.velocity ?? 80, beats: info?.duration_beats ?? bpb };
-    });
+/**
+ * O projeto que a pré-escuta toca: a progressão inteira ou um acorde só (no máximo ~4 s, se ele não tiver frase nem levada).
+ * É lido pelo motor como na exportação, então o que se ouve é o que sai no arquivo.
+ */
+function previewProject(only = null) {
+  const { project } = readProject(toPayload());
+  const index = only ? state.project.chords.indexOf(only) : -1;
+  if (only) {
+    project.chords = [project.chords[index]];
+    const [chord] = project.chords;
+    if (!chord.phrase_events.length && !chord.comp_layers.length) chord.duration_beats = Math.min(chord.duration_beats, (project.tempo / 60) * 4);
+  }
+  return { project, index };
+}
+
+/** Timbre simples: toca a lista de notas do motor (acordes, levada, strum e frase). */
+function playSimple(project, index, { onEnd }) {
+  const seconds = 60 / project.tempo / TICKS_PER_BEAT;
+  const { notes, starts, end } = noteEvents(project, { phraseMode: state.phraseMode });
+  player.play(
+    notes.map((n) => ({ midi: n.pitch, start: n.start * seconds, length: (n.end - n.start) * seconds, velocity: n.velocity })),
+    {
+      steps: starts.map((tick, i) => ({ time: tick * seconds, index: index >= 0 ? index : i })),
+      total: end * seconds, onStep: (i) => setPlaying(i), onEnd,
+    },
+  );
+  return notes.length;
 }
 
 function setPlaying(index) {
@@ -821,14 +837,10 @@ async function playAll() {
   if (state.playing) return stopPlayback();
   if (usingSoundFont()) soundFont.unlock(); // no toque, antes de esperar qualquer coisa (exigência do iPhone)
   await validateNow();
-  const bpm = toNumber(state.project.tempo);
   state.playing = true;
   renderPlayButton();
   if (usingSoundFont() && (await playWithSoundFont())) return;
-  player.play(chordsForPlayback(), bpm > 0 ? bpm : 80, {
-    onStep: (i) => setPlaying(i),
-    onEnd: () => stopPlayback(),
-  });
+  playSimple(previewProject().project, -1, { onEnd: () => stopPlayback() });
 }
 
 async function playOne(chord) {
@@ -836,12 +848,103 @@ async function playOne(chord) {
   if (usingSoundFont()) soundFont.unlock();
   await validateNow();
   if (usingSoundFont() && (await playWithSoundFont(chord))) return;
-  const bpm = toNumber(state.project.tempo);
-  const [data] = chordsForPlayback(chord);
-  if (!data.midis.length && !data.phrase.length) { toast("Este acorde ainda não tem notas válidas."); return; }
-  const index = state.project.chords.indexOf(chord);
-  if (!data.phrase.length) data.beats = Math.min(data.beats, (bpm > 0 ? bpm : 80) / 60 * 4); // no máximo ~4 s
-  player.play([data], bpm > 0 ? bpm : 80, { onStep: () => setPlaying(index), onEnd: () => setPlaying(-1) });
+  const { project, index } = previewProject(chord);
+  if (!playSimple(project, index, { onEnd: () => setPlaying(-1) })) { player.stop(); toast("Este acorde ainda não tem notas válidas."); }
+}
+
+// ---------------------------------------------------------------- ritmo e frases (escritos pelo app, sem IA)
+const grooveStyle = () => findStyle(state.groove.style) ?? STYLES[0];
+const anyChord = (key) => state.project.chords.some((c) => String(c[key] || "").trim());
+
+function saveGroove() {
+  try { localStorage.setItem(GROOVE_KEY, JSON.stringify(state.groove)); } catch { /* sem armazenamento */ }
+}
+
+function loadGroove() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GROOVE_KEY) || "null");
+    if (saved && findStyle(saved.style)) state.groove = { style: saved.style, variation: Number.isInteger(saved.variation) ? saved.variation : 0 };
+  } catch { /* fica o padrão */ }
+}
+
+/** O painel: estilo, levada e o interruptor das frases, sempre a partir do que a progressão tem agora. */
+function renderGroove() {
+  if (!state.project) return;
+  const style = grooveStyle();
+  const styleSelect = $("#groove-style");
+  if (!styleSelect.children.length) styleSelect.replaceChildren(...STYLES.map((s) => h("option", { value: s.id }, s.label)));
+  styleSelect.value = style.id;
+  $("#groove-info").textContent = `${style.summary} Influências: ${style.influences.join(", ")}.`;
+
+  const options = compOptions(style);
+  const hasComp = anyChord("comp");
+  const chosen = state.project.groove?.comp || "";
+  const value = !hasComp ? "" : options.some((o) => o.id === chosen) ? chosen : CUSTOM_COMP;
+  $("#groove-comp").replaceChildren(
+    h("option", { value: "" }, "Desligada (acorde inteiro)"),
+    ...options.map((o) => h("option", { value: o.id }, o.label)),
+    ...(value === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizada (do projeto)")] : []),
+  );
+  $("#groove-comp").value = value;
+
+  const phrases = anyChord("phrase");
+  $("#groove-phrases").checked = phrases;
+  $("#groove-again").hidden = !phrases;
+}
+
+/** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
+function applyGroove({ comp, phrases }, message) {
+  const undo = snapshot();
+  stopPlayback();
+  const style = grooveStyle();
+  const result = generateGroove(toPayload(), { style, comp: comp || null, phrases: phrases === true, variation: state.groove.variation });
+  state.project.chords.forEach((chord, i) => {
+    const made = result.chords[i] || {};
+    if (comp !== undefined) chord.comp = comp ? made.comp ?? "" : "";
+    if (phrases === true) {
+      chord.phrase = made.phrase ?? "";
+      if (made.phrase_scale && !String(chord.phrase_scale || "").trim()) chord.phrase_scale = made.phrase_scale;
+    } else if (phrases === false) {
+      chord.phrase = "";
+    }
+  });
+  if (comp !== undefined) state.project.groove = { comp: comp || "" };
+  if (comp || phrases === true) state.project.style = style.label;
+  renderSettings();
+  renderChords();
+  validateNow();
+  saveDraftSoon();
+  toast([message, ...result.notes].join(" "), { action: { label: "Desfazer", run: undo }, timeout: result.notes.length ? 9000 : 4500 });
+}
+
+function bindGroove() {
+  loadGroove();
+  $("#groove-style").addEventListener("change", (e) => {
+    state.groove.style = e.target.value;
+    saveGroove();
+    const style = grooveStyle();
+    const current = state.project.groove?.comp || "";
+    const hasComp = anyChord("comp") && current && current !== CUSTOM_COMP;
+    const phrases = anyChord("phrase");
+    if (!hasComp && !phrases) { renderGroove(); return; }
+    const comp = hasComp ? (compOptions(style).some((o) => o.id === current) ? current : style.comps[0].id) : undefined;
+    applyGroove({ comp, phrases: phrases ? true : undefined }, `Ritmo e frases refeitos em ${style.label}.`);
+  });
+  $("#groove-comp").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id === CUSTOM_COMP) return;
+    const label = e.target.selectedOptions[0]?.textContent ?? "";
+    applyGroove({ comp: id }, id ? `Levada nos acordes: ${label}.` : "Levada desligada: cada acorde volta a soar inteiro.");
+  });
+  $("#groove-phrases").addEventListener("change", (e) => {
+    if (e.target.checked) applyGroove({ phrases: true }, `Frases escritas em ${grooveStyle().label}.`);
+    else applyGroove({ phrases: false }, "Frases apagadas.");
+  });
+  $("#groove-again").addEventListener("click", () => {
+    state.groove.variation += 1;
+    saveGroove();
+    applyGroove({ phrases: true }, `Outra variação das frases (${state.groove.variation + 1}).`);
+  });
 }
 
 // ---------------------------------------------------------------- banco de sons (.sf2)
@@ -856,13 +959,7 @@ async function playWithSoundFont(only = null) {
     toast("Há erros na progressão: por enquanto, ela toca com o timbre simples.");
     return false;
   }
-  const { project } = readProject(toPayload());
-  const index = only ? state.project.chords.indexOf(only) : -1;
-  if (only) {
-    project.chords = [project.chords[index]];
-    const [chord] = project.chords;
-    if (!chord.phrase_events.length) chord.duration_beats = Math.min(chord.duration_beats, (project.tempo / 60) * 4); // ~4 s
-  }
+  const { project, index } = previewProject(only);
   const bytes = midiBytes(project, { phraseMode: state.phraseMode });
   const slow = setTimeout(() => toast("Carregando o banco de sons…"), 500);
   try {
@@ -1171,6 +1268,7 @@ function bindUi() {
     e.target.value = "";
   });
   bindSettings();
+  bindGroove();
   bindSound();
 }
 

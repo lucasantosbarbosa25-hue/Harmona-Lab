@@ -35,8 +35,8 @@ def _preenchido(acorde, chave) -> bool:
 
 
 def problemas(relatorio: dict, projeto: dict | None = None) -> list[str]:
-    """O que bloqueia: erros do motor, ponta travada que não é a nota mais aguda, avisos da frase e, com o projeto,
-    a frase de função (comment) que falta em acordes e a escala que falta numa frase. É o mesmo critério do app."""
+    """O que bloqueia: erros do motor, ponta travada que não é a nota mais aguda, avisos da frase e da escala e, com o
+    projeto, a frase de função (comment) e as notas da escala (phrase_scale) que faltarem. É o mesmo critério do app."""
     saida = []
     for item in relatorio["issues"]:
         if item["level"] == "error" or (item["level"] == "warning" and item["field"] in CAMPOS_QUE_BLOQUEIAM):
@@ -49,10 +49,12 @@ def problemas(relatorio: dict, projeto: dict | None = None) -> list[str]:
                 onde = f"Projeto, campo {item['field']}: "
             saida.append(onde + item["message"])
     acordes = projeto.get("chords") if isinstance(projeto, dict) and isinstance(projeto.get("chords"), list) else []
-    sem_escala = [i + 1 for i, c in enumerate(acordes) if _preenchido(c, "phrase") and not _preenchido(c, "phrase_scale")]
-    if sem_escala:
-        saida.append(f'Acorde(s) {", ".join(map(str, sem_escala))}: a frase precisa vir com "phrase_scale" (as notas da escala, sem oitava).')
     if projeto is not None:
+        sem_escala = [c["index"] + 1 for c in relatorio["chords"]
+                      if not c["is_rest"] and not (c["index"] < len(acordes) and _preenchido(acordes[c["index"]], "phrase_scale"))]
+        if sem_escala:
+            saida.append('Faltam as notas da escala (campo "phrase_scale", sem oitava, como "B C D Eb F G A") no(s) acorde(s) '
+                         + ", ".join(map(str, sem_escala)) + ".")
         mudos = [c["index"] + 1 for c in relatorio["chords"]
                  if not c["is_rest"] and not (c["index"] < len(acordes) and _preenchido(acordes[c["index"]], "comment"))]
         if mudos:
@@ -149,6 +151,7 @@ def link_compacto(projeto: dict, base: str = BASE_PADRAO) -> str:
             texto(acorde.get("comment", "")),
             _frase_link(acorde.get("phrase", "")),
             _escala_link(acorde.get("phrase_scale", "")),
+            texto(acorde.get("phrase_color", "")),
         ]
         while campos and not campos[-1]:
             campos.pop()
