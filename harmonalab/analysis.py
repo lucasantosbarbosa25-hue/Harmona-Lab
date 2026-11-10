@@ -220,6 +220,7 @@ def analyze(project: Project, issues: list[Issue] | None = None) -> dict[str, An
         "middle_c": project.middle_c,
         "beats_per_bar": project.beats_per_bar,
         "strum_delay_ms": project.strum_delay_ms,
+        "drums": project.drums or None,
         "totals": {
             "chords": len(project.chords),
             "beats": total,

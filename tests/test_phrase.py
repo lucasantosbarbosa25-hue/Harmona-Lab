@@ -5,10 +5,10 @@ import json
 import pytest
 
 from harmonalab.analysis import analyze_data
-from harmonalab.midi_io import PHRASE_MODES, TICKS_PER_BEAT, build_midi, chord_notes, load_midi, midi_bytes, summarize_midi
+from harmonalab.midi_io import PHRASE_MODES, TICKS_PER_BEAT, build_midi, chord_notes, drum_notes, load_midi, midi_bytes, summarize_midi
 from harmonalab.model import Project, rename_project_notes
 from harmonalab.phrase import (
-    PhraseError, comp_text, duration_ticks, normalize_role, parse_comp, parse_phrase, parse_scale, phrase_text, rename_phrase_text, split_phrase,
+    PhraseError, comp_text, drums_text, duration_ticks, normalize_role, parse_comp, parse_drums, parse_phrase, parse_scale, phrase_text, rename_phrase_text, split_phrase,
 )
 
 PPQ = TICKS_PER_BEAT
@@ -326,3 +326,43 @@ def test_levada_com_erro_bloqueia_e_cor_da_frase_vai_e_volta():
     assert data["chords"][0]["phrase_color"] == "outside" and data["chords"][0]["comp"] == "T/8"
     assert analyze_data(one(comp="T/8"))["chords"][0]["comp"] == "T/8"
     assert messages(one(phrase="C5/4 Db5/4*outside", phrase_scale="C D E G")) == []  # outside não é cobrado na escala
+
+
+# ------------------------------------------------------------------ bateria
+
+
+ROCK = "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/4 K/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4"
+
+
+def test_bateria_le_compassos_camadas_e_pecas():
+    bars, errors = parse_drums(ROCK + " | K/4 S/4 ; C!/1")
+    assert errors == [] and len(bars) == 2 and [total for _, total in bars[0]] == [1920, 1920, 1920]
+    assert [h.part for h in bars[0][1][0]] == ["36", "36", "36"] and bars[0][2][0][0].accent == 16
+    assert drums_text(" K/4,S/4 ;; H/8 |  | r/1 ") == "K/4 S/4 ; H/8 | r/1"
+    _, errors = parse_drums("Z/4 K k/4 K/9")
+    assert len(errors) == 4 and "Peças: K bumbo" in errors[0]
+
+
+def test_bateria_repete_os_compassos_e_corta_no_fim():
+    project = Project.from_dict({"drums": "K/4 S/4 | K/8 K/8 S/4", "chords": [{"notes": "C4", "duration_beats": 10}]})
+    notes = drum_notes(project, 10 * PPQ)
+    kicks = [n[0] for n in notes if n[2] == 36]
+    assert kicks == [0, 960, 1920, 2160, 2880, 3120, 3840]  # compasso 1: a camada de 2 tempos se repete; compasso 2; e de novo o 1, cortado
+    assert max(n[1] for n in notes) == 10 * PPQ
+    assert drum_notes(Project.from_dict({"chords": [{"notes": "C4"}]}), 1920) == []
+
+
+def test_midi_com_bateria_tem_faixas_separadas_e_canal_10():
+    data = {"title": "Teste", "drums": ROCK, "chords": [{**B7ALT}, {"notes": "E3 B3"}]}
+    midi = build_midi(Project.from_dict(data))
+    assert midi.type == 1 and [t.name for t in midi.tracks] == ["Teste", "Frase", "Bateria"]
+    summary = summarize_midi(midi)
+    assert {n.channel for n in summary.notes} == {0, 1, 9}
+    assert sorted({n.pitch for n in summary.notes if n.channel == 9}) == [36, 38, 42]
+    assert summary.tempo_bpm == pytest.approx(80) and summary.length_ticks == 8 * PPQ
+    only_drums = build_midi(Project.from_dict({"drums": ROCK, "chords": [{"notes": "C4"}]}))
+    assert [t.name for t in only_drums.tracks] == ["Progressão", "Bateria"]
+    plain = build_midi(Project.from_dict({"chords": [{"notes": "C4"}]}))
+    assert plain.type == 0 and len(plain.tracks) == 1  # só acordes: o arquivo de sempre
+    assert Project.from_dict(data).to_dict()["drums"] == ROCK
+    assert not analyze_data({"drums": "Z/4", "chords": [{"notes": "C4"}]})["ok"]

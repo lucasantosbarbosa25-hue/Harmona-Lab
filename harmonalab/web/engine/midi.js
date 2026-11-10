@@ -1,16 +1,18 @@
 // Projeto → bytes de um arquivo MIDI (.mid) — espelho de harmonalab/midi_io.py.
 // Gera exatamente os mesmos bytes que o mido gera no Python (há teste comparando).
 //
-// Tipo 0 (uma faixa), 480 ticks por semínima, sem program change: acordes no canal 1 e frases no canal 2.
+// 480 ticks por semínima, sem program change. Só acordes: tipo 0 (uma faixa). Com frase ou bateria: tipo 1, com uma
+// faixa para os acordes (canal 1), uma para a frase (canal 2) e uma para a bateria (canal 10, General MIDI).
 // Nota comum entre acordes: o note_off vem antes do note_on no mesmo tick.
 
 import { roundHalfEven } from "./numbers.js";
-import { sounding, strumFor, velocityFor } from "./model.js";
+import { beatsPerBar, sounding, strumFor, velocityFor } from "./model.js";
 import { TICKS_PER_BEAT } from "./phrase.js";
 
 export { TICKS_PER_BEAT };
 const CHANNEL = 0;
 const PHRASE_CHANNEL = 1;
+export const DRUM_CHANNEL = 9;
 /** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
 export const PHRASE_MODES = ["both", "chords", "line"];
 
@@ -120,6 +122,11 @@ export function chordNotes(project, chord, length, phraseMode = "both", ticksPer
       }
     }
   }
+  return mergeSameKeys(notes);
+}
+
+/** A mesma tecla pedida duas vezes: no mesmo instante, fica a mais longa; depois, o toque novo corta o anterior. */
+function mergeSameKeys(notes) {
   const byPitch = new Map();
   for (const note of notes.slice().sort((a, b) => a[0] - b[0])) {
     if (!byPitch.has(note[2])) byPitch.set(note[2], []);
@@ -136,10 +143,34 @@ export function chordNotes(project, chord, length, phraseMode = "both", ticksPer
 }
 
 /**
+ * Notas da bateria (canal 10): [[início, fim, nota, velocity]] em ticks desde o começo da progressão.
+ * Os compassos escritos se repetem até o fim; em cada compasso, cada camada se repete até o fim do compasso.
+ */
+export function drumNotes(project, total, ticksPerBeat = TICKS_PER_BEAT) {
+  if (!project.drum_bars.length || total <= 0) return [];
+  const barTicks = Math.max(1, beatsToTicks(beatsPerBar(project), ticksPerBeat));
+  const notes = [];
+  for (let index = 0, barStart = 0; barStart < total; index++, barStart += barTicks) {
+    const barEnd = Math.min(barStart + barTicks, total);
+    for (const { hits, ticks } of project.drum_bars[index % project.drum_bars.length]) {
+      for (let base = barStart; base < barEnd; base += ticks) {
+        for (const hit of hits) {
+          const start = base + hit.start;
+          if (start >= barEnd) break;
+          const velocity = Math.max(1, Math.min(127, project.default_velocity + hit.accent));
+          notes.push([start, Math.min(start + hit.length, barEnd), hit.part, velocity]);
+        }
+      }
+    }
+  }
+  return mergeSameKeys(notes);
+}
+
+/**
  * Todas as notas do projeto, com tempo: { notes: [{start, end, pitch, velocity, channel, chord}], starts (tick de cada
  * acorde), end }. É a lista de onde sai o arquivo .mid, e a pré-escuta do app toca a mesma lista.
  */
-export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode = "both" } = {}) {
+export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode = "both", drums = true } = {}) {
   if (!PHRASE_MODES.includes(phraseMode)) throw new Error(`phraseMode deve ser um de ${PHRASE_MODES.join(", ")} (recebido ${phraseMode}).`);
   const notes = [];
   const starts = [];
@@ -158,56 +189,64 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     }
     tick += length;
   });
+  for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat) : []) {
+    notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1 });
+  }
   return { notes, starts, end: tick };
 }
 
 /** Gera o .mid exatamente com as notas, oitavas e durações do projeto. */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both" } = {}) {
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true } = {}) {
   const [num, den] = project.time_signature;
-  const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode });
+  const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = [];
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [DRUM_CHANNEL]: [] };
   project.chords.forEach((chord, i) => {
-    if (markers && chord.symbol) events.push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
+    if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
   for (const n of notes) {
-    events.push([n.start, 2, n.pitch, { bytes: [0x90 | n.channel, n.pitch, n.velocity] }, n.channel]);
-    events.push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
+    events[n.channel].push([n.start, 2, n.pitch, { bytes: [0x90 | n.channel, n.pitch, n.velocity] }, n.channel]);
+    events[n.channel].push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
   }
-  events.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[4] - b[4]);
-
   const tempo = roundHalfEven(((60 * 1e6) / project.tempo) * 4 / 4);
-  const messages = [
-    [0, meta(0x03, metaTextBytes(project.title || "Harmona Lab"))],
-    [0, meta(0x58, [num, Math.log2(den), 24, 8])],
-    [0, meta(0x51, [(tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff])],
-  ];
-  let last = 0;
-  for (const [at, , , msg] of events) {
-    messages.push([at - last, msg]);
-    last = at;
-  }
-  messages.push([endTick - last, meta(0x2f, [])]);
 
-  // Faixa com "running status" (igual ao mido).
-  const track = [];
-  let running = null;
-  for (const [delta, msg] of messages) {
-    track.push(...varInt(delta));
-    if (msg.meta) {
-      track.push(...msg.bytes);
-      running = null;
-    } else {
-      const status = msg.bytes[0];
-      track.push(...(status === running ? msg.bytes.slice(1) : msg.bytes));
-      running = status;
+  // Uma faixa: nome, (compasso e andamento, na primeira), eventos com "running status" (igual ao mido) e fim.
+  const trackBytes = (name, items, header) => {
+    const messages = [[0, meta(0x03, metaTextBytes(name))]];
+    if (header) {
+      messages.push([0, meta(0x58, [num, Math.log2(den), 24, 8])]);
+      messages.push([0, meta(0x51, [(tempo >> 16) & 0xff, (tempo >> 8) & 0xff, tempo & 0xff])]);
     }
-  }
+    let last = 0;
+    for (const [at, , , msg] of items.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[4] - b[4])) {
+      messages.push([at - last, msg]);
+      last = at;
+    }
+    messages.push([endTick - last, meta(0x2f, [])]);
+    const track = [];
+    let running = null;
+    for (const [delta, msg] of messages) {
+      track.push(...varInt(delta));
+      if (msg.meta) {
+        track.push(...msg.bytes);
+        running = null;
+      } else {
+        const status = msg.bytes[0];
+        track.push(...(status === running ? msg.bytes.slice(1) : msg.bytes));
+        running = status;
+      }
+    }
+    return track;
+  };
 
+  const title = project.title || "Harmona Lab";
+  const tracks = [trackBytes(title, events[CHANNEL], true)];
+  if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
+  if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));
   const u32 = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   const u16 = (n) => [(n >> 8) & 0xff, n & 0xff];
   return new Uint8Array([
-    0x4d, 0x54, 0x68, 0x64, ...u32(6), ...u16(0), ...u16(1), ...u16(ticksPerBeat), // MThd
-    0x4d, 0x54, 0x72, 0x6b, ...u32(track.length), ...track, // MTrk
+    0x4d, 0x54, 0x68, 0x64, ...u32(6), ...u16(tracks.length > 1 ? 1 : 0), ...u16(tracks.length), ...u16(ticksPerBeat), // MThd
+    ...tracks.flatMap((track) => [0x4d, 0x54, 0x72, 0x6b, ...u32(track.length), ...track]), // MTrk
   ]);
 }

@@ -3,7 +3,8 @@
 Usa ``mido``: controle total de ticks, sem conversões em ponto flutuante.
 
 Decisões:
-  - Arquivo MIDI tipo 0 (uma única faixa): abre igual em qualquer DAW.
+  - Só acordes: arquivo MIDI tipo 0 (uma única faixa), que abre igual em qualquer DAW. Com frase ou bateria: tipo 1,
+    com uma faixa para os acordes, uma para a frase (canal 2) e uma para a bateria (canal 10, General MIDI).
   - 480 ticks por semínima. Todas as posições são somadas em ticks inteiros,
     então não há deriva: 4 tempos em 4/4 = 1920 ticks = 1 compasso, em
     qualquer BPM.
@@ -29,6 +30,7 @@ from .timing import TICKS_PER_BEAT, beats_to_ticks, strum_plan  # noqa: F401 (re
 
 CHANNEL = 0
 PHRASE_CHANNEL = 1
+DRUM_CHANNEL = 9
 #: O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase).
 PHRASE_MODES = ("both", "chords", "line")
 
@@ -112,7 +114,11 @@ def chord_notes(project: Project, chord, length: int, phrase_mode: str = "both",
                 vel = max(1, min(127, velocity + hit.accent))
                 notes.extend(block(_hit_notes(voices, hit.part, scale), start, min(start + hit.length, length), vel))
             base += total
-    # A mesma tecla pedida duas vezes: no mesmo instante, fica a mais longa; depois, o toque novo corta o anterior.
+    return _merge_same_keys(notes)
+
+
+def _merge_same_keys(notes: list[tuple[int, int, int, int]]) -> list[tuple[int, int, int, int]]:
+    """A mesma tecla pedida duas vezes: no mesmo instante, fica a mais longa; depois, o toque novo corta o anterior."""
     by_pitch: dict[int, list[tuple[int, int, int, int]]] = {}
     for note in sorted(notes, key=lambda n: n[0]):
         same = by_pitch.setdefault(note[2], [])
@@ -124,6 +130,34 @@ def chord_notes(project: Project, chord, length: int, phrase_mode: str = "both",
             same[-1] = (same[-1][0], note[0], same[-1][2], same[-1][3])
         same.append(note)
     return sorted((n for group in by_pitch.values() for n in group if n[1] > n[0]), key=lambda n: (n[0], n[2]))
+
+
+def drum_notes(project: Project, total: int, ticks_per_beat: int = TICKS_PER_BEAT) -> list[tuple[int, int, int, int]]:
+    """Notas da bateria (canal 10): [(início, fim, nota, velocity)] em ticks desde o começo da progressão.
+
+    Os compassos escritos se repetem até o fim; em cada compasso, cada camada se repete até o fim do compasso.
+    """
+    if not project.drum_bars or total <= 0:
+        return []
+    bar_ticks = max(1, beats_to_ticks(project.beats_per_bar, ticks_per_beat))
+    notes: list[tuple[int, int, int, int]] = []
+    index = 0
+    bar_start = 0
+    while bar_start < total:
+        bar_end = min(bar_start + bar_ticks, total)
+        for hits, layer_ticks in project.drum_bars[index % len(project.drum_bars)]:
+            base = bar_start
+            while base < bar_end:
+                for hit in hits:
+                    start = base + hit.start
+                    if start >= bar_end:
+                        break
+                    velocity = max(1, min(127, project.default_velocity + hit.accent))
+                    notes.append((start, min(start + hit.length, bar_end), int(hit.part), velocity))
+                base += layer_ticks
+        index += 1
+        bar_start += bar_ticks
+    return _merge_same_keys(notes)
 
 
 def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, markers: bool = True,
@@ -153,21 +187,38 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         tick += length
     end_tick = tick
 
-    events.sort(key=lambda e: (e[0], e[1], e[2], e[3]))
+    drums = [(start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel))
+             for start, _, pitch, vel in drum_notes(project, end_tick, ticks_per_beat)]
+    drums += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
+              for _, end, pitch, _ in drum_notes(project, end_tick, ticks_per_beat)]
+    phrase = [e for e in events if e[3] == PHRASE_CHANNEL]
+    chords = [e for e in events if e[3] != PHRASE_CHANNEL]
 
-    track = mido.MidiTrack()
-    track.append(mido.MetaMessage("track_name", name=_meta_text(project.title or "Harmona Lab"), time=0))
-    track.append(mido.MetaMessage("time_signature", numerator=num, denominator=den,
-                                  clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
-    track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(project.tempo), time=0))
-    last = 0
-    for at, _, _, _, msg in events:
-        track.append(msg.copy(time=at - last))
-        last = at
-    track.append(mido.MetaMessage("end_of_track", time=end_tick - last))
+    def make_track(name: str, items: list, header: bool) -> mido.MidiTrack:
+        track = mido.MidiTrack()
+        track.append(mido.MetaMessage("track_name", name=_meta_text(name), time=0))
+        if header:
+            track.append(mido.MetaMessage("time_signature", numerator=num, denominator=den,
+                                          clocks_per_click=24, notated_32nd_notes_per_beat=8, time=0))
+            track.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(project.tempo), time=0))
+        last = 0
+        for at, _, _, _, msg in sorted(items, key=lambda e: (e[0], e[1], e[2], e[3])):
+            track.append(msg.copy(time=at - last))
+            last = at
+        track.append(mido.MetaMessage("end_of_track", time=end_tick - last))
+        return track
 
-    midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
-    midi.tracks.append(track)
+    title = project.title or "Harmona Lab"
+    if not phrase and not drums:
+        midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
+        midi.tracks.append(make_track(title, chords, True))
+        return midi
+    midi = mido.MidiFile(type=1, ticks_per_beat=ticks_per_beat)
+    midi.tracks.append(make_track(title, chords, True))
+    if phrase:
+        midi.tracks.append(make_track("Frase", phrase, False))
+    if drums:
+        midi.tracks.append(make_track("Bateria", drums, False))
     return midi
 
 

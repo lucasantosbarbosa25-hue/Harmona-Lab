@@ -6,8 +6,8 @@ import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { analyzeData } from "./engine/analysis.js";
-import { compOptions, generateGroove } from "./engine/groove.js";
-import { TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
+import { beatOptions, compOptions, generateGroove } from "./engine/groove.js";
+import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
@@ -97,13 +97,14 @@ const state = {
   playing: false,
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
   sound: { chords: SIMPLE, phrase: SAME }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
-  groove: { style: STYLES[0].id, variation: 0 }, // estilo do ritmo e das frases, e qual variação das frases
+  groove: { style: STYLES[0].id, variation: 0, drumVariation: 0 }, // estilo do ritmo e das frases, e as variações das frases e das viradas
   listen: { loop: false, rate: 1 }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
 const player = new Player();
 const soundFont = new SoundFontPlayer(); // banco de sons (.sf2): só carrega a biblioteca quando alguém usa
 let soundTimers = [];
+let warnedNoKit = false;
 let soundRestored = false; // o banco guardado já foi lido (antes disso, não descartamos a escolha salva)
 let nextId = 1;
 
@@ -171,7 +172,8 @@ function toEditable(data) {
     comment: data.comment ?? "",
     key: typeof data.key === "string" ? data.key : "",
     style: typeof data.style === "string" ? data.style : "",
-    groove: data.groove && typeof data.groove === "object" ? { comp: String(data.groove.comp || "") } : { comp: "" },
+    groove: data.groove && typeof data.groove === "object" ? { comp: String(data.groove.comp || ""), drums: String(data.groove.drums || "") } : { comp: "", drums: "" },
+    drums: Array.isArray(data.drums) ? data.drums.join(" | ") : typeof data.drums === "string" ? data.drums : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     chords,
   };
@@ -796,6 +798,7 @@ function previewProject(only = null) {
     project.chords = [project.chords[index]];
     const [chord] = project.chords;
     if (!chord.phrase_events.length && !chord.comp_layers.length) chord.duration_beats = Math.min(chord.duration_beats, (project.tempo / 60) * 4);
+    project.drum_bars = []; // um acorde só: sem a bateria
   }
   return { project, index };
 }
@@ -805,13 +808,13 @@ function playSimple(project, index, { onEnd }) {
   const seconds = 60 / project.tempo / TICKS_PER_BEAT;
   const { notes, starts, end } = noteEvents(project, { phraseMode: state.phraseMode });
   player.play(
-    notes.map((n) => ({ midi: n.pitch, start: n.start * seconds, length: (n.end - n.start) * seconds, velocity: n.velocity })),
+    notes.map((n) => ({ midi: n.pitch, start: n.start * seconds, length: (n.end - n.start) * seconds, velocity: n.velocity, drum: n.channel === DRUM_CHANNEL })),
     {
       steps: starts.map((tick, i) => ({ time: tick * seconds, index: index >= 0 ? index : i })),
       total: end * seconds, onStep: (i) => setPlaying(i), onEnd,
     },
   );
-  return notes.length;
+  return notes.filter((n) => n.channel !== DRUM_CHANNEL).length;
 }
 
 function setPlaying(index) {
@@ -873,7 +876,9 @@ function saveGroove() {
 function loadGroove() {
   try {
     const saved = JSON.parse(localStorage.getItem(GROOVE_KEY) || "null");
-    if (saved && findStyle(saved.style)) state.groove = { style: saved.style, variation: Number.isInteger(saved.variation) ? saved.variation : 0 };
+    if (saved && findStyle(saved.style)) {
+      state.groove = { style: saved.style, variation: Number.isInteger(saved.variation) ? saved.variation : 0, drumVariation: Number.isInteger(saved.drumVariation) ? saved.drumVariation : 0 };
+    }
   } catch { /* fica o padrão */ }
 }
 
@@ -899,17 +904,36 @@ function renderGroove() {
   );
   $("#groove-comp").value = value;
 
+  const beats = beatOptions(style);
+  const hasDrums = Boolean(String(state.project.drums || "").trim());
+  const beat = state.project.groove?.drums || "";
+  const drumValue = !hasDrums ? "" : beats.some((o) => o.id === beat) ? beat : CUSTOM_COMP;
+  $("#groove-drums").replaceChildren(
+    h("option", { value: "" }, "Desligada"),
+    ...beats.map((o) => h("option", { value: o.id }, o.label)),
+    ...(drumValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizada (do projeto)")] : []),
+  );
+  $("#groove-drums").value = drumValue;
+  $("#groove-fill-row").hidden = !hasDrums || drumValue === CUSTOM_COMP;
+
   const phrases = anyChord("phrase");
   $("#groove-phrases").checked = phrases;
   $("#groove-again").hidden = !phrases;
 }
 
 /** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
-function applyGroove({ comp, phrases }, message) {
+function applyGroove({ comp, phrases, drums }, message) {
   const undo = snapshot();
   stopPlayback();
   const style = grooveStyle();
-  const result = generateGroove(toPayload(), { style, comp: comp || null, phrases: phrases === true, variation: state.groove.variation });
+  const result = generateGroove(toPayload(), {
+    style, comp: comp || null, phrases: phrases === true, variation: state.groove.variation,
+    drums: drums || null, drumVariation: state.groove.drumVariation,
+  });
+  if (drums !== undefined) {
+    state.project.drums = drums ? result.drums ?? "" : "";
+    state.project.groove = { ...state.project.groove, drums: drums || "" };
+  }
   state.project.chords.forEach((chord, i) => {
     const made = result.chords[i] || {};
     if (comp !== undefined) chord.comp = comp ? made.comp ?? "" : "";
@@ -920,8 +944,8 @@ function applyGroove({ comp, phrases }, message) {
       chord.phrase = "";
     }
   });
-  if (comp !== undefined) state.project.groove = { comp: comp || "" };
-  if (comp || phrases === true) state.project.style = style.label;
+  if (comp !== undefined) state.project.groove = { ...state.project.groove, comp: comp || "" };
+  if (comp || drums || phrases === true) state.project.style = style.label;
   renderSettings();
   renderChords();
   validateNow();
@@ -943,15 +967,29 @@ function bindGroove() {
     const current = state.project.groove?.comp || "";
     const hasComp = anyChord("comp") && current && current !== CUSTOM_COMP;
     const phrases = anyChord("phrase");
-    if (!hasComp && !phrases) { renderGroove(); return; }
+    const beat = state.project.groove?.drums || "";
+    const hasDrums = Boolean(String(state.project.drums || "").trim()) && beat && beat !== CUSTOM_COMP;
+    if (!hasComp && !phrases && !hasDrums) { renderGroove(); return; }
     const comp = hasComp ? (compOptions(style).some((o) => o.id === current) ? current : style.comps[0].id) : undefined;
-    applyGroove({ comp, phrases: phrases ? true : undefined }, `Ritmo e frases refeitos em ${style.label}.`);
+    const drums = hasDrums ? (beatOptions(style).some((o) => o.id === beat) ? beat : style.beats[0].id) : undefined;
+    applyGroove({ comp, drums, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
   });
   $("#groove-comp").addEventListener("change", (e) => {
     const id = e.target.value;
     if (id === CUSTOM_COMP) return;
     const label = e.target.selectedOptions[0]?.textContent ?? "";
     applyGroove({ comp: id }, id ? `Levada nos acordes: ${label}.` : "Levada desligada: cada acorde volta a soar inteiro.");
+  });
+  $("#groove-drums").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id === CUSTOM_COMP) return;
+    const label = e.target.selectedOptions[0]?.textContent ?? "";
+    applyGroove({ drums: id }, id ? `Bateria: ${label}.` : "Bateria desligada.");
+  });
+  $("#groove-fill").addEventListener("click", () => {
+    state.groove.drumVariation += 1;
+    saveGroove();
+    applyGroove({ drums: state.project.groove?.drums }, "Outras viradas sorteadas.");
   });
   $("#groove-phrases").addEventListener("change", (e) => {
     if (e.target.checked) applyGroove({ phrases: true }, `Frases escritas em ${grooveStyle().label}.`);
@@ -977,7 +1015,12 @@ async function playWithSoundFont(only = null, onEnd = null) {
     return false;
   }
   const { project, index } = previewProject(only);
-  const bytes = midiBytes(project, { phraseMode: state.phraseMode });
+  const kit = soundFont.bank?.presets?.some((p) => p.isDrum);
+  if (project.drum_bars.length && !kit && !warnedNoKit) {
+    warnedNoKit = true;
+    toast("Este banco de sons não tem kit de bateria: a bateria fica muda com ele (no timbre simples ela toca).");
+  }
+  const bytes = midiBytes(project, { phraseMode: state.phraseMode, drums: Boolean(kit) });
   const slow = setTimeout(() => toast("Carregando o banco de sons…"), 500);
   try {
     await soundFont.play(bytes, {

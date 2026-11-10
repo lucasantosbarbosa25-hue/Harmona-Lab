@@ -13,7 +13,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .phrase import CompHit, PhraseEvent, comp_text, parse_comp, parse_phrase, parse_scale, phrase_text, rename_phrase_text
+from .phrase import CompHit, PhraseEvent, comp_text, drums_text, parse_comp, parse_drums, parse_phrase, parse_scale, phrase_text, rename_phrase_text
 from .pitch import (
     DEFAULT_MIDDLE_C,
     MIDDLE_C_OFFSETS,
@@ -174,6 +174,8 @@ class Project:
     key: str = ""  # tonalidade (ex.: "Em"), só informativa
     references: list[str] = field(default_factory=list)  # artistas e músicas de referência
     style: str = ""  # levada das frases (ex.: "Neo-soul"), só informativa
+    drums: str = ""  # bateria: compassos separados por "|" (ver phrase.py); vai para o canal 10
+    drum_bars: list = field(default_factory=list)  # derivado de drums
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
@@ -213,6 +215,8 @@ class Project:
             d["references"] = list(self.references)
         if self.style:
             d["style"] = self.style
+        if self.drums:
+            d["drums"] = self.drums
         if self.comment:
             d["comment"] = self.comment
         return d
@@ -294,6 +298,15 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         project.key = data["key"].strip()
     if isinstance(data.get("style"), str):
         project.style = data["style"].strip()
+    drums = data.get("drums")
+    if drums not in (None, ""):
+        if isinstance(drums, (str, list, tuple)):
+            project.drums = drums_text(drums)
+            project.drum_bars, errors = parse_drums(project.drums)
+            for message in errors:
+                issues.append(Issue("error", message, None, "drums"))
+        else:
+            issues.append(Issue("error", 'A bateria ("drums") deve ser um texto, por exemplo "H/8 H/8 H/8 H/8 ; K/4 r/4 ; r/4 S/4".', None, "drums"))
     refs = data.get("references")
     if isinstance(refs, str):
         refs = [t for t in re.split(r"[,;]", refs)]

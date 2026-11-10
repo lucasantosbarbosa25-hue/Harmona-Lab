@@ -187,3 +187,64 @@ export function parseComp(value) {
   }
   return { layers, errors };
 }
+
+// ---------------------------------------------------------------------------
+// Bateria ("drums", no projeto): compassos separados por "|"; em cada compasso, camadas separadas por ";" soam juntas.
+//   "H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"
+// Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve). Cada camada se repete até o fim do compasso, e a
+// sequência de compassos se repete até o fim da progressão. As peças seguem o padrão General MIDI (canal 10).
+// ---------------------------------------------------------------------------
+
+/** Peça → nota MIDI (General MIDI). */
+export const DRUM_PIECES = {
+  K: 36, S: 38, X: 37, H: 42, O: 46, P: 44, R: 51, E: 53, C: 49,
+  T: 50, M: 47, F: 43, B: 56, L: 75, A: 54, Q: 70, G: 63, N: 64,
+};
+const DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, "
+  + "T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas";
+const DRUM_TOKEN_RE = /^([A-Z]|r)([!?]?)$/;
+
+/** Compassos → camadas → fichas. */
+export function splitDrums(value) {
+  if (value == null) return [];
+  const text = Array.isArray(value) ? value.map(String).join(" | ") : String(value);
+  return text.split("|")
+    .map((bar) => bar.split(";").map((layer) => layer.trim().split(/[\s,]+/u).filter(Boolean)).filter((layer) => layer.length))
+    .filter((bar) => bar.length);
+}
+
+export const drumsText = (value) => splitDrums(value).map((bar) => bar.map((layer) => layer.join(" ")).join(" ; ")).join(" | ");
+
+/** Lê a bateria. Devolve { bars: [[{ hits: [{part (nota MIDI), start, length, accent}], ticks }]], errors }. */
+export function parseDrums(value) {
+  const bars = [];
+  const errors = [];
+  for (const bar of splitDrums(value)) {
+    const layers = [];
+    for (const tokens of bar) {
+      const hits = [];
+      let tick = 0;
+      for (const token of tokens) {
+        const [head, slash, durText] = partition(token, "/");
+        const m = head.match(DRUM_TOKEN_RE);
+        if (!slash || !durText || !m || (m[1] !== "r" && !Object.hasOwn(DRUM_PIECES, m[1]))) {
+          errors.push(`Não entendi "${token}" na bateria: escreva PEÇA/DURAÇÃO, por exemplo K/4, S!/8 (acento) ou r/8 (pausa). Peças: ${DRUM_NAMES}.`);
+          continue;
+        }
+        let length;
+        try {
+          length = durationTicks(durText);
+        } catch (err) {
+          if (!(err instanceof PhraseError)) throw err;
+          errors.push(`${err.message} (em "${token}")`);
+          continue;
+        }
+        if (m[1] !== "r") hits.push({ part: DRUM_PIECES[m[1]], start: tick, length, accent: COMP_ACCENT[m[2]] });
+        tick += length;
+      }
+      if (tick > 0) layers.push({ hits, ticks: tick });
+    }
+    if (layers.length) bars.push(layers);
+  }
+  return { bars, errors };
+}

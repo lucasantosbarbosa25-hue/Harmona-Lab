@@ -233,6 +233,7 @@ export function analyze(project, issues = []) {
     middle_c: project.middle_c,
     beats_per_bar: beatsPerBar(project),
     strum_delay_ms: project.strum_delay_ms,
+    drums: project.drums || null,
     totals: {
       chords: project.chords.length,
       beats: total,

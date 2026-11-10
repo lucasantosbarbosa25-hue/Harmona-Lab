@@ -149,6 +149,17 @@ CASES = [
     {"chords": [{"left_hand": "C2 G2", "right_hand": "E4 G4 Bb4", "comp": "S1/4 S2/4 S3/4 S9/4 ; m1/8 m2/8 m5/2."}]},  # sem escala: notas do acorde
     {"chords": [{"left_hand": "Db3", "phrase_scale": "C D E", "comp": "S1/4 S2/4 M1/4 M3/4"}, {"notes": "G9", "comp": "S5/4 M9/4"}]},  # baixo fora da escala; sem mão direita; teto do MIDI
     {"chords": [{"notes": "C4", "comp": "S0/4 M10/4 S/4 Sx/4"}]},
+    # bateria (canal 10, faixa própria): camadas, compassos que se repetem, acentos, corte no fim e outros compassos
+    {"drums": "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/4 K/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4", "chords": [{"notes": "C4 E4", "duration_beats": 8}]},
+    {"drums": "K/4 S/4 | K/8 K/8 S/4 ; C!/1 | r/2 T/8 M/8 F/8 F!/8", "tempo": 132, "chords": [{"notes": "C4"}, {"notes": "D4", "duration_beats": 6.5}],
+     "default_velocity": 110},
+    {"drums": ["K/4", "S/4 ; H/8t H/8t H/8t"], "time_signature": "3/4", "chords": [{"notes": "C4", "phrase": "C5/4 D5/4", "comp": "T/8"}, {"symbol": "Pausa"}]},
+    {"drums": "K/1 ; K/2 ; K/4 X/4", "time_signature": "6/8", "chords": [{"notes": "C4", "duration_beats": 5}]},  # mesma peça em camadas
+    {"drums": "r/4 | ; | K/4+8 Q/16q N/8. G/8 A/8 L/8 B/8 E/8 O/8 P/8 R/8", "chords": [{"duration_beats": 4}, {"notes": "C4"}]},
+    {"drums": "Z/4 K K/9 k/4 R!!/4 r!/4 KS/4 K/4+x", "chords": [{"notes": "C4"}]},
+    {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
+    {"drums": 5, "chords": [{"notes": "C4"}]},
+    {"drums": " | ; ", "chords": [{"notes": "C4"}]},
 ]
 
 

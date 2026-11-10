@@ -5,10 +5,10 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
-import { compFor, compOptions, generateGroove, makeRng } from "../../harmonalab/web/engine/groove.js";
-import { chordNotes, noteEvents } from "../../harmonalab/web/engine/midi.js";
+import { beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
+import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../../harmonalab/web/engine/midi.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
-import { durationTicks, parseComp } from "../../harmonalab/web/engine/phrase.js";
+import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
 import { COLORS, SOURCES, STYLES, findStyle, styleByLabel } from "../../harmonalab/web/kb/estilos.js";
 
 const EXAMPLE = JSON.parse(readFileSync(new URL("../../examples/resolucao_em_fsharp_ponta.json", import.meta.url), "utf8"));
@@ -144,4 +144,77 @@ test("a levada vira notas: camadas ao mesmo tempo, repetição até o fim do aco
   const events = noteEvents(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("samba"), comp: "teleco", phrases: true }))).project);
   assert.deepEqual(events.starts, [0, 1920, 3840, 5760]);
   assert.ok(events.notes.some((n) => n.channel === 1) && events.notes.filter((n) => n.channel === 0).length > 60);
+});
+
+test("bateria na base: cada estilo tem beat básico, variações e viradas de 1 ou 2 tempos", () => {
+  for (const style of STYLES) {
+    assert.ok(style.beats.length >= 3, `${style.id}: beat básico e pelo menos duas variações`);
+    assert.ok(style.fills.length >= 3, `${style.id}: pelo menos três viradas`);
+    for (const beat of style.beats) {
+      const { bars, errors } = parseDrums(beat.bars.join(" | "));
+      assert.deepEqual(errors, [], `${style.id}/${beat.id}`);
+      assert.equal(bars.length, beat.bars.length);
+      for (const bar of bars) for (const layer of bar) assert.equal(layer.ticks, 1920, `${style.id}/${beat.id}`);
+    }
+    for (const fill of style.fills) {
+      const { bars, errors } = parseDrums(fill);
+      assert.deepEqual(errors, [], `${style.id}: ${fill}`);
+      assert.ok([480, 960].includes(bars[0][0].ticks), `${style.id}: virada "${fill}"`);
+    }
+  }
+  assert.deepEqual([DRUM_PIECES.K, DRUM_PIECES.S, DRUM_PIECES.H], [36, 38, 42]); // General MIDI
+  assert.equal(ticksText(1440), "2+4");
+  assert.equal(ticksText(800), "4+4t");
+});
+
+test("a virada interrompe o beat no fim do compasso, o beat volta no tempo 1 e entra um ataque de prato", () => {
+  const style = findStyle("rock");
+  const data = { ...bare(), chords: [...bare().chords, ...bare().chords] }; // 8 compassos
+  const text = generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums;
+  const bars = text.split(" | ");
+  assert.equal(bars.length, 8);
+  assert.equal(bars[0], style.beats[0].bars[0]);
+  const { project } = loadProject({ ...data, drums: text });
+  const notes = drumNotes(project, 8 * 1920);
+  const inBar = (i) => notes.filter((n) => n[0] >= i * 1920 && n[0] < (i + 1) * 1920);
+  const sameBeat = (i) => JSON.stringify(inBar(i).map((n) => [n[0] - i * 1920, n[2]]));
+  assert.equal(sameBeat(1), sameBeat(0)); // compassos comuns: o beat inteiro
+  for (const fillBar of [3, 7]) {
+    assert.notEqual(sameBeat(fillBar), sameBeat(0), `compasso ${fillBar + 1} tem virada`);
+    const tail = inBar(fillBar).filter((n) => n[0] - fillBar * 1920 >= 960);
+    assert.ok(tail.every((n) => [38, 50, 47, 43, 36].includes(n[2])) && tail.length >= 2, "no fim do compasso só soa a virada (caixa, tons, bumbo)");
+  }
+  assert.ok(inBar(4).some((n) => n[0] === 4 * 1920 && n[2] === 49), "ataque de prato no tempo 1 depois da virada");
+  assert.ok(inBar(4).some((n) => n[0] === 4 * 1920 && n[2] === 36), "e o beat volta no tempo 1");
+  assert.notEqual(generateGroove(data, { style, drums: "basico", drumVariation: 5 }).drums, text); // outra virada
+  assert.equal(generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums, text);
+  assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project), style.beats[0].bars[0]); // um compasso só: sem virada
+  assert.equal(drumsFor(style, "nao-existe", project), "");
+  assert.deepEqual(beatOptions(style).map((o) => o.id), ["basico", "meio", "aberto"]);
+});
+
+test("a bateria gerada é válida em todos os estilos e compassos, e sai numa faixa própria no canal 10", () => {
+  for (const style of STYLES) {
+    for (const beat of style.beats) {
+      for (const signature of ["4/4", "3/4", "6/8", "5/4", "7/8"]) {
+        const data = { ...bare(), time_signature: signature, chords: [...bare().chords, ...bare().chords, ...bare().chords] };
+        const drums = generateGroove(data, { style, drums: beat.id, drumVariation: 1 }).drums;
+        const report = analyzeData({ ...data, drums });
+        assert.equal(report.ok, true, `${style.id}/${beat.id} em ${signature}`);
+        assert.equal(report.drums, drums);
+      }
+    }
+  }
+  const data = apply(bare(), generateGroove(bare(), { style: findStyle("funk"), comp: "clav", phrases: true, drums: "basico" }));
+  data.drums = generateGroove(bare(), { style: findStyle("funk"), drums: "basico" }).drums;
+  const { project } = loadProject(data);
+  const events = noteEvents(project);
+  assert.ok(events.notes.filter((n) => n.channel === DRUM_CHANNEL).length > 80);
+  assert.equal(noteEvents(project, { drums: false }).notes.filter((n) => n.channel === DRUM_CHANNEL).length, 0);
+  const bytes = midiBytes(project);
+  const text = Buffer.from(bytes).toString("latin1");
+  assert.deepEqual([bytes[9], bytes[11]], [1, 3]); // tipo 1, três faixas
+  assert.ok(text.includes("Frase") && text.includes("Bateria"));
+  const plain = midiBytes(loadProject({ chords: [{ notes: "C4 E4" }] }).project);
+  assert.deepEqual([plain[9], plain[11]], [0, 1]); // só acordes: continua tipo 0, uma faixa
 });

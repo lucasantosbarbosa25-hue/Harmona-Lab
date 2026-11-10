@@ -133,6 +133,10 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   teleco-teco, skank, Charleston…), e dois **ostinatos ou riffs** por estilo (boogie-woogie, baixo andando, guajeo, dedilhado
   de violão, riff de baixo…). O ostinato repete o mesmo desenho e segue a escala de cada acorde. Desligada, cada acorde soa
   inteiro, como antes.
+- **Bateria:** o beat do estilo (um básico e duas variações), com **viradas** sorteadas no último compasso e, nas
+  progressões longas, a cada quatro. A virada interrompe o beat no fim do compasso e ele volta no tempo 1, com um ataque
+  de prato. "Outra virada" sorteia de novo. No app ela toca com um kit sintético simples; com um banco de sons, usa o kit
+  do banco, se houver.
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
   conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
@@ -280,6 +284,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
+| `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO`. Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 
 **Papéis das notas da frase.** `*alvo` (nota de chegada: cai num tempo e é nota do acorde) e `*aprox` (aproximação: resolve por
@@ -454,7 +459,8 @@ cromáticas, por condução de vozes), cada uma exportável. Tudo entra **antes*
 ## Limitações conhecidas desta versão
 
 - A ponta travada é **validada** (aviso); o app só reorganiza voicings quando você pede, pelos botões (fechado, aberto, drop 2, drop 3, ponta pedal).
-- Uma faixa MIDI única (sem separar mãos em faixas): os acordes ficam no canal 1 e a frase, no canal 2.
+- MIDI: só com acordes, o arquivo tem uma faixa (tipo 0). Com frase ou bateria, tem uma faixa para cada coisa (tipo 1): acordes no canal 1, frase no canal 2 e bateria no canal 10. As mãos não são separadas em faixas.
+- A bateria do app é um kit sintético simples, para conferir o ritmo. Os beats foram escritos para 4/4 e saem na grade, sem a variação de um baterista.
 - As frases e levadas do app seguem regras e a base de conhecimento: saem corretas e com o ritmo do estilo, como bons exercícios, não como um solo inspirado. O app confere o que dá para medir (tempos, notas do acorde, semitom, escala, tamanho); se soa mesmo a salsa ou a neo-soul, só o seu ouvido diz. As levadas foram escritas para 4/4: em outros compassos elas se repetem e são cortadas no fim do acorde. Há tercinas e quiálteras de 5; outras divisões (setinas) não. O atraso proposital do neo-soul ("atrás do tempo") não é imitado: o MIDI sai na grade.
 - Sem banco de sons, a pré‑escuta é um timbre simples, só para conferir notas. Com um `.sf2`, o banco inteiro vai para a memória: bancos de centenas de MB podem travar o celular (o app pergunta antes). O tocador de SF2 foi testado com um banco gerado nos testes e no Chromium; o timbre de cada banco de verdade só o seu ouvido julga.
 - A DAW pode ignorar o BPM do arquivo ao importar (veja "Na DAW").

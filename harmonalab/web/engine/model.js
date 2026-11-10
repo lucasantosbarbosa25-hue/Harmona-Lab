@@ -2,7 +2,7 @@
 // As notas explícitas mandam; o símbolo do acorde é só um rótulo.
 
 import { fmtG, roundHalfEven, toNumber } from "./numbers.js";
-import { TICKS_PER_BEAT, compText, parseComp, parsePhrase, parseScale, phraseText, renamePhraseText } from "./phrase.js";
+import { TICKS_PER_BEAT, compText, drumsText, parseComp, parseDrums, parsePhrase, parseScale, phraseText, renamePhraseText } from "./phrase.js";
 import {
   DEFAULT_MIDDLE_C, NoteParseError, isMiddleC, noteName, parseNote, parseNoteList, renameNoteText, splitNoteList,
 } from "./pitch.js";
@@ -83,7 +83,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, key: "", references: [], style: "", strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
+    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -108,6 +108,7 @@ export function projectToDict(project) {
   if (project.key) d.key = project.key;
   if (project.references.length) d.references = [...project.references];
   if (project.style) d.style = project.style;
+  if (project.drums) d.drums = project.drums;
   if (project.comment) d.comment = project.comment;
   return d;
 }
@@ -160,6 +161,17 @@ export function loadProject(data) {
   if (data.comment) project.comment = String(data.comment);
   if (typeof data.key === "string") project.key = data.key.trim();
   if (typeof data.style === "string") project.style = data.style.trim();
+  const drums = data.drums;
+  if (drums !== undefined && drums !== null && drums !== "") {
+    if (typeof drums === "string" || Array.isArray(drums)) {
+      project.drums = drumsText(drums);
+      const parsed = parseDrums(project.drums);
+      project.drum_bars = parsed.bars;
+      for (const message of parsed.errors) issues.push(issue("error", message, null, "drums"));
+    } else {
+      issues.push(issue("error", 'A bateria ("drums") deve ser um texto, por exemplo "H/8 H/8 H/8 H/8 ; K/4 r/4 ; r/4 S/4".', null, "drums"));
+    }
+  }
   let refs = data.references;
   if (typeof refs === "string") refs = refs.split(/[,;]/);
   if (Array.isArray(refs)) project.references = refs.filter((t) => typeof t === "string" && t.trim()).map((t) => t.trim());

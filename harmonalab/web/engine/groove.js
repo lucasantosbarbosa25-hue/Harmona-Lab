@@ -6,7 +6,7 @@
 // (phrase_color: "dentro", "cromatico" ou "outside"; sem ela, vale o costume do estilo). O sorteio tem semente:
 // a mesma variação dá sempre a mesma frase.
 
-import { loadProject, sounding } from "./model.js";
+import { beatsPerBar, loadProject, sounding, totalBeats } from "./model.js";
 import { TICKS_PER_BEAT, durationTicks } from "./phrase.js";
 import { LETTER_PC, makeNote, noteName, pitchClass, pitchClassName } from "./pitch.js";
 
@@ -42,6 +42,74 @@ export const compOptions = (style) => (style?.comps ?? []).map(({ id, label, kin
 
 /** A levada (texto "comp") de um estilo. Os padrões usam partes e graus da escala, então servem para qualquer acorde. */
 export const compFor = (style, compId) => style?.comps.find((c) => c.id === compId)?.pattern ?? "";
+
+// ---------------------------------------------------------------- bateria
+
+/** Os beats que a tela oferece para um estilo, do básico às variações. */
+export const beatOptions = (style) => (style?.beats ?? []).map(({ id, label }) => ({ id, label }));
+
+const BINARY = [[1920, "1"], [960, "2"], [480, "4"], [240, "8"], [120, "16"], [60, "32"], [30, "64"]];
+const TRIPLETS = [[320, "4t"], [160, "8t"], [80, "16t"], [40, "32t"], [20, "64t"]];
+
+/** Uma duração qualquer escrita como soma de figuras ("2+4", "4+4t"), para pausas e cortes. */
+export function ticksText(ticks) {
+  const triplets = [];
+  while (ticks % 30 !== 0) {
+    const figure = TRIPLETS.find(([value]) => value <= ticks);
+    if (!figure) break;
+    triplets.push(figure[1]);
+    ticks -= figure[0];
+  }
+  const binary = [];
+  for (const [value, name] of BINARY) while (ticks >= value) { binary.push(name); ticks -= value; }
+  return [...binary, ...triplets].join("+");
+}
+
+/** Corta uma camada do beat em `cut` ticks (repetindo-a se for mais curta) e completa o compasso com pausa. */
+function cutLayer(layer, cut, barTicks) {
+  const tokens = layer.trim().split(/\s+/);
+  const out = [];
+  let at = 0;
+  for (let i = 0; at < cut; i++) {
+    const token = tokens[i % tokens.length];
+    const [head, dur] = token.split("/");
+    const ticks = durationTicks(dur);
+    out.push(at + ticks <= cut ? token : `${head}/${ticksText(cut - at)}`);
+    at += ticks;
+  }
+  if (barTicks > cut) out.push(`r/${ticksText(barTicks - cut)}`);
+  return out.join(" ");
+}
+
+/**
+ * A bateria da progressão inteira (texto "drums"): o beat do estilo, com uma virada no último compasso (e a cada quatro,
+ * nas progressões longas). A virada substitui o fim do compasso e o beat volta no tempo 1, com um ataque de prato.
+ */
+export function drumsFor(style, beatId, project, variation = 0) {
+  const beat = style?.beats.find((b) => b.id === beatId);
+  if (!beat) return "";
+  const barTicks = Math.round(beatsPerBar(project) * TICKS_PER_BEAT);
+  const bars = Math.ceil((totalBeats(project) * TICKS_PER_BEAT) / barTicks - 1e-9);
+  if (bars < 2 || barTicks < 2 * TICKS_PER_BEAT) return beat.bars.join(" | ");
+  const rng = makeRng(`${style.id}|${beatId}|bateria|${variation}`);
+  const fills = style.fills.map((text) => ({ text, ticks: text.split(/\s+/).reduce((n, t) => n + durationTicks(t.split("/")[1]), 0) }))
+    .filter((f) => f.ticks <= barTicks / 2);
+  const out = [];
+  let crash = false;
+  for (let i = 0; i < bars; i++) {
+    let layers = beat.bars[i % beat.bars.length].split(";").map((l) => l.trim());
+    const isFill = fills.length && (i === bars - 1 || (bars >= 8 && i % 4 === 3));
+    if (isFill) {
+      const fill = rng.pick(fills);
+      const cut = barTicks - fill.ticks;
+      layers = [...layers.map((l) => cutLayer(l, cut, barTicks)), `r/${ticksText(cut)} ${fill.text}`];
+    }
+    if (crash) layers.push(`C!/4 r/${ticksText(barTicks - TICKS_PER_BEAT)}`);
+    crash = isFill;
+    out.push(layers.join(" ; "));
+  }
+  return out.join(" | ");
+}
 
 // ---------------------------------------------------------------- frases
 
@@ -241,10 +309,11 @@ function speller(chord, middleC) {
 
 /**
  * Escreve a levada e/ou as frases de uma progressão.
- * data: o JSON do projeto. options: { style (da base), comp (id da levada ou null), phrases (bool), variation (número) }.
- * Devolve { chords: [{ comp, phrase, phrase_scale }] (só os campos pedidos), notes: [avisos em português] }.
+ * data: o JSON do projeto. options: { style (da base), comp (id da levada ou null), phrases (bool), variation (número),
+ * drums (id do beat ou null), drumVariation (número: sorteia as viradas) }.
+ * Devolve { chords: [{ comp, phrase, phrase_scale }] (só os campos pedidos), drums (texto, se pedido), notes: [avisos em português] }.
  */
-export function generateGroove(data, { style, comp = null, phrases = false, variation = 0 } = {}) {
+export function generateGroove(data, { style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0 } = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
   const warnings = [];
@@ -281,5 +350,5 @@ export function generateGroove(data, { style, comp = null, phrases = false, vari
       warnings.push(`${withoutScale} acorde(s) sem escala declarada: as frases deles usam só as notas do acorde. Peça à sua IA as notas da escala (ou escreva em “Mais”).`);
     }
   }
-  return { chords: out, notes: warnings };
+  return drums ? { chords: out, drums: drumsFor(style, drums, project, drumVariation), notes: warnings } : { chords: out, notes: warnings };
 }

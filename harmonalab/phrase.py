@@ -214,3 +214,66 @@ def parse_comp(value) -> tuple[list[tuple[list[CompHit], int]], list[str]]:
         if tick > 0:
             layers.append((hits, tick))
     return layers, errors
+
+
+# ---------------------------------------------------------------------------
+# Bateria ("drums", no projeto): compassos separados por "|"; em cada compasso, camadas separadas por ";" soam juntas.
+#
+#   "H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"
+#
+# Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve). Cada camada se repete até o fim do compasso, e a
+# sequência de compassos se repete até o fim da progressão. As peças seguem o padrão General MIDI (canal 10).
+# ---------------------------------------------------------------------------
+
+#: Peça → nota MIDI (General MIDI).
+DRUM_PIECES = {
+    "K": 36, "S": 38, "X": 37, "H": 42, "O": 46, "P": 44, "R": 51, "E": 53, "C": 49,
+    "T": 50, "M": 47, "F": 43, "B": 56, "L": 75, "A": 54, "Q": 70, "G": 63, "N": 64,
+}
+DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, " \
+             "T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas"
+_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)([!?]?)$")
+
+
+def split_drums(value) -> list[list[list[str]]]:
+    """Compassos → camadas → fichas."""
+    if value is None:
+        return []
+    text = " | ".join(str(v) for v in value) if isinstance(value, (list, tuple)) else str(value)
+    bars = [[[t for t in re.split(r"[\s,]+", layer.strip()) if t] for layer in bar.split(";")] for bar in text.split("|")]
+    bars = [[layer for layer in bar if layer] for bar in bars]
+    return [bar for bar in bars if bar]
+
+
+def drums_text(value) -> str:
+    return " | ".join(" ; ".join(" ".join(layer) for layer in bar) for bar in split_drums(value))
+
+
+def parse_drums(value) -> tuple[list[list[tuple[list[CompHit], int]]], list[str]]:
+    """Lê a bateria. Devolve ([compasso: [(toques da camada, duração em ticks)]], erros). Em cada toque, part = nota MIDI."""
+    bars: list[list[tuple[list[CompHit], int]]] = []
+    errors: list[str] = []
+    for bar in split_drums(value):
+        layers: list[tuple[list[CompHit], int]] = []
+        for tokens in bar:
+            hits: list[CompHit] = []
+            tick = 0
+            for token in tokens:
+                head, slash, dur_text = token.partition("/")
+                m = _DRUM_TOKEN_RE.match(head)
+                if not slash or not dur_text or not m or (m.group(1) != "r" and m.group(1) not in DRUM_PIECES):
+                    errors.append(f'Não entendi "{token}" na bateria: escreva PEÇA/DURAÇÃO, por exemplo K/4, S!/8 (acento) ou r/8 (pausa). Peças: {DRUM_NAMES}.')
+                    continue
+                try:
+                    length = duration_ticks(dur_text)
+                except PhraseError as exc:
+                    errors.append(f'{exc} (em "{token}")')
+                    continue
+                if m.group(1) != "r":
+                    hits.append(CompHit(str(DRUM_PIECES[m.group(1)]), tick, length, COMP_ACCENT[m.group(2)]))
+                tick += length
+            if tick > 0:
+                layers.append((hits, tick))
+        if layers:
+            bars.append(layers)
+    return bars, errors
