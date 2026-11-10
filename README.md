@@ -118,7 +118,7 @@ e copia o texto de correção para você colar na mesma conversa. **Ajustar a at
 - `#z=…`: a progressão comprimida, o link mais curto. **⋯ → Copiar link da progressão** gera um para você mandar a um amigo.
 - `#json=…` (o projeto) e `#pedido=…` (só preenche o pedido; o app nunca gera sozinho ao abrir um link).
 
-**Voicings à mão.** Em cada acorde, **Voicing da mão direita**: Fechado, Aberto, Drop 2 e Drop 3. Em **Mexer nos voicings de
+**Voicings à mão.** Em cada acorde, **Voicing da mão direita**: Fechado, Aberto, Drop 2, Quartal e Cluster. Os três primeiros só mudam as oitavas; o quartal empilha quartas sob a ponta e o cluster junta segundas sob ela, usando as notas da escala do acorde. Em **Mexer nos voicings de
 todos os acordes**, os mesmos botões valem para a progressão inteira, e a **ponta pedal** põe a mesma nota no topo de todos
 os acordes (o app avisa em quantos ela não fazia parte do acorde: é a tensão que você vai ouvir). Só mudam as oitavas da
 mão direita; tudo pode ser desfeito.
