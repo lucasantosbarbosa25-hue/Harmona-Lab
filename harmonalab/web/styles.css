@@ -490,3 +490,7 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .groove-title small { font-weight: 400; color: var(--muted); font-size: .8rem; margin-left: 4px; }
 .groove .ai-help { margin: -4px 0 0; }
 .groove-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Ouvir: repetir e andamento de estudo */
+.listen-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 10px; }
+.listen-rate { flex: 1; min-width: 170px; max-width: 240px; margin: 0; }

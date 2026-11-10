@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
-import { ARPEGGIOS, compFor, compOptions, generateGroove, makeRng } from "../../harmonalab/web/engine/groove.js";
+import { compFor, compOptions, generateGroove, makeRng } from "../../harmonalab/web/engine/groove.js";
 import { chordNotes, noteEvents } from "../../harmonalab/web/engine/midi.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { durationTicks, parseComp } from "../../harmonalab/web/engine/phrase.js";
@@ -27,7 +27,11 @@ test("a base de conhecimento é coerente: estilos pedidos, influências, levadas
   assert.equal(new Set(STYLES.map((s) => s.id)).size, STYLES.length);
   for (const style of STYLES) {
     assert.ok(style.influences.length && style.summary.length > 30, style.id);
-    assert.ok(style.comps.length >= 2, `${style.id}: pelo menos duas levadas`);
+    assert.ok(style.comps.filter((c) => !c.kind).length >= 3, `${style.id}: pelo menos três levadas`);
+    assert.ok(style.comps.filter((c) => c.kind === "ostinato").length >= 2, `${style.id}: pelo menos dois ostinatos ou riffs`);
+    const kinds = style.comps.map((c) => c.kind ?? "levada");
+    assert.deepEqual(kinds, [...kinds].sort(), `${style.id}: levadas primeiro, ostinatos depois`);
+    assert.equal(new Set(style.comps.map((c) => c.id)).size, style.comps.length);
     assert.ok(style.cells.length >= 8, `${style.id}: variedade rítmica`);
     for (const comp of style.comps) {
       const { layers, errors } = parseComp(comp.pattern);
@@ -39,7 +43,7 @@ test("a base de conhecimento é coerente: estilos pedidos, influências, levadas
       assert.ok(ticks % 480 === 0 && ticks <= 1920, `${style.id}: célula "${cell}" com ${ticks} ticks`);
     }
   }
-  for (const name of ["Jesús Molina", "Ed Motta", "Salomão Soares", "Cartola", "B.B. King", "Scott Henderson"]) {
+  for (const name of ["Jesús Molina", "Ed Motta", "Salomão Soares", "Cartola", "B.B. King", "Scott Henderson", "Joshua Domfeh"]) {
     assert.ok(STYLES.some((s) => s.influences.includes(name)), name);
   }
   assert.ok(findStyle("gospel").influences.length >= 6);
@@ -116,13 +120,16 @@ test("sem a escala, a frase usa só as notas do acorde e o app avisa", () => {
   assert.deepEqual(generateGroove({ chords: [{ symbol: "Pausa" }] }, { style: findStyle("rock"), comp: "colcheias", phrases: true }).chords, [{ comp: "", phrase: "" }]);
 });
 
-test("levadas: do estilo e arpejos que se adaptam ao número de notas", () => {
-  const style = findStyle("ska");
-  assert.deepEqual(compOptions(style).map((o) => o.id), ["skank", "soacorde", ...ARPEGGIOS.map((a) => a.id)]);
-  assert.equal(compFor(style, "arp-up", 4), "1/16 2/16 3/16 4/16");
-  assert.equal(compFor(style, "arp-down", 3), "3/16 2/16 1/16");
-  assert.equal(compFor(style, "arp-updown", 4), "1/16 2/16 3/16 4/16 3/16 2/16");
-  assert.equal(compFor(style, "nao-existe", 4), "");
+test("ostinatos e riffs: o desenho se repete e as notas seguem a escala de cada acorde", () => {
+  const style = findStyle("blues");
+  assert.deepEqual(compOptions(style).map((o) => `${o.kind}:${o.id}`), ["levada:shuffle", "levada:lento", "levada:stabs", "levada:stoptime", "ostinato:boogie", "ostinato:riffresposta"]);
+  assert.equal(compFor(style, "nao-existe"), "");
+  const made = generateGroove(bare(), { style, comp: "boogie" }).chords;
+  assert.equal(new Set(made.map((c) => c.comp)).size, 1); // o mesmo desenho em todos os acordes
+  const { project } = loadProject(apply(bare(), { chords: made }));
+  const low = (i) => chordNotes(project, project.chords[i], 1920).filter((n) => n[2] < 58).map((n) => n[2]);
+  assert.deepEqual(low(1), [47, 47, 53, 53, 55, 55, 53, 53]); // B7alt: B, depois o 5º e o 6º graus da escala alterada (F e G)
+  assert.deepEqual(low(3).filter((p) => p < 50).slice(0, 3), [40, 40, 47]); // Em9: E e a quinta do eólio (B)
 });
 
 test("a levada vira notas: camadas ao mesmo tempo, repetição até o fim do acorde, acentos e a mesma tecla sem sobrepor", () => {

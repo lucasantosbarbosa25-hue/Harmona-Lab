@@ -98,6 +98,7 @@ const state = {
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
   sound: { chords: SIMPLE, phrase: SAME }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
   groove: { style: STYLES[0].id, variation: 0 }, // estilo do ritmo e das frases, e qual variação das frases
+  listen: { loop: false, rate: 1 }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
 const player = new Player();
@@ -790,6 +791,7 @@ function removeChord(chord) {
 function previewProject(only = null) {
   const { project } = readProject(toPayload());
   const index = only ? state.project.chords.indexOf(only) : -1;
+  project.tempo *= state.listen.rate; // andamento de estudo: só na escuta
   if (only) {
     project.chords = [project.chords[index]];
     const [chord] = project.chords;
@@ -839,8 +841,16 @@ async function playAll() {
   await validateNow();
   state.playing = true;
   renderPlayButton();
-  if (usingSoundFont() && (await playWithSoundFont())) return;
-  playSimple(previewProject().project, -1, { onEnd: () => stopPlayback() });
+  await startAll();
+}
+
+/** Toca a progressão inteira; com "Repetir" ligado, recomeça quando chega ao fim. */
+async function startAll() {
+  const onEnd = () => {
+    if (state.playing && state.listen.loop) { soundTimers.forEach(clearTimeout); soundTimers = []; startAll(); } else stopPlayback();
+  };
+  if (usingSoundFont() && (await playWithSoundFont(null, onEnd))) return;
+  playSimple(previewProject().project, -1, { onEnd });
 }
 
 async function playOne(chord) {
@@ -880,9 +890,11 @@ function renderGroove() {
   const hasComp = anyChord("comp");
   const chosen = state.project.groove?.comp || "";
   const value = !hasComp ? "" : options.some((o) => o.id === chosen) ? chosen : CUSTOM_COMP;
+  const group = (label, kind) => h("optgroup", { label }, ...options.filter((o) => o.kind === kind).map((o) => h("option", { value: o.id }, o.label)));
   $("#groove-comp").replaceChildren(
     h("option", { value: "" }, "Desligada (acorde inteiro)"),
-    ...options.map((o) => h("option", { value: o.id }, o.label)),
+    group("Levadas", "levada"),
+    group("Ostinatos e riffs", "ostinato"),
     ...(value === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizada (do projeto)")] : []),
   );
   $("#groove-comp").value = value;
@@ -919,6 +931,11 @@ function applyGroove({ comp, phrases }, message) {
 
 function bindGroove() {
   loadGroove();
+  $("#listen-loop").addEventListener("change", (e) => { state.listen.loop = e.target.checked; });
+  $("#listen-rate").addEventListener("change", (e) => {
+    state.listen.rate = Number(e.target.value) || 1;
+    if (state.playing) stopPlayback();
+  });
   $("#groove-style").addEventListener("change", (e) => {
     state.groove.style = e.target.value;
     saveGroove();
@@ -954,7 +971,7 @@ const usingSoundFont = () => Boolean(soundFont.bank) && parsePatchValue(state.so
  * Toca com o banco de sons o mesmo MIDI que "Gerar MIDI" exporta (no modo de frase escolhido).
  * Devolve false quando não dá (há erros na progressão): aí quem chamou usa o timbre simples.
  */
-async function playWithSoundFont(only = null) {
+async function playWithSoundFont(only = null, onEnd = null) {
   if (!state.report?.ok) {
     toast("Há erros na progressão: por enquanto, ela toca com o timbre simples.");
     return false;
@@ -965,7 +982,7 @@ async function playWithSoundFont(only = null) {
   try {
     await soundFont.play(bytes, {
       chords: state.sound.chords, phrase: state.sound.phrase,
-      onEnd: () => (only ? setPlaying(-1) : stopPlayback()),
+      onEnd: onEnd ?? (() => (only ? setPlaying(-1) : stopPlayback())),
     });
   } catch (err) {
     clearTimeout(slow);

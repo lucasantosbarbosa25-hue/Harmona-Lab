@@ -143,6 +143,12 @@ CASES = [
     {"chords": [{"notes": "C4", "comp": "X/4 T T/9 T/ /4 E!!/4 0/4 10/4 r!/4 T/4+x"}, {"notes": "C4", "comp": {"a": 1}}, {"notes": "C4", "comp": 3}]},  # erros
     {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/8+8 D5/4+4t E5/8t+8t*alvo", "phrase_scale": "C D E G"}]},  # ligaduras na frase
     {"chords": [{"notes": "C4 E4 G4", "phrase": "C5/4 Db5/4*outside", "phrase_scale": "C D E G"}]},  # outside não é cobrado na escala
+    # levada com graus da escala (ostinatos e riffs): a partir do baixo (S) e da mão direita (M), com e sem escala
+    {"chords": [{"left_hand": "C2 G2", "right_hand": "E4 G4 Bb4", "phrase_scale": "C D E F G A Bb",
+                 "comp": "S1/8 S1/8 S5/8 S5/8 S6/8 S6/8 S7/8 S8/8 ; M1/4 M2/4 M3!/4 M9?/4"}]},
+    {"chords": [{"left_hand": "C2 G2", "right_hand": "E4 G4 Bb4", "comp": "S1/4 S2/4 S3/4 S9/4 ; m1/8 m2/8 m5/2."}]},  # sem escala: notas do acorde
+    {"chords": [{"left_hand": "Db3", "phrase_scale": "C D E", "comp": "S1/4 S2/4 M1/4 M3/4"}, {"notes": "G9", "comp": "S5/4 M9/4"}]},  # baixo fora da escala; sem mão direita; teto do MIDI
+    {"chords": [{"notes": "C4", "comp": "S0/4 M10/4 S/4 Sx/4"}]},
 ]
 
 

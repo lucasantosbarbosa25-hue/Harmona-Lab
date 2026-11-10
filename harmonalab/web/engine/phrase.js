@@ -22,13 +22,15 @@ export const SCALE_EXEMPT_ROLES = new Set(["aprox", "passagem", "cromatica", "bl
 /**
  * Levada do acorde: que notas do voicing cada toque usa. T = todas, E = mão esquerda e baixo, D = mão direita,
  * B = a nota mais grave, P = a ponta; um número (1 a 9) = a enésima nota a partir do grave (dá a volta se passar).
+ * Graus da escala do acorde (para ostinatos e riffs): S1 a S9 sobem a escala a partir da nota mais grave (S1 = ela mesma),
+ * M1 a M9 sobem a partir da nota mais grave da mão direita. Sem escala declarada, sobem pelas notas do acorde.
  */
 export const COMP_PARTS = ["T", "E", "D", "B", "P"];
 export const COMP_ACCENT = { "": 0, "!": 16, "?": -24 }; // ! = acento, ? = toque leve (somados à velocity)
 
 const SEPARATORS = /[\s,;|]+/u;
 const DURATION_RE = /^(\d+)([tq]?)(\.?)$/;
-const COMP_TOKEN_RE = /^([TEDBPtedbp]|[1-9]|[rR])([!?]?)$/;
+const COMP_TOKEN_RE = /^([TEDBPtedbp]|[1-9]|[sSmM][1-9]|[rR])([!?]?)$/;
 
 export class PhraseError extends Error {}
 
@@ -166,7 +168,7 @@ export function parseComp(value) {
       const m = head.match(COMP_TOKEN_RE);
       if (!slash || !durText || !m) {
         errors.push(`Não entendi "${token}" na levada: escreva PARTE/DURAÇÃO, por exemplo E/4, D/8, T!/8 (acento) ou r/8 (pausa). `
-          + "Partes: T (todas), E (esquerda), D (direita), B (baixo), P (ponta) ou 1 a 9 (a enésima nota).");
+          + "Partes: T (todas), E (esquerda), D (direita), B (baixo), P (ponta), 1 a 9 (a enésima nota) ou S1 a S9 / M1 a M9 (graus da escala).");
         continue;
       }
       let length;

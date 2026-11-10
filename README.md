@@ -129,8 +129,11 @@ desligado por padrão) decide se a IA pesquisa os artistas citados antes de comp
 Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
 
 - **Estilo:** Jazz swing, Blues, Jazz fusion, Neo-soul, Gospel americano, Funk, Salsa, Samba, Bossa nova, Rock ou Ska.
-- **Levada dos acordes:** duas ou três levadas por estilo (shuffle, montuno, teleco-teco, skank, Charleston…) e arpejos
-  (subindo, descendo, sobe e desce). Desligada, cada acorde soa inteiro, como antes.
+- **Levada dos acordes:** três ou quatro levadas por estilo, da mais tradicional à mais experimental (shuffle, montuno,
+  teleco-teco, skank, Charleston…), e dois **ostinatos ou riffs** por estilo (boogie-woogie, baixo andando, guajeo, dedilhado
+  de violão, riff de baixo…). O ostinato repete o mesmo desenho e segue a escala de cada acorde. Desligada, cada acorde soa
+  inteiro, como antes.
+- **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
   conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
 - **Cor pedida no prompt:** se o pedido falar em frases cromáticas ou *outside* (até "só nos dominantes"), a IA marca esses
@@ -275,7 +278,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto, `+` ligadura, como em `8+4`); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. |
 | `chords[].phrase_scale` | não (a IA sempre preenche) | Notas da escala do acorde, sem oitava (`"B C D Eb F G A"`): o app escreve e confere as frases com ela, e avisa se ela não contém as notas do acorde. |
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
-| `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
+| `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 

@@ -7,7 +7,10 @@
 //
 // Notação
 //   levada (comp): PARTE/DURAÇÃO, camadas separadas por ";" soam juntas. Partes: T = todas as notas, E = mão esquerda e baixo,
-//                  D = mão direita, B = a nota mais grave, P = a ponta. "!" = acento, "?" = toque leve, r = pausa.
+//                  D = mão direita, B = a nota mais grave, P = a ponta, 1 a 9 = a enésima nota do voicing. "!" = acento, "?" = toque leve, r = pausa.
+//                  Ostinatos e riffs (kind: "ostinato") usam também graus da escala do acorde: S1 a S9 sobem a partir do baixo e
+//                  M1 a M9 a partir da mão direita, então o desenho se repete e as notas acompanham cada acorde.
+//                  Em cada estilo, as levadas vão da mais tradicional para a mais experimental, e os ostinatos vêm depois.
 //   célula (cells): só o ritmo de um trecho de frase, em tempos inteiros: durações separadas por espaço, "r" na frente = pausa.
 //   durações: 4 = semínima, 8 = colcheia, 16 = semicolcheia, 32 = fusa; t = tercina, q = quiáltera de 5, . = ponto, + = ligadura.
 //
@@ -35,6 +38,9 @@ export const STYLES = [
       { id: "charleston", label: "Charleston", pattern: "T/4 r/4t T/8t+2" },
       { id: "quatro", label: "Quatro tempos com antecipações", pattern: "E/4 E?/4 E/4 E?/4 ; r/4t D/8t+4 r/4 r/4t D/8t" },
       { id: "contratempo", label: "Mão direita no contratempo", pattern: "E/1 ; r/4 r/4t D/8t r/4 r/4t D/8t" },
+      { id: "doisquatro", label: "Dois e quatro", pattern: "E/2 E/2 ; r/4 D/4 r/4 D/4" },
+      { id: "walking", kind: "ostinato", label: "Baixo andando", pattern: "S1/4 S3/4 S5/4 S6/4 ; r/4t D/8t+4 r/4 r/4t D/8t" },
+      { id: "rifftercina", kind: "ostinato", label: "Riff em tercinas", pattern: "E/1 ; M1/4t M3/8t M5/4t M3/8t M1/4t M2/8t M3/4" },
     ],
     cells: SWING_CELLS,
     phrase: { chromatic: 0.55, enclosure: 0.3, blue: 0, leap: 0.25, repeat: 0.05, rest: 0.12, motif: 0.4, pentatonic: false, minNotes: 4 },
@@ -47,6 +53,9 @@ export const STYLES = [
       { id: "shuffle", label: "Shuffle", pattern: "E/4t E?/8t E/4t E?/8t E/4t E?/8t E/4t E?/8t ; D/4 r/4 r/4t D/8t+4" },
       { id: "lento", label: "Blues lento em tercinas", pattern: "E/2 E/2 ; D/8t D?/8t D?/8t D/8t D?/8t D?/8t D/8t D?/8t D?/8t D/8t D?/8t D?/8t" },
       { id: "stabs", label: "Acordes de resposta", pattern: "E/1 ; r/4 D!/8t r/4t r/4 D/4t D/8t" },
+      { id: "stoptime", label: "Stop-time", pattern: "T!/4 r/2." },
+      { id: "boogie", kind: "ostinato", label: "Boogie-woogie", pattern: "S1/4t S1/8t S5/4t S5/8t S6/4t S6/8t S5/4t S5/8t ; r/4 D/4 r/4 D/8t r/4t" },
+      { id: "riffresposta", kind: "ostinato", label: "Riff de resposta", pattern: "E/1 ; r/4t M1/8t M3!/4 M5/8t M4/8t M3/8t M1/4" },
     ],
     cells: ["4t 8t 4", "8t 8t 8t 4", "r4t 8t 4", "4t 8t+4", "4 r4", "r4 4t 8t", "8t 8t 8t 8t 8t 8t", "4t 8t 4t 8t", "2", "4+4t 8t", "r4t 8t 8t 8t 8t"],
     phrase: { chromatic: 0.25, enclosure: 0.05, blue: 0.55, leap: 0.2, repeat: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
@@ -59,6 +68,9 @@ export const STYLES = [
       { id: "332", label: "Síncope 3+3+2", pattern: "T/8. T/8. T/8 r/8 T!/8. T/16 r/8" },
       { id: "stabs16", label: "Ataques em semicolcheia", pattern: "T/16 r/8 T/16+8 r/8 r/8 T/8 r/16 T/16+8" },
       { id: "pedal", label: "Baixo pulsando, acordes sincopados", pattern: "B/8 B?/8 B/8 B?/8 B/8 B?/8 B/8 B?/8 ; r/8. D/16+8 r/8 r/16 D!/16+8 r/8. D/16" },
+      { id: "empurrao", label: "Acordes longos com empurrão", pattern: "T/4. T/8+2" },
+      { id: "baixo8", kind: "ostinato", label: "Ostinato de baixo", pattern: "S1/8 S5/8 S8/8 S5/8 S7/8 S5/8 S8/8 S5/8 ; r/8. D/16+8 r/8 r/16 D!/16+8 r/8. D/16" },
+      { id: "grupo5", kind: "ostinato", label: "Grupo de cinco contra o compasso", pattern: "E/1 ; M1/16 M3/16 M5/16 M4/16 M2/16 M1/16 M3/16 M5/16 M4/16 M2/16 M1/16 M3/16 M5/16 M4/16 M2/16 M1/16" },
     ],
     cells: [
       "16 16 16 16", "16 16 16 16 16 16 16 16", "8 16 16", "16 16 8", "r16 16 16 16", "16 16 r16 16", "8. 16", "16 8 16",
@@ -68,24 +80,30 @@ export const STYLES = [
   },
   {
     id: "neosoul", label: "Neo-soul",
-    influences: ["Robert Glasper", "D'Angelo", "Domi & JD Beck", "Ed Motta"],
+    influences: ["Robert Glasper", "D'Angelo", "Domi & JD Beck", "Ed Motta", "Joshua Domfeh"],
     summary: "Pouca nota e muito espaço: semicolcheias sincopadas, notas repetidas, entradas depois do tempo e notas longas.",
     comps: [
       { id: "espaco", label: "Acorde longo e resposta leve", pattern: "T/4. r/8 r/4 r/8 D?/8" },
       { id: "sincope", label: "Antecipação em semicolcheia", pattern: "T/8. D?/16+4 r/4 r/8. D/16" },
       { id: "pulso", label: "Baixo e acorde alternados", pattern: "B/4. B/8+4 r/4 ; r/8 D/8+4 r/8. D?/16+4" },
+      { id: "duas", label: "Duas batidas", pattern: "T/2 T?/4. D/8" },
+      { id: "quebrado", kind: "ostinato", label: "Arpejo quebrado", pattern: "1/8 3/8 2/8 P/8+2" },
+      { id: "atrasada", kind: "ostinato", label: "Motivo que entra depois do tempo", pattern: "E/1 ; r/8. M3/16+8 M2/8 r/8 M1/8+4" },
     ],
     cells: ["r8 16 16+4", "r16 16 8 4", "8. 16+4", "r8 8 4", "16 16 8+4", "4 r4", "r4 r8 16 16", "8 8 r4", "r16 8 16+4", "2", "8t 8t 8t 4", "r8. 16 4"],
     phrase: { chromatic: 0.3, enclosure: 0.1, blue: 0.15, leap: 0.2, repeat: 0.3, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
   },
   {
     id: "gospel", label: "Gospel americano",
-    influences: ["Cory Henry", "Kirk Franklin", "Jesús Molina", "Shaun Martin", "Aaron Lindsey", "Kevin Bond", "Tye Tribbett", "Israel Houghton", "Fred Hammond"],
+    influences: ["Cory Henry", "Kirk Franklin", "Jesús Molina", "Joshua Domfeh", "Shaun Martin", "Aaron Lindsey", "Kevin Bond", "Tye Tribbett", "Israel Houghton", "Fred Hammond"],
     summary: "Corridas rápidas que pousam no tempo, pentatônica com blue notes, fills entre os acordes e síncopes marcadas.",
     comps: [
       { id: "pulso", label: "Pulso com antecipações", pattern: "E/4 E/4 E/4 E/4 ; D/4. D/8+4 r/8 D!/8" },
       { id: "128", label: "Balanço em tercinas (12/8)", pattern: "E/4 E/4 E/4 E/4 ; D/4t D/8t D/4t D/8t D/4t D/8t D/4t D/8t" },
       { id: "shout", label: "Baixo e acorde alternados (rápido)", pattern: "B/8 D/8 B/8 D/8 B/8 D/8 B/8 D!/8" },
+      { id: "ataques", label: "Ataques sincopados", pattern: "T!/8. T/16+8 r/8 T/8. T!/16+4" },
+      { id: "orgao", kind: "ostinato", label: "Ondulação de órgão", pattern: "E/1 ; M1/8 M3/8 M2/8 M3/8 M1/8 M3/8 M2/8 M3/8" },
+      { id: "walkresposta", kind: "ostinato", label: "Baixo andando com resposta", pattern: "S1/4 S3/4 S5/4 S6/8 S7/8 ; r/8 D/8+4 r/8 D!/8+4" },
     ],
     cells: [
       "16 16 16 16 4", "r8 16 16 4", "32 32 32 32 16 16 4", "8 16 16 4", "16t 16t 16t 16t 16t 16t 4", "r4 16 16 16 16", "8. 16+4",
@@ -101,6 +119,9 @@ export const STYLES = [
       { id: "clav", label: "Clavinete", pattern: "T/16 r/16 T?/16 T/16 r/16 T?/16 r/16 T/16 r/8 T!/16 r/16 T?/16 T/16 r/8" },
       { id: "baixoacorde", label: "Baixo e acorde", pattern: "B/8 D!/16 r/16 r/16 D?/16 B/8 r/8 D!/8 B/16 D?/16 r/8" },
       { id: "um", label: "No “um”", pattern: "T!/8 r/8 r/8. T?/16 r/8 T/16 r/16 r/8 T/8" },
+      { id: "contra8", label: "Contratempos secos", pattern: "r/8 T!/16 r/16 r/8 T/16 r/16 r/8 T!/16 r/16 r/8 T/16 T?/16" },
+      { id: "riffbaixo", kind: "ostinato", label: "Riff de baixo", pattern: "S1/16 r/16 S1/16 S8/16 r/8 S7/16 S8/16 r/16 S5/16 r/16 S7/16 S8/8 r/8 ; r/4 D!/16 r/8. r/4 D!/16 r/8." },
+      { id: "clavmelodico", kind: "ostinato", label: "Clavinete melódico", pattern: "E/1 ; M1/16 M1?/16 r/16 M3/16 r/16 M4/16 M5/16 r/16 M5?/16 M4/16 r/16 M3/16 M1/16 r/16 M1?/16 r/16" },
     ],
     cells: ["16 r16 16 16", "r16 16 r16 16", "16 16 r8", "r8 16 16", "16 r16 r16 16", "8 r16 16", "16 16 16 r16", "r4", "16 r16 16 r16 r16 16 16 r16", "8 8", "r16 16 16 r16 16 r16 8"],
     phrase: { chromatic: 0.2, enclosure: 0, blue: 0.3, leap: 0.15, repeat: 0.45, rest: 0.2, motif: 0.7, pentatonic: true, minNotes: 4 },
@@ -113,6 +134,9 @@ export const STYLES = [
       { id: "montuno", label: "Montuno (clave 2-3)", pattern: "r/4 r/8 B/8+4 B/4 ; D/8 r/8 P/8 D/8 r/8 P/8 r/8 D/8 r/8 P/8 r/8 D/8 r/8 P/8 r/8 D/8" },
       { id: "montuno2", label: "Montuno em bloco", pattern: "r/4 r/8 B/8+4 B/4 ; D!/8 r/8 D/8 D/8 r/8 D/8 r/8 D/8" },
       { id: "tumbao", label: "Só o tumbao e acordes longos", pattern: "r/4 r/8 B/8+4 B/4 ; D/2 r/8 D/8+4" },
+      { id: "chacha", label: "Cha-cha-chá", pattern: "B/4 B/4 B/4 B/4 ; r/8 D/8 r/8 D/8 r/8 D/8 D/8 D/8" },
+      { id: "guajeo", kind: "ostinato", label: "Guajeo arpejado", pattern: "r/4 r/8 B/8+4 B/4 ; M1/8 r/8 M3/8 M5/8 r/8 M8/8 r/8 M5/8 r/8 M3/8 r/8 M5/8 r/8 M8/8 r/8 M5/8" },
+      { id: "bajocantado", kind: "ostinato", label: "Baixo cantado", pattern: "S1/4. S5/8+4 S8/4 ; D/8 r/8 D/8 D/8 r/8 D/8 r/8 D/8" },
     ],
     cells: ["8 8 8 8", "r8 8 8 8", "8 r8 8 8", "8 8 r8 8", "r8 8+8 8", "8 8+4", "4 r8 8", "r8 8 r8 8", "8 8 8 8+4 r4", "4 4", "r8 8 4"],
     phrase: { chromatic: 0.15, enclosure: 0.05, blue: 0, leap: 0.3, repeat: 0.3, rest: 0.15, motif: 0.6, pentatonic: false, minNotes: 4 },
@@ -125,6 +149,8 @@ export const STYLES = [
       { id: "teleco", label: "Teleco-teco", pattern: "B/8. B/16 B/4 B/8. B/16 B/4 ; D/16 r/16 D/16 r/16 r/16 D/16 r/16 D/16 r/16 D/16 r/16 D/16 r/16 r/16 D/16 r/16" },
       { id: "partido", label: "Partido alto", pattern: "B/8. B/16 B/4 B/8. B/16 B/4 ; D/8 r/8 D/8 r/16 D/16 r/8 D/8 r/8 D/8" },
       { id: "contra", label: "Mão direita no contratempo", pattern: "B/8. B/16 B/4 B/8. B/16 B/4 ; r/16 D/16 r/16 D/16 D/16 r/16 D/16 r/16 r/16 D/16 r/16 D/16 D/16 r/16 D/16 r/16" },
+      { id: "violao", kind: "ostinato", label: "Dedilhado de violão", pattern: "B/8. B/16 B/4 B/8. B/16 B/4 ; r/16 2/16 3/16 P/16 r/16 3/16 2/16 3/16 r/16 2/16 3/16 P/16 r/16 3/16 P/16 3/16" },
+      { id: "baixocantado", kind: "ostinato", label: "Baixo cantado", pattern: "S1/8. S5/16 S8/8 S5/8 S1/8. S5/16 S7/8 S5/8 ; D/16 r/16 D/16 r/16 r/16 D/16 r/16 D/16 r/16 D/16 r/16 D/16 r/16 r/16 D/16 r/16" },
     ],
     cells: ["16 8 16", "16 16 16 16", "r16 16 16 16", "16 8 16 16 8 16", "8. 16", "16 16 8", "8 16 16", "r16 8 16+4", "16 8 16+4", "4", "r8 16 16", "16 16 16 16 16 8 16"],
     phrase: { chromatic: 0.2, enclosure: 0.05, blue: 0, leap: 0.25, repeat: 0.15, rest: 0.1, motif: 0.55, pentatonic: false, minNotes: 6 },
@@ -137,6 +163,8 @@ export const STYLES = [
       { id: "classica", label: "Batida clássica", pattern: "B/4. B/8+4. B/8 ; D/4 r/8 D/8+8 D/8 r/8 D/8" },
       { id: "contra", label: "Contratempos", pattern: "B/2 B/2 ; r/8 D/8 r/8 D/8 r/8 D/8 r/8 D/8" },
       { id: "esparsa", label: "Esparsa", pattern: "B/4. B/8+2 ; r/4 D/4. D/8+4" },
+      { id: "violao", kind: "ostinato", label: "Dedilhado de violão", pattern: "B/4. B/8+4. B/8 ; r/8 3/8 P/8 2/8 r/8 3/8 P/8 3/8" },
+      { id: "descendente", kind: "ostinato", label: "Motivo descendente", pattern: "B/2 B/2 ; M5/4. M4/8+4 M3/8 M2/8" },
     ],
     cells: ["r8 8 4", "8 8+4", "4 r8 8", "r8 8+4", "4. 8", "8 4 8", "2", "r4 8 8", "8 8 8 8", "r8 8 8 8+4 r4", "4 4"],
     phrase: { chromatic: 0.25, enclosure: 0.1, blue: 0, leap: 0.2, repeat: 0.15, rest: 0.25, motif: 0.5, pentatonic: false, minNotes: 3 },
@@ -149,6 +177,9 @@ export const STYLES = [
       { id: "colcheias", label: "Colcheias retas", pattern: "T/8 T?/8 T/8 T?/8 T/8 T?/8 T/8 T?/8" },
       { id: "baixo", label: "Baixo pulsando e acordes longos", pattern: "B/8 B?/8 B/8 B?/8 B/8 B?/8 B/8 B?/8 ; D/2 D/4. D/8" },
       { id: "ataques", label: "Ataques", pattern: "T!/4 r/8 T/8+4 T/4" },
+      { id: "doisquatro", label: "Dois e quatro", pattern: "E/2 E/2 ; r/4 D/4 r/4 D/4" },
+      { id: "riff8", kind: "ostinato", label: "Riff em colcheias", pattern: "S1/8 S1/8 S8/8 S1/8 S7/8 S1/8 S5/8 S7/8 ; D/1" },
+      { id: "riffsincopado", kind: "ostinato", label: "Riff sincopado", pattern: "S1/8. S1/16 r/8 S3/8 S4/8. S5/16+4 ; r/2 D!/2" },
     ],
     cells: ["8 8 8 8", "8 8 4", "4 8 8", "r8 8 8 8", "4 4", "8 8 r4", "16 16 8 4", "2", "r4 8 8", "8. 16 4"],
     phrase: { chromatic: 0.1, enclosure: 0, blue: 0.5, leap: 0.25, repeat: 0.3, rest: 0.2, motif: 0.75, pentatonic: true, minNotes: 4 },
@@ -160,6 +191,9 @@ export const STYLES = [
     comps: [
       { id: "skank", label: "Skank (baixo no tempo, acorde no contratempo)", pattern: "B/8 D!/16 r/16 B/8 D!/16 r/16 B/8 D!/16 r/16 B/8 D!/16 r/16" },
       { id: "soacorde", label: "Só o contratempo", pattern: "r/8 T!/16 r/16 r/8 T!/16 r/16 r/8 T!/16 r/16 r/8 T!/16 r/16" },
+      { id: "dobrado", label: "Skank dobrado", pattern: "B/8 D!/16 D?/16 B/8 D!/16 D?/16 B/8 D!/16 D?/16 B/8 D!/16 D?/16" },
+      { id: "walking", kind: "ostinato", label: "Baixo andando com skank", pattern: "S1/4 S3/4 S5/4 S3/4 ; r/8 D!/16 r/16 r/8 D!/16 r/16 r/8 D!/16 r/16 r/8 D!/16 r/16" },
+      { id: "metais", kind: "ostinato", label: "Riff de metais", pattern: "B/8 D!/16 r/16 B/8 D!/16 r/16 B/8 D!/16 r/16 B/8 D!/16 r/16 ; r/8 M5/8 M3/8 M1/8 r/8 M3/8 M5/4" },
     ],
     cells: ["r8 8 r8 8", "r8 8 8 8", "8 8 r8 8", "r8 8 4", "4 r8 8", "r8 8 r4", "8 8 8 8", "r8 8+4", "4 4"],
     phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, repeat: 0.35, rest: 0.2, motif: 0.7, pentatonic: false, minNotes: 3 },

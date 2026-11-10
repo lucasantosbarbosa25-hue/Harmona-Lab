@@ -62,8 +62,24 @@ function varInt(value) {
 const meta = (type, data) => ({ meta: true, bytes: [0xff, type, ...varInt(data.length), ...data] });
 
 /** Alturas de um toque da levada, do grave ao agudo. `voices` = [{note, part}] já do grave ao agudo. */
-function hitNotes(voices, part) {
+function hitNotes(voices, part, scale) {
   if (!voices.length) return [];
+  if (part[0] === "S" || part[0] === "M") {
+    // grau da escala: sobe a escala (ou, sem ela, as notas do acorde) a partir do baixo (S) ou da mão direita (M)
+    let base = voices[0].note.midi;
+    if (part[0] === "M") {
+      const right = voices.filter((v) => v.part === "right_hand" || v.part === "notes");
+      base = right.length ? right[0].note.midi : base + 12;
+    }
+    const pcs = new Set(scale.size ? scale : voices.map((v) => v.note.midi % 12));
+    pcs.add(base % 12);
+    let pitch = base;
+    for (let i = 1; i < parseInt(part[1], 10); i++) {
+      pitch += 1;
+      while (!pcs.has(pitch % 12)) pitch += 1;
+    }
+    return pitch <= 127 ? [pitch] : [];
+  }
   if (part === "T") return voices.map((v) => v.note.midi);
   if (part === "E") return voices.filter((v) => v.part === "bass" || v.part === "left_hand").map((v) => v.note.midi);
   if (part === "D") return voices.filter((v) => v.part === "right_hand" || v.part === "notes").map((v) => v.note.midi);
@@ -82,6 +98,7 @@ export function chordNotes(project, chord, length, phraseMode = "both", ticksPer
   if (phraseMode === "line") voices = voices.filter((v) => v.part !== "right_hand");
   const velocity = velocityFor(project, chord);
   const direction = strumFor(project, chord);
+  const scale = new Set(chord.phrase_pcs.map((s) => s.pc));
   const block = (pitches, start, end, vel) => {
     let offsets = pitches.map(() => 0);
     if (direction !== "off") {
@@ -99,7 +116,7 @@ export function chordNotes(project, chord, length, phraseMode = "both", ticksPer
         const start = base + hit.start;
         if (start >= length) break;
         const vel = Math.max(1, Math.min(127, velocity + hit.accent));
-        notes.push(...block(hitNotes(voices, hit.part), start, Math.min(start + hit.length, length), vel));
+        notes.push(...block(hitNotes(voices, hit.part, scale), start, Math.min(start + hit.length, length), vel));
       }
     }
   }

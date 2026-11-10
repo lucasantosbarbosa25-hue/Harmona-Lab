@@ -45,10 +45,23 @@ def _meta_text(text: str) -> str:
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
-def _hit_notes(voices: list, part: str) -> list[int]:
+def _hit_notes(voices: list, part: str, scale: frozenset = frozenset()) -> list[int]:
     """Alturas de um toque da levada, do grave ao agudo. ``voices`` = [(nota, parte)] já do grave ao agudo."""
     if not voices:
         return []
+    if part[0] in "SM":
+        # grau da escala: sobe a escala (ou, sem ela, as notas do acorde) a partir do baixo (S) ou da mão direita (M)
+        base = voices[0][0].midi
+        if part[0] == "M":
+            right = [n.midi for n, p in voices if p in ("right_hand", "notes")]
+            base = right[0] if right else base + 12
+        pcs = (scale or frozenset(n.pitch_class for n, _ in voices)) | {base % 12}
+        pitch = base
+        for _ in range(int(part[1]) - 1):
+            pitch += 1
+            while pitch % 12 not in pcs:
+                pitch += 1
+        return [pitch] if pitch <= 127 else []
     if part == "T":
         return [n.midi for n, _ in voices]
     if part == "E":
@@ -75,6 +88,7 @@ def chord_notes(project: Project, chord, length: int, phrase_mode: str = "both",
         voices = [(n, p) for n, p in voices if p != "right_hand"]
     velocity = project.velocity_for(chord)
     direction = project.strum_for(chord)
+    scale = frozenset(pc for pc, _ in chord.phrase_pcs)
 
     def block(pitches: list[int], start: int, end: int, vel: int) -> list[tuple[int, int, int, int]]:
         offsets = [0] * len(pitches)
@@ -96,7 +110,7 @@ def chord_notes(project: Project, chord, length: int, phrase_mode: str = "both",
                 if start >= length:
                     break
                 vel = max(1, min(127, velocity + hit.accent))
-                notes.extend(block(_hit_notes(voices, hit.part), start, min(start + hit.length, length), vel))
+                notes.extend(block(_hit_notes(voices, hit.part, scale), start, min(start + hit.length, length), vel))
             base += total
     # A mesma tecla pedida duas vezes: no mesmo instante, fica a mais longa; depois, o toque novo corta o anterior.
     by_pitch: dict[int, list[tuple[int, int, int, int]]] = {}

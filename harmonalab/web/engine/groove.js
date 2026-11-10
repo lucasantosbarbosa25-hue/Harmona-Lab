@@ -37,25 +37,11 @@ export function makeRng(seed) {
 
 // ---------------------------------------------------------------- levada dos acordes
 
-/** Arpejos que valem para qualquer estilo (o desenho depende de quantas notas o acorde tem). */
-export const ARPEGGIOS = [
-  { id: "arp-up", label: "Arpejo subindo", order: (n) => Array.from({ length: n }, (_, i) => i + 1) },
-  { id: "arp-down", label: "Arpejo descendo", order: (n) => Array.from({ length: n }, (_, i) => n - i) },
-  { id: "arp-updown", label: "Arpejo sobe e desce", order: (n) => [...Array.from({ length: n }, (_, i) => i + 1), ...Array.from({ length: Math.max(0, n - 2) }, (_, i) => n - 1 - i)] },
-];
+/** As levadas que a tela oferece para um estilo, na ordem da base: levadas e depois ostinatos e riffs. */
+export const compOptions = (style) => (style?.comps ?? []).map(({ id, label, kind }) => ({ id, label, kind: kind ?? "levada" }));
 
-/** As levadas que a tela oferece para um estilo: as do estilo e os arpejos. */
-export const compOptions = (style) => [...(style?.comps ?? []).map(({ id, label }) => ({ id, label })), ...ARPEGGIOS.map(({ id, label }) => ({ id, label }))];
-
-/** A levada (texto "comp") de um acorde. `count` = quantas notas o voicing tem. */
-export function compFor(style, compId, count) {
-  const arpeggio = ARPEGGIOS.find((a) => a.id === compId);
-  if (arpeggio) {
-    const n = Math.max(1, Math.min(9, count));
-    return arpeggio.order(n).map((i) => `${i}/16`).join(" ");
-  }
-  return style?.comps.find((c) => c.id === compId)?.pattern ?? "";
-}
+/** A levada (texto "comp") de um estilo. Os padrões usam partes e graus da escala, então servem para qualquer acorde. */
+export const compFor = (style, compId) => style?.comps.find((c) => c.id === compId)?.pattern ?? "";
 
 // ---------------------------------------------------------------- frases
 
@@ -265,7 +251,7 @@ export function generateGroove(data, { style, comp = null, phrases = false, vari
   if (!style) return { chords: out, notes: ["Escolha um estilo."] };
 
   if (comp) {
-    project.chords.forEach((chord, i) => { out[i].comp = sounding(chord).length ? compFor(style, comp, sounding(chord).length) : ""; });
+    project.chords.forEach((chord, i) => { out[i].comp = sounding(chord).length ? compFor(style, comp) : ""; });
   }
 
   if (phrases) {
