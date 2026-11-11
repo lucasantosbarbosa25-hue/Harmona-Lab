@@ -601,3 +601,27 @@ test("outside: a tensão sempre volta no tempo, perto da última nota de fora; o
     }
   }
 });
+
+test("9ª e 11ª como chegada preferida só nos menores: nos maiores e dominantes, a chegada é nota do acorde", () => {
+  const mod = (n) => ((n % 12) + 12) % 12;
+  const count = { menor: [0, 0], outros: [0, 0] }; // [chegadas em 9ª/11ª, chegadas]
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 6; variation++) {
+      const data = apply(structuredClone(VARIED), generateGroove(structuredClone(VARIED), { style, phrases: true, variation }));
+      for (const chord of loadProject(data).project.chords) {
+        const root = { Dm9: 2, Am9: 9, Cmaj9: 0, "Fmaj7#11": 5, G13: 7, A7alt: 9, E7b9: 4 }[chord.symbol];
+        if (root === undefined) continue;
+        const kind = /m9/.test(chord.symbol) ? "menor" : "outros";
+        for (const e of chord.phrase_events) {
+          if (e.start % 960 !== 0) continue; // tempo 1 e meio do compasso
+          count[kind][1] += 1;
+          if ([2, 5].includes(mod(e.note.midi - root))) count[kind][0] += 1;
+        }
+      }
+    }
+  }
+  const share = ([hit, all]) => hit / all;
+  console.log(`9ª/11ª nas chegadas: menores ${(100 * share(count.menor)).toFixed(0)}%, outros ${(100 * share(count.outros)).toFixed(0)}%`);
+  assert.ok(share(count.menor) >= 0.3, `menores chegam em 9ª/11ª: ${JSON.stringify(count.menor)}`);
+  assert.ok(share(count.outros) <= 0.15, `maiores e dominantes quase nunca chegam em 9ª/11ª: ${JSON.stringify(count.outros)}`);
+});

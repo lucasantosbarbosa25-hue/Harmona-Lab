@@ -147,8 +147,9 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): o app escreve o solo como um improvisador pensa, **a partir da chegada**. Primeiro
   escolhe os pontos de chegada (o tempo 1 de cada acorde, o meio do compasso, as notas longas, o começo e o fim de cada
-  frase) e uma nota boa para cada um, conforme o tipo de acorde: nos menores, 9ª e 11ª (com 3ª e 5ª no tempo 1, e a 6ª
-  dórica de vez em quando); nos maiores, 3ª, 7ª, 9ª; nos dominantes, 3ª e 7ª, e as tensões que a escala tiver. Notas
+  frase) e uma nota boa para cada um, conforme o tipo de acorde: só nos menores a chegada preferida é 9ª ou 11ª (com 3ª e 5ª no
+  tempo 1, e a 6ª dórica de vez em quando); nos maiores, dominantes e meio-diminutos, a chegada é nota do acorde (3ª, 7ª,
+  5ª), e as tensões aparecem só de vez em quando. Notas
   evitadas (a 4ª sobre terça maior, a b9 fora dos dominantes) nunca ficam no tempo nem sustentadas. Depois liga as
   chegadas grau a grau pela escala, com curvas. **Outra variação** sorteia frases novas.
 - **Cromatismo dosado:** aproximações cromáticas e envolventes só logo antes de uma chegada, e sempre resolvem no tempo.
