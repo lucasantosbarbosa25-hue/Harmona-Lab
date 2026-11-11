@@ -205,6 +205,7 @@ export function analyzeChord(project, chord, index, startBeats) {
       events: chord.phrase_events.map((e) => ({
         midi: e.note.midi, name: noteName(e.note, mc), start: e.start, length: e.length, role: e.role,
       })),
+      ...(chord.phrase_extra.length ? { extra: chord.phrase_extra.map((e) => ({ midi: e.note.midi, name: noteName(e.note, mc), start: e.start, length: e.length })) } : {}),
     } : null,
     comp: chord.comp || null,
     bass_line: chord.bass_line || null,
@@ -235,6 +236,7 @@ export function analyze(project, issues = []) {
     beats_per_bar: beatsPerBar(project),
     strum_delay_ms: project.strum_delay_ms,
     drums: project.drums || null,
+    percussion: project.percussion || null,
     totals: {
       chords: project.chords.length,
       beats: total,

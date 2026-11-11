@@ -111,6 +111,14 @@ export function drumsFor(style, beatId, project, variation = 0) {
   return out.join(" | ");
 }
 
+// ---------------------------------------------------------------- percussão
+
+/** As percussões que a tela oferece para um estilo (congas, bongô, güiro, ganzá...). */
+export const percussionOptions = (style) => (style?.percussion ?? []).map(({ id, label }) => ({ id, label }));
+
+/** A percussão da progressão (texto "percussion"): os compassos da opção, que o motor repete até o fim. */
+export const percussionFor = (style, percussionId) => style?.percussion?.find((p) => p.id === percussionId)?.bars.join(" | ") ?? "";
+
 // ---------------------------------------------------------------- baixo
 
 /** As linhas de baixo que a tela oferece para um estilo. */
@@ -494,7 +502,52 @@ export function composePhrase(ctx) {
     }
   }
   noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue });
-  return { notes, cursor: sounding.at(-1).midi, cells };
+  const cursorOut = sounding.at(-1).midi;
+  return { notes: sustainRests(notes, length), cursor: cursorOut, cells };
+}
+
+/**
+ * Notas de repouso (alvos e a última nota da frase) duram até a próxima nota: as pausas logo depois delas viram ligadura.
+ * As notas do motivo outside não mudam (a cópia tem de sair igual ao original).
+ */
+function sustainRests(notes, length) {
+  const out = [];
+  const sounding = notes.filter((n) => !n.rest);
+  const last = sounding.at(-1);
+  for (const note of notes) {
+    const holder = out.at(-1);
+    if (note.rest && holder && !holder.rest && !holder.locked && (holder.role === "alvo" || holder === last)) {
+      holder.ticks += note.ticks;
+      holder.dur = ticksText(holder.ticks);
+      continue;
+    }
+    out.push(note);
+  }
+  // se o ritmo não encheu o acorde, a última nota segura até o fim dele
+  const end = out.reduce((sum, n) => sum + n.ticks, 0);
+  const tail = out.at(-1);
+  if (end < length && tail && !tail.rest && !tail.locked) { tail.ticks += length - end; tail.dur = ticksText(tail.ticks); }
+  return out;
+}
+
+/**
+ * Dueto da frase: a segunda voz em oitava abaixo ou em sexta da escala abaixo. Notas fora da escala (aproximações,
+ * outside, blue notes) andam paralelas, com o mesmo intervalo da nota anterior. Devolve um mapa nota -> segunda voz.
+ */
+function duetVoices(notes, kind, scalePcs) {
+  const second = new Map();
+  let interval = kind === "octave" ? 12 : 9;
+  for (const note of notes) {
+    if (note.rest) continue;
+    if (kind === "sixth" && scalePcs.has(mod12(note.midi))) {
+      // sexta abaixo = cinco graus da escala para baixo
+      let pitch = note.midi;
+      for (let step = 0; step < 5; step++) { pitch -= 1; while (!scalePcs.has(mod12(pitch))) pitch -= 1; }
+      interval = note.midi - pitch;
+    } else if (kind === "octave") interval = 12;
+    second.set(note, note.midi - interval);
+  }
+  return second;
 }
 
 /** Nome da nota com a grafia da escala ou do acorde (Eb, não D#, quando a escala diz Eb). */
@@ -518,7 +571,7 @@ function speller(chord, middleC) {
  */
 export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
-  phraseStyles = null, scales = null, color: globalColor = "", bass = null,
+  phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null,
 } = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
@@ -551,7 +604,15 @@ export function generateGroove(data, {
       cursor = result.cursor;
       previousCells = result.cells;
       const spell = speller(chord, project.middle_c);
-      out[i].phrase = result.notes.map((n) => (n.rest ? `r/${n.dur}` : `${spell(n.midi)}/${n.dur}${n.role ? `*${n.role}` : ""}`)).join(" ");
+      const duet = style.phrase.duet ?? {};
+      const roll = makeRng(`${style.id}|${variation}|${i}|dueto`).next();
+      const kind = roll < (duet.octave ?? 0) ? "octave" : roll < (duet.octave ?? 0) + (duet.sixth ?? 0) ? "sixth" : null;
+      const second = kind ? duetVoices(result.notes, kind, scalePcs) : new Map();
+      out[i].phrase = result.notes.map((n) => {
+        if (n.rest) return `r/${n.dur}`;
+        const name = second.has(n) ? `${spell(n.midi)}&${spell(second.get(n))}` : spell(n.midi);
+        return `${name}/${n.dur}${n.role ? `*${n.role}` : ""}`;
+      }).join(" ");
       if (!hasScale) out[i].phrase_scale = [...new Map(voices.map((v) => [pitchClass(v.note), pitchClassName(v.note)])).values()].join(" ");
     });
     if (withoutScale) {
@@ -571,5 +632,8 @@ export function generateGroove(data, {
       out[i].bass_line = result.notes.map((n) => (n.rest ? `r/${n.dur}` : `${spell(n.midi)}/${n.dur}${n.role ? `*${n.role}` : ""}`)).join(" ");
     });
   }
-  return drums ? { chords: out, drums: drumsFor(style, drums, project, drumVariation), notes: warnings } : { chords: out, notes: warnings };
+  const result = { chords: out, notes: warnings };
+  if (drums) result.drums = drumsFor(style, drums, project, drumVariation);
+  if (percussion) result.percussion = percussionFor(style, percussion);
+  return result;
 }

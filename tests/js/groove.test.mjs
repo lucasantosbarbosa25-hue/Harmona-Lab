@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
-import { SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
+import { SOURCE_SCALES, percussionFor, percussionOptions, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
 import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../../harmonalab/web/engine/midi.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
@@ -178,7 +178,8 @@ test("a virada interrompe o beat no fim do compasso, o beat volta no tempo 1 e e
   const notes = drumNotes(project, 8 * 1920);
   const inBar = (i) => notes.filter((n) => n[0] >= i * 1920 && n[0] < (i + 1) * 1920);
   const sameBeat = (i) => JSON.stringify(inBar(i).map((n) => [n[0] - i * 1920, n[2]]));
-  assert.equal(sameBeat(1), sameBeat(0)); // compassos comuns: o beat inteiro
+  assert.equal(sameBeat(2), sameBeat(0)); // compassos comuns: o beat inteiro (dois compassos: o segundo varia o chimbal)
+  assert.equal(bars[1], style.beats[0].bars[1]);
   for (const fillBar of [3, 7]) {
     assert.notEqual(sameBeat(fillBar), sameBeat(0), `compasso ${fillBar + 1} tem virada`);
     const tail = inBar(fillBar).filter((n) => n[0] - fillBar * 1920 >= 960);
@@ -188,7 +189,7 @@ test("a virada interrompe o beat no fim do compasso, o beat volta no tempo 1 e e
   assert.ok(inBar(4).some((n) => n[0] === 4 * 1920 && n[2] === 36), "e o beat volta no tempo 1");
   assert.notEqual(generateGroove(data, { style, drums: "basico", drumVariation: 5 }).drums, text); // outra virada
   assert.equal(generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums, text);
-  assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project), style.beats[0].bars[0]); // um compasso só: sem virada
+  assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project), style.beats[0].bars.join(" | ")); // um compasso só: sem virada
   assert.equal(drumsFor(style, "nao-existe", project), "");
   assert.deepEqual(beatOptions(style).map((o) => o.id), ["basico", "meio", "aberto"]);
 });
@@ -339,4 +340,77 @@ test("fraseado sem nota repetida: dentro da frase nunca a mesma nota duas vezes 
   }
   assert.ok(phrases > 2000);
   for (const style of STYLES) assert.equal("repeat" in style.phrase, false, `${style.id}: a base não tem mais chance de repetir nota`);
+});
+
+test("notas de repouso duram até a próxima nota: depois de um alvo ou da última nota não sobra pausa", () => {
+  let checked = 0;
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 6; variation++) {
+      const data = apply(bare(), generateGroove(bare(), { style, phrases: true, variation }));
+      for (const chord of loadProject(data).project.chords) {
+        const tokens = chord.phrase.split(" ");
+        tokens.forEach((t, i) => {
+          if (i && t.startsWith("r/")) assert.ok(!/\*alvo$/.test(tokens[i - 1]), `${style.id}: pausa depois de alvo em ${chord.phrase}`);
+        });
+        assert.ok(!tokens.at(-1).startsWith("r/"), `${style.id}: a frase termina soando (${chord.phrase})`);
+        const ev = chord.phrase_events;
+        assert.equal(ev.at(-1).start + ev.at(-1).length, Math.round(chord.duration_beats * 480), "a última nota vai até o fim do acorde");
+        checked += 1;
+      }
+    }
+  }
+  assert.ok(checked > 100);
+});
+
+test("duetos: salsa sai quase sempre em oitavas; sextas seguem a escala; tudo passa na conferência", () => {
+  const kinds = { octave: 0, sixth: 0, none: 0 };
+  for (const id of ["salsa", "gospel", "samba"]) {
+    for (let variation = 0; variation < 20; variation++) {
+      const data = apply(bare(), generateGroove(bare(), { style: findStyle(id), phrases: true, variation }));
+      assert.deepEqual(problems(data), []);
+      for (const chord of loadProject(data).project.chords) {
+        if (!chord.phrase_extra.length) { if (id === "salsa") kinds.none += 1; continue; }
+        assert.equal(chord.phrase_extra.length, chord.phrase_events.length, "cada nota da melodia tem a sua segunda voz");
+        const gaps = new Set(chord.phrase_events.map((e, i) => e.note.midi - chord.phrase_extra[i].note.midi));
+        if (gaps.size === 1 && gaps.has(12)) { if (id === "salsa") kinds.octave += 1; }
+        else {
+          kinds.sixth += 1;
+          const scale = new Set(chord.phrase_pcs.map((x) => x.pc));
+          chord.phrase_events.forEach((e, i) => {
+            const gap = e.note.midi - chord.phrase_extra[i].note.midi;
+            assert.ok(gap >= 7 && gap <= 10, `sexta (ou paralela): ${chord.phrase}`);
+            if (scale.has(((e.note.midi % 12) + 12) % 12)) assert.ok(scale.has(((chord.phrase_extra[i].note.midi % 12) + 12) % 12), `sexta da escala: ${chord.phrase}`);
+          });
+        }
+      }
+    }
+  }
+  assert.ok(kinds.octave > kinds.none, `salsa em oitavas: ${JSON.stringify(kinds)}`);
+  assert.ok(kinds.sixth > 0);
+  const midi = midiBytes(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("salsa"), phrases: true, variation: 1 }))).project);
+  assert.ok(midi.length > 100);
+});
+
+test("percussão: cada estilo tem opções de compassos inteiros, e ela sai numa faixa própria no canal 10", () => {
+  for (const style of STYLES) {
+    assert.ok(percussionOptions(style).length >= 2, style.id);
+    for (const option of style.percussion) {
+      for (const bar of option.bars) {
+        const { bars, errors } = parseDrums(bar);
+        assert.deepEqual(errors, [], `${style.id}/${option.id}`);
+        for (const layer of bars[0]) assert.equal(layer.ticks % 1920, 0, `${style.id}/${option.id}`);
+      }
+    }
+    for (const beat of style.beats) assert.equal(beat.bars.length, 2, `${style.id}/${beat.id}: dois compassos`);
+  }
+  const style = findStyle("salsa");
+  const result = generateGroove(bare(), { style, drums: "cascara", percussion: "completa" });
+  assert.equal(result.percussion, percussionFor(style, "completa"));
+  assert.equal(generateGroove(bare(), { style }).percussion, undefined);
+  const data = { ...bare(), drums: result.drums, percussion: result.percussion };
+  const { notes } = noteEvents(loadProject(data).project);
+  const perc = notes.filter((n) => n.percussion);
+  assert.ok(perc.length > 20 && perc.every((n) => n.channel === DRUM_CHANNEL));
+  assert.ok(perc.some((n) => n.pitch === 62) && perc.some((n) => n.pitch === 60) && perc.some((n) => n.pitch === 73));
+  assert.ok(Buffer.from(midiBytes(loadProject(data).project)).includes(Buffer.from("Percuss")));
 });

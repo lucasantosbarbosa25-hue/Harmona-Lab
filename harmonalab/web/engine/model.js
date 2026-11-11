@@ -39,7 +39,7 @@ export function newChord(beatsPerBar) {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
     top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
     phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "",
-    phrase_events: [], phrase_pcs: [], comp_layers: [], bass_events: [], // derivados da frase, da escala e da levada, preenchidos na leitura
+    phrase_events: [], phrase_extra: [], phrase_pcs: [], comp_layers: [], bass_events: [], // derivados da frase, da escala e da levada, preenchidos na leitura
   };
 }
 
@@ -84,7 +84,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
+    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], percussion: "", percussion_bars: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -110,6 +110,7 @@ export function projectToDict(project) {
   if (project.references.length) d.references = [...project.references];
   if (project.style) d.style = project.style;
   if (project.drums) d.drums = project.drums;
+  if (project.percussion) d.percussion = project.percussion;
   if (project.comment) d.comment = project.comment;
   return d;
 }
@@ -162,15 +163,16 @@ export function loadProject(data) {
   if (data.comment) project.comment = String(data.comment);
   if (typeof data.key === "string") project.key = data.key.trim();
   if (typeof data.style === "string") project.style = data.style.trim();
-  const drums = data.drums;
-  if (drums !== undefined && drums !== null && drums !== "") {
-    if (typeof drums === "string" || Array.isArray(drums)) {
-      project.drums = drumsText(drums);
-      const parsed = parseDrums(project.drums);
-      project.drum_bars = parsed.bars;
-      for (const message of parsed.errors) issues.push(issue("error", message, null, "drums"));
+  for (const [key, label] of [["drums", "A bateria"], ["percussion", "A percussão"]]) {
+    const value = data[key];
+    if (value === undefined || value === null || value === "") continue;
+    if (typeof value === "string" || Array.isArray(value)) {
+      project[key] = drumsText(value);
+      const parsed = parseDrums(project[key]);
+      project[key === "drums" ? "drum_bars" : "percussion_bars"] = parsed.bars;
+      for (const message of parsed.errors) issues.push(issue("error", key === "drums" ? message : message.replace("na bateria", "na percussão"), null, key));
     } else {
-      issues.push(issue("error", 'A bateria ("drums") deve ser um texto, por exemplo "H/8 H/8 H/8 H/8 ; K/4 r/4 ; r/4 S/4".', null, "drums"));
+      issues.push(issue("error", `${label} ("${key}") deve ser um texto, por exemplo "H/8 H/8 H/8 H/8 ; K/4 r/4 ; r/4 S/4".`, null, key));
     }
   }
   let refs = data.references;
@@ -317,7 +319,8 @@ function loadPhrase(raw, chord, index, project, issues) {
         issues.push(issue("error", `A frase dura ${fmtG(ticks / TICKS_PER_BEAT)} tempos, mais que os `
           + `${fmtG(chord.duration_beats)} do acorde.`, index, "phrase"));
       }
-      chord.phrase_events = events;
+      chord.phrase_events = events.filter((e) => e.voice === 0); // a melodia (é ela que a conferência lê)
+      chord.phrase_extra = events.filter((e) => e.voice !== 0); // as segundas vozes dos duetos
     } else {
       issues.push(issue("error", 'A frase ("phrase") deve ser um texto, por exemplo "G5/8 F5/8 Eb5/4*alvo".', index, "phrase"));
     }

@@ -339,7 +339,7 @@ def test_bateria_le_compassos_camadas_e_pecas():
     assert errors == [] and len(bars) == 2 and [total for _, total in bars[0]] == [1920, 1920, 1920]
     assert [h.part for h in bars[0][1][0]] == ["36", "36", "36"] and bars[0][2][0][0].accent == 16
     assert drums_text(" K/4,S/4 ;; H/8 |  | r/1 ") == "K/4 S/4 ; H/8 | r/1"
-    _, errors = parse_drums("Z/4 K k/4 K/9")
+    _, errors = parse_drums("Ç/4 K k/4 K/9")
     assert len(errors) == 4 and "Peças: K bumbo" in errors[0]
 
 
@@ -365,7 +365,7 @@ def test_midi_com_bateria_tem_faixas_separadas_e_canal_10():
     plain = build_midi(Project.from_dict({"chords": [{"notes": "C4"}]}))
     assert plain.type == 0 and len(plain.tracks) == 1  # só acordes: o arquivo de sempre
     assert Project.from_dict(data).to_dict()["drums"] == ROCK
-    assert not analyze_data({"drums": "Z/4", "chords": [{"notes": "C4"}]})["ok"]
+    assert not analyze_data({"drums": "Ç/4", "chords": [{"notes": "C4"}]})["ok"]
 
 
 def test_linha_de_baixo_vai_numa_faixa_propria_no_canal_3():

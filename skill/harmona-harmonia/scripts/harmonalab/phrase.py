@@ -57,6 +57,7 @@ class PhraseEvent:
     length: int
     role: str  # "" = sem marca
     token: str  # como foi escrita
+    voice: int = 0  # 0 = a melodia; 1 = a segunda voz de um dueto ("C5&A4/8": A4 soa junto com C5)
 
 
 def split_phrase(value) -> list[str]:
@@ -117,13 +118,14 @@ def parse_phrase(value, middle_c: str) -> tuple[list[PhraseEvent], int, list[str
         if name in ("r", "R"):
             tick += length
             continue
-        try:
-            note = parse_note(name, middle_c)
-        except NoteParseError as exc:
-            errors.append(f"Frase: {exc}")
-            tick += length
-            continue
-        events.append(PhraseEvent(note, tick, length, normalize_role(role_text) if star else "", token))
+        role = normalize_role(role_text) if star else ""
+        for voice, part in enumerate(name.split("&")):  # dueto: "C5&A4" = as duas notas juntas; a primeira é a melodia
+            try:
+                note = parse_note(part, middle_c)
+            except NoteParseError as exc:
+                errors.append(f"Frase: {exc}")
+                continue
+            events.append(PhraseEvent(note, tick, length, role, token, min(voice, 1)))
         tick += length
     return events, tick, errors
 
@@ -152,7 +154,7 @@ def rename_phrase_text(value, from_middle_c: str, to_middle_c: str):
         head, star, role = token.partition("*")
         name, slash, dur = head.partition("/")
         if slash and name and name not in ("r", "R"):
-            name = rename_note_text(name, from_middle_c, to_middle_c)
+            name = "&".join(rename_note_text(part, from_middle_c, to_middle_c) for part in name.split("&"))
         out.append(f"{name}{slash}{dur}{star}{role}")
     return " ".join(out)
 
@@ -229,9 +231,11 @@ def parse_comp(value) -> tuple[list[tuple[list[CompHit], int]], list[str]]:
 DRUM_PIECES = {
     "K": 36, "S": 38, "X": 37, "H": 42, "O": 46, "P": 44, "R": 51, "E": 53, "C": 49,
     "T": 50, "M": 47, "F": 43, "B": 56, "L": 75, "A": 54, "Q": 70, "G": 63, "N": 64,
+    "U": 62, "V": 60, "W": 61, "Y": 65, "Z": 66, "J": 73, "I": 74, "D": 67,
 }
 DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, " \
-             "T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas"
+             "T/M/F tons, B cowbell (campana), L clave, A pandeirola, Q ganzá, G conga aberta aguda, N conga grave, U conga muda (tapa), " \
+             "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô"
 _DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)([!?]?)$")
 
 

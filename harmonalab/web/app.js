@@ -7,7 +7,7 @@ import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
-import { SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove } from "./engine/groove.js";
+import { SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
@@ -144,7 +144,7 @@ function grooveSettings(raw) {
   const g = raw && typeof raw === "object" ? raw : {};
   const list = (v) => (Array.isArray(v) ? v.map(String) : []);
   return {
-    comp: String(g.comp || ""), drums: String(g.drums || ""), bass: String(g.bass || ""),
+    comp: String(g.comp || ""), drums: String(g.drums || ""), bass: String(g.bass || ""), percussion: String(g.percussion || ""),
     phraseStyles: list(g.phraseStyles), scales: list(g.scales), color: ["dentro", "cromatico", "outside"].includes(g.color) ? g.color : "",
   };
 }
@@ -186,6 +186,7 @@ function toEditable(data) {
     style: typeof data.style === "string" ? data.style : "",
     groove: grooveSettings(data.groove),
     drums: Array.isArray(data.drums) ? data.drums.join(" | ") : typeof data.drums === "string" ? data.drums : "",
+    percussion: Array.isArray(data.percussion) ? data.percussion.join(" | ") : typeof data.percussion === "string" ? data.percussion : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     chords,
   };
@@ -813,6 +814,7 @@ function previewProject(only = null) {
     const [chord] = project.chords;
     if (!chord.phrase_events.length && !chord.comp_layers.length) chord.duration_beats = Math.min(chord.duration_beats, (project.tempo / 60) * 4);
     project.drum_bars = []; // um acorde só: sem a bateria
+    project.percussion_bars = [];
   }
   return { project, index };
 }
@@ -938,6 +940,16 @@ function renderGroove() {
     ...(bassValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizado (do projeto)")] : []),
   );
   $("#groove-bass").value = bassValue;
+  const percs = percussionOptions(style);
+  const hasPerc = Boolean(String(state.project.percussion || "").trim());
+  const percId = state.project.groove?.percussion || "";
+  const percValue = !hasPerc ? "" : percs.some((o) => o.id === percId) ? percId : CUSTOM_COMP;
+  $("#groove-percussion").replaceChildren(
+    h("option", { value: "" }, "Desligada"),
+    ...percs.map((o) => h("option", { value: o.id }, o.label)),
+    ...(percValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizada (do projeto)")] : []),
+  );
+  $("#groove-percussion").value = percValue;
   $("#groove-fill-row").hidden = !((hasDrums && drumValue !== CUSTOM_COMP) || (hasBass && bassValue !== CUSTOM_COMP));
 
   const phrases = anyChord("phrase");
@@ -964,7 +976,7 @@ function toggleTag(key, id, current) {
 }
 
 /** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
-function applyGroove({ comp, phrases, drums, bass, settings, before }, message) {
+function applyGroove({ comp, phrases, drums, bass, percussion, settings, before }, message) {
   const undo = snapshot();
   before?.();
   if (settings) state.project.groove = { ...state.project.groove, ...settings };
@@ -973,7 +985,7 @@ function applyGroove({ comp, phrases, drums, bass, settings, before }, message) 
   const result = generateGroove(toPayload(), {
     style, comp: comp || null, phrases: phrases === true, variation: state.groove.variation,
     drums: drums || null, drumVariation: state.groove.drumVariation,
-    bass: bass || null,
+    bass: bass || null, percussion: percussion || null,
     phraseStyles: (state.project.groove?.phraseStyles || []).map(findStyle).filter(Boolean),
     scales: state.project.groove?.scales || [], color: state.project.groove?.color || "",
   });
@@ -984,6 +996,10 @@ function applyGroove({ comp, phrases, drums, bass, settings, before }, message) 
   if (drums !== undefined) {
     state.project.drums = drums ? result.drums ?? "" : "";
     state.project.groove = { ...state.project.groove, drums: drums || "" };
+  }
+  if (percussion !== undefined) {
+    state.project.percussion = percussion ? result.percussion ?? "" : "";
+    state.project.groove = { ...state.project.groove, percussion: percussion || "" };
   }
   state.project.chords.forEach((chord, i) => {
     const made = result.chords[i] || {};
@@ -996,7 +1012,7 @@ function applyGroove({ comp, phrases, drums, bass, settings, before }, message) 
     }
   });
   if (comp !== undefined) state.project.groove = { ...state.project.groove, comp: comp || "" };
-  if (comp || drums || bass || phrases === true) state.project.style = style.label;
+  if (comp || drums || bass || percussion || phrases === true) state.project.style = style.label;
   renderSettings();
   renderChords();
   validateNow();
@@ -1020,12 +1036,15 @@ function bindGroove() {
     const phrases = anyChord("phrase");
     const beat = state.project.groove?.drums || "";
     const hasDrums = Boolean(String(state.project.drums || "").trim()) && beat && beat !== CUSTOM_COMP;
-    if (!hasComp && !phrases && !hasDrums && !anyChord("bass_line")) { renderGroove(); return; }
+    const percId = state.project.groove?.percussion || "";
+    const hasPerc = Boolean(String(state.project.percussion || "").trim()) && percId && percId !== CUSTOM_COMP;
+    if (!hasComp && !phrases && !hasDrums && !hasPerc && !anyChord("bass_line")) { renderGroove(); return; }
+    const percussion = hasPerc ? (percussionOptions(style).some((o) => o.id === percId) ? percId : style.percussion[0].id) : undefined;
     const comp = hasComp ? (compOptions(style).some((o) => o.id === current) ? current : style.comps[0].id) : undefined;
     const drums = hasDrums ? (beatOptions(style).some((o) => o.id === beat) ? beat : style.beats[0].id) : undefined;
     const hasBass = anyChord("bass_line") && state.project.groove?.bass && state.project.groove.bass !== CUSTOM_COMP;
     const bass = hasBass ? bassForComp(style, comp ?? current) : undefined;
-    applyGroove({ comp, drums, bass, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
+    applyGroove({ comp, drums, bass, percussion, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
   });
   $("#groove-comp").addEventListener("change", (e) => {
     const id = e.target.value;
@@ -1040,6 +1059,12 @@ function bindGroove() {
     if (id === CUSTOM_COMP) return;
     const label = e.target.selectedOptions[0]?.textContent ?? "";
     applyGroove({ drums: id }, id ? `Bateria: ${label}.` : "Bateria desligada.");
+  });
+  $("#groove-percussion").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id === CUSTOM_COMP) return;
+    const label = e.target.selectedOptions[0]?.textContent ?? "";
+    applyGroove({ percussion: id }, id ? `Percussão: ${label}.` : "Percussão desligada.");
   });
   $("#groove-bass").addEventListener("change", (e) => {
     const id = e.target.value;
@@ -1080,12 +1105,12 @@ async function playWithSoundFont(only = null, onEnd = null) {
   }
   const { project, index } = previewProject(only);
   const bytes = midiBytes(project, { phraseMode: state.phraseMode });
-  const fresh = [state.sound.chords, state.sound.phrase, project.drum_bars.length ? state.sound.drums : ""]
+  const fresh = [state.sound.chords, state.sound.phrase, (project.drum_bars.length || project.percussion_bars.length) ? state.sound.drums : ""]
     .map(parsePatchValue).filter((patch) => patch && patch.bank !== "aparelho");
   const slow = setTimeout(() => toast(fresh.length ? "Baixando o banco de sons (só na primeira vez)…" : "Carregando o banco de sons…"), 500);
   try {
     await soundFont.play(bytes, {
-      chords: state.sound.chords, phrase: state.sound.phrase, drums: project.drum_bars.length ? state.sound.drums : NO_DRUMS,
+      chords: state.sound.chords, phrase: state.sound.phrase, drums: (project.drum_bars.length || project.percussion_bars.length) ? state.sound.drums : NO_DRUMS,
       onEnd: onEnd ?? (() => (only ? setPlaying(-1) : stopPlayback())),
     });
   } catch (err) {
@@ -1170,7 +1195,7 @@ function updateSoundPhraseField() {
   const banks = state.sound.chords !== SIMPLE;
   const anyPhrase = (state.report?.chords || []).some((c) => c.phrase);
   $("#sound-phrase-field").hidden = !banks || !anyPhrase;
-  $("#sound-drums-field").hidden = !banks || !String(state.project?.drums || "").trim();
+  $("#sound-drums-field").hidden = !banks || !String(state.project?.drums || state.project?.percussion || "").trim();
   $("#sound-simple-hint").hidden = banks;
 }
 

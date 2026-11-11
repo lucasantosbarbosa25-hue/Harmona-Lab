@@ -98,16 +98,15 @@ export function parsePhrase(value, middleC) {
       tick += length;
       continue;
     }
-    let note;
-    try {
-      note = parseNote(name, middleC);
-    } catch (err) {
-      if (!(err instanceof NoteParseError)) throw err;
-      errors.push(`Frase: ${err.message}`);
-      tick += length;
-      continue;
-    }
-    events.push({ note, start: tick, length, role: star ? normalizeRole(roleText) : "", token });
+    const role = star ? normalizeRole(roleText) : "";
+    name.split("&").forEach((part, voice) => { // dueto: "C5&A4" = as duas notas juntas; a primeira é a melodia
+      try {
+        events.push({ note: parseNote(part, middleC), start: tick, length, role, token, voice: Math.min(voice, 1) });
+      } catch (err) {
+        if (!(err instanceof NoteParseError)) throw err;
+        errors.push(`Frase: ${err.message}`);
+      }
+    });
     tick += length;
   }
   return { events, ticks: tick, errors };
@@ -135,7 +134,7 @@ export function renamePhraseText(value, fromMiddleC, toMiddleC) {
   return splitPhrase(value).map((token) => {
     const [head, star, role] = partition(token, "*");
     let [name, slash, dur] = partition(head, "/");
-    if (slash && name && name !== "r" && name !== "R") name = renameNoteText(name, fromMiddleC, toMiddleC);
+    if (slash && name && name !== "r" && name !== "R") name = name.split("&").map((part) => renameNoteText(part, fromMiddleC, toMiddleC)).join("&");
     return `${name}${slash}${dur}${star}${role}`;
   }).join(" ");
 }
@@ -199,9 +198,11 @@ export function parseComp(value) {
 export const DRUM_PIECES = {
   K: 36, S: 38, X: 37, H: 42, O: 46, P: 44, R: 51, E: 53, C: 49,
   T: 50, M: 47, F: 43, B: 56, L: 75, A: 54, Q: 70, G: 63, N: 64,
+  U: 62, V: 60, W: 61, Y: 65, Z: 66, J: 73, I: 74, D: 67,
 };
 const DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, "
-  + "T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas";
+  + "T/M/F tons, B cowbell (campana), L clave, A pandeirola, Q ganzá, G conga aberta aguda, N conga grave, U conga muda (tapa), "
+  + "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô";
 const DRUM_TOKEN_RE = /^([A-Z]|r)([!?]?)$/;
 
 /** Compassos → camadas → fichas. */

@@ -190,6 +190,8 @@ def analyze_chord(project: Project, chord: ChordEvent, index: int, start_beats: 
         "phrase": {
             "events": [{"midi": e.note.midi, "name": e.note.name(mc), "start": e.start, "length": e.length, "role": e.role}
                        for e in chord.phrase_events],
+            **({"extra": [{"midi": e.note.midi, "name": e.note.name(mc), "start": e.start, "length": e.length}
+                          for e in chord.phrase_extra]} if chord.phrase_extra else {}),
         } if chord.phrase_events else None,
         "comp": chord.comp or None,
         "bass_line": chord.bass_line or None,
@@ -222,6 +224,7 @@ def analyze(project: Project, issues: list[Issue] | None = None) -> dict[str, An
         "beats_per_bar": project.beats_per_bar,
         "strum_delay_ms": project.strum_delay_ms,
         "drums": project.drums or None,
+        "percussion": project.percussion or None,
         "totals": {
             "chords": len(project.chords),
             "beats": total,

@@ -15,6 +15,9 @@
 //                  X aro, H chimbal fechado, O aberto, P de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave,
 //                  A pandeirola (tamborim), Q ganzá, G/N congas. Os beats vão do básico às variações. Viradas (fills): uma camada
 //                  de 1 ou 2 tempos que substitui o fim do compasso; depois dela o beat volta no tempo 1, com um ataque de prato.
+//                  Os beats têm dois compassos: o segundo varia o chimbal (semicolcheias, notas leves, aberturas "O").
+//   percussão (percussion): mesma notação, numa camada própria (congas, bongô, güiro, ganzá, pandeirola, agogô...).
+//                  Peças novas: U conga muda (tapa), V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô.
 //   baixo (bass): linhas de um compasso, GRAU/DURAÇÃO: 1 = a nota de baixo do acorde, 2 a 9 = graus da escala acima dela
 //                  (8 = a oitava), _2 a _9 = graus abaixo (_4 = a quinta abaixo), x = aproximação cromática da nota de baixo
 //                  do acorde seguinte, r = pausa. A levada pode indicar a sua linha (bass: "id"); a virada de baixo (bassFill)
@@ -26,6 +29,7 @@
 // (duas aproximações); blue = chance de blue note; leap = chance de salto; rest = chance de respirar
 // um tempo; motif = chance de repetir o ritmo do acorde anterior. pentatonic: prefere a pentatônica da escala.
 // minNotes: mínimo de notas a cada 4 tempos (a frase nunca fica vazia demais).
+// duet: chance de a frase sair em dueto, em oitavas (octave) ou em sextas da escala (sixth); as notas de chegada sustentam até a próxima.
 // Regra fixa do gerador: dentro de uma frase, nunca a mesma nota duas vezes seguidas (pausa de até um tempo no meio não
 // conta como fim de frase). Entre o fim de uma frase e o começo da próxima, pode. Baixo e levadas não seguem essa regra.
 
@@ -53,9 +57,13 @@ export const STYLES = [
       { id: "rifftercina", kind: "ostinato", label: "Riff em tercinas", pattern: "E/1 ; M1/4t M3/8t M5/4t M3/8t M1/4t M2/8t M3/4" },
     ],
     beats: [
-      { id: "ride", label: "Condução de jazz", bars: ["R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4"] },
-      { id: "feathered", label: "Com bumbo leve nos quatro tempos", bars: ["R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4 ; K?/4 K?/4 K?/4 K?/4"] },
-      { id: "comping", label: "Com respostas na caixa", bars: ["R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4 ; r/2. r/4t X/8t", "R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4 ; r/4 r/4t S?/8t r/2 ; r/2. K?/4"] },
+      { id: "ride", label: "Condução de jazz", bars: ["R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4", "R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4 ; r/2. r/4t X/8t"] },
+      { id: "chimbal", label: "Chimbal abrindo e fechando", bars: ["O/4 H!/4t H?/8t O/4 H!/4t H?/8t ; K?/4 K?/4 K?/4 K?/4", "O/4 H!/4t H?/8t O/4 H!/4t O?/8t ; K?/4 K?/4 K?/4 K?/4 ; r/2. r/4t S?/8t"] },
+      { id: "comping", label: "Condução com respostas na caixa", bars: ["R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4 ; r/2. r/4t X/8t", "R/4 R/4t R?/8t R/4 R/4t R?/8t ; r/4 P/4 r/4 P/4 ; r/4 r/4t S?/8t r/2 ; r/2. K?/4"] },
+    ],
+    percussion: [
+      { id: "shaker", label: "Shaker em tercinas", bars: ["Q!/8t Q?/8t Q?/8t Q!/8t Q?/8t Q?/8t Q!/8t Q?/8t Q?/8t Q!/8t Q?/8t Q?/8t"] },
+      { id: "pandeirola", label: "Pandeirola no 2 e 4", bars: ["r/4 A!/4 r/4 A!/4"] },
     ],
     fills: ["S/8t S?/8t S/8t S/4t S!/8t", "T/8t T/8t M/8t M/8t F/8t F!/8t", "S/8t S/8t S!/8t", "S/8t S/8t S/8t S/8t S/8t S!/8t"],
     bass: [
@@ -65,7 +73,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.5, figure: "8t" },
     cells: SWING_CELLS,
-    phrase: { chromatic: 0.55, enclosure: 0.3, blue: 0, leap: 0.25, rest: 0.12, motif: 0.4, pentatonic: false, minNotes: 4 },
+    phrase: { chromatic: 0.55, enclosure: 0.3, blue: 0, leap: 0.25, rest: 0.12, motif: 0.4, pentatonic: false, minNotes: 4 , duet: { octave: 0.1, sixth: 0.05 } },
   },
   {
     id: "blues", label: "Blues",
@@ -80,9 +88,13 @@ export const STYLES = [
       { id: "riffresposta", kind: "ostinato", label: "Riff de resposta", pattern: "E/1 ; r/4t M1/8t M3!/4 M5/8t M4/8t M3/8t M1/4" },
     ],
     beats: [
-      { id: "shuffle", label: "Shuffle", bars: ["H/4t H?/8t H/4t H?/8t H/4t H?/8t H/4t H?/8t ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "lento", label: "Blues lento (12/8)", bars: ["H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t ; K/4 r/4 K/4t K/8t r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "ride", label: "Shuffle na condução", bars: ["R/4t R?/8t R/4t R?/8t R/4t R?/8t R/4t R?/8t ; K/4 r/4t K/8t K/4 r/4 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "shuffle", label: "Shuffle", bars: ["H/4t H?/8t H/4t H?/8t H/4t H?/8t H/4t H?/8t ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4", "H/4t H?/8t H/4t H?/8t H/4t H?/8t O/4t H?/8t ; K/4 r/4 K/4 r/4t K/8t ; r/4 S!/4 r/4 S!/4"] },
+      { id: "lento", label: "Blues lento (12/8)", bars: ["H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t ; K/4 r/4 K/4t K/8t r/4 ; r/4 S!/4 r/4 S!/4", "H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t O/8t ; K/4 r/4 K/4t K/8t r/4 ; r/4 S!/4 r/4 S!/4t S?/8t"] },
+      { id: "ride", label: "Shuffle na condução", bars: ["R/4t R?/8t R/4t R?/8t R/4t R?/8t R/4t R?/8t ; K/4 r/4t K/8t K/4 r/4 ; r/4 S!/4 r/4 S!/4 ; r/4 P/4 r/4 P/4", "R/4t R?/8t R/4t R?/8t R/4t R?/8t E/4t R?/8t ; K/4 r/4t K/8t K/4 r/4 ; r/4 S!/4 r/4 S!/4 ; r/4 P/4 r/4 O/4"] },
+    ],
+    percussion: [
+      { id: "pandeirola", label: "Pandeirola no 2 e 4", bars: ["r/4 A!/4 r/4 A!/4"] },
+      { id: "shaker", label: "Shaker em tercinas", bars: ["Q!/8t Q?/8t Q?/8t Q!/8t Q?/8t Q?/8t Q!/8t Q?/8t Q?/8t Q!/8t Q?/8t Q?/8t ; r/4 A!/4 r/4 A!/4"] },
     ],
     fills: ["S/8t S?/8t S/8t S/4t S!/8t", "T/8t T/8t M/8t M/8t F/8t F!/8t", "S/8t S/8t S!/8t", "S/8t S/8t S/8t S/8t S/8t S!/8t"],
     bass: [
@@ -92,7 +104,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.45, figure: "8t" },
     cells: ["4t 8t 4", "8t 8t 8t 4", "r4t 8t 4", "4t 8t+4", "4 r4", "r4 4t 8t", "8t 8t 8t 8t 8t 8t", "4t 8t 4t 8t", "2", "4+4t 8t", "r4t 8t 8t 8t 8t"],
-    phrase: { chromatic: 0.25, enclosure: 0.05, blue: 0.55, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
+    phrase: { chromatic: 0.25, enclosure: 0.05, blue: 0.55, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 , duet: { octave: 0.15, sixth: 0.25 } },
   },
   {
     id: "fusion", label: "Jazz fusion",
@@ -107,9 +119,13 @@ export const STYLES = [
       { id: "grupo5", kind: "ostinato", label: "Grupo de cinco contra o compasso", pattern: "E/1 ; M1/16 M3/16 M5/16 M4/16 M2/16 M1/16 M3/16 M5/16 M4/16 M2/16 M1/16 M3/16 M5/16 M4/16 M2/16 M1/16" },
     ],
     beats: [
-      { id: "dezesseis", label: "Dezesseis avos", bars: ["H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 ; K/8. K/16 r/4 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "sincopado", label: "Bumbo sincopado", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/8. K/16 r/8 K/8 r/8. K/16 r/4 ; r/4 S!/4 r/8. S?/16 S!/4"] },
-      { id: "cupula", label: "Condução com cúpula", bars: ["R/8 E/8 R/8 E/8 R/8 E/8 R/8 E/8 ; K/8. K/16 r/4 r/8 K/8 r/8 K/8 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "dezesseis", label: "Dezesseis avos", bars: ["H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 ; K/8. K/16 r/4 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4", "H!/16 H?/16 H/16 H?/16 H/8 O/8 H!/16 H?/16 H/16 H?/16 H/16 H?/16 O/8 ; K/8. K/16 r/4 r/8 K/8 r/8. K/16 ; r/4 S!/4 r/8. S?/16 S!/4"] },
+      { id: "sincopado", label: "Bumbo sincopado", bars: ["H/8 O/8 H/8 H?/8 H/8 O/8 H/8 H?/8 ; K/8. K/16 r/8 K/8 r/8. K/16 r/4 ; r/4 S!/4 r/8. S?/16 S!/4", "H/8 H?/8 H/16 H?/16 H?/8 H/8 H?/8 H/8 O/8 ; K/8. K/16 r/8 K/8 r/8. K/16 r/8 K/8 ; r/4 S!/4 r/8. S?/16 S!/8 S?/16 S?/16"] },
+      { id: "cupula", label: "Condução com cúpula", bars: ["R/8 E/8 R/8 E/8 R/8 E/8 R/8 E/8 ; K/8. K/16 r/4 r/8 K/8 r/8 K/8 ; r/4 S!/4 r/4 S!/4 ; r/4 P/4 r/4 P/4", "R/8 E/8 R/8 E/8 R/8 E/8 R/8 E/8 ; K/8. K/16 r/4 r/8 K/8 r/8 K/8 ; r/4 S!/4 r/4 S!/4 ; r/4 P/4 r/4 O/4"] },
+    ],
+    percussion: [
+      { id: "shakerconga", label: "Shaker e congas", bars: ["Q!/16 Q?/16 Q/16 Q?/16 Q!/16 Q?/16 Q/16 Q?/16 Q!/16 Q?/16 Q/16 Q?/16 Q!/16 Q?/16 Q/16 Q?/16 ; r/4 G/8 N/8 r/4 G/16 G/16 N/8"] },
+      { id: "congas", label: "Congas e bongô", bars: ["G/8 N/8 U!/8 N/8 G/8 G/16 N/16 U!/8 N/8 ; V!/8 W?/8 V/8 W?/8 V!/8 W?/8 V/8 W?/8"] },
     ],
     fills: ["S/16 S/16 T/16 T/16 M/16 M/16 F/16 F!/16", "S/16 S/16 S/16 r/16 K/16 S/16 S/16 F!/16", "S/16 S/16 S/16 S!/16", "S/8 S/8 T/8 F!/8", "S/16q S/16q T/16q M/16q F!/16q"],
     bass: [
@@ -122,7 +138,7 @@ export const STYLES = [
       "16 16 16 16", "16 16 16 16 16 16 16 16", "8 16 16", "16 16 8", "r16 16 16 16", "16 16 r16 16", "8. 16", "16 8 16",
       "16q 16q 16q 16q 16q", "8t 8t 8t", "16t 16t 16t 16t 16t 16t", "8. 16+4", "r8 16 16 8 8", "4", "16 16 16 16 8. 16", "32 32 32 32 16 16 4",
     ],
-    phrase: { chromatic: 0.5, enclosure: 0.3, blue: 0, leap: 0.35, rest: 0.1, motif: 0.3, pentatonic: false, minNotes: 8 },
+    phrase: { chromatic: 0.5, enclosure: 0.3, blue: 0, leap: 0.35, rest: 0.1, motif: 0.3, pentatonic: false, minNotes: 8 , duet: { octave: 0.0, sixth: 0.05 } },
   },
   {
     id: "neosoul", label: "Neo-soul",
@@ -137,9 +153,13 @@ export const STYLES = [
       { id: "atrasada", kind: "ostinato", label: "Motivo que entra depois do tempo", pattern: "E/1 ; r/8. M3/16+8 M2/8 r/8 M1/8+4" },
     ],
     beats: [
-      { id: "boombap", label: "Boom-bap lento", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 r/8 K/8 r/4 ; r/4 X/4 r/4 X/4"] },
-      { id: "fantasma", label: "Com notas fantasma", bars: ["H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 ; K/8. K/16 r/4 r/8. K/16 r/4 ; r/4 S/4 r/8 S?/16 r/16 S/4"] },
-      { id: "espaco", label: "Espaçado", bars: ["H/4 H/4 H/4 H/4 ; K/4 r/2 r/8 K/8 ; r/2 X/2"] },
+      { id: "boombap", label: "Boom-bap lento", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 r/8 K/8 r/4 ; r/4 X/4 r/4 X/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 O!/8 ; K/4. K/8 r/8 K/8 r/8. K/16 ; r/4 X/4 r/4 X/4"] },
+      { id: "fantasma", label: "Com notas fantasma", bars: ["H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 ; K/8. K/16 r/4 r/8. K/16 r/4 ; r/4 S/4 r/8 S?/16 r/16 S/4", "H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 O/8 ; K/8. K/16 r/4 r/8. K/16 r/8 K/8 ; r/4 S/4 r/16 S?/16 S?/16 r/16 S/4"] },
+      { id: "espaco", label: "Espaçado", bars: ["H/4 H/4 H/4 H/4 ; K/4 r/2 r/8 K/8 ; r/2 X/2", "H/4 H/4 H/4 O/4 ; K/4 r/2 r/8 K/8 ; r/2 X/4. X?/8"] },
+    ],
+    percussion: [
+      { id: "shaker", label: "Shaker em semicolcheias", bars: ["Q!/16 Q?/16 Q/16 Q?/16 Q!/16 Q?/16 Q/16 Q?/16 Q!/16 Q?/16 Q/16 Q?/16 Q!/16 Q?/16 Q/16 Q?/16"] },
+      { id: "pandeirola", label: "Pandeirola e shaker", bars: ["Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 ; r/4 A!/4 r/4 A!/4"] },
     ],
     fills: ["r/8 S?/16 S/16 S/8 S!/8", "T/8 M/8 F/4", "S?/16 S/16 S!/8"],
     bass: [
@@ -149,7 +169,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.4, figure: "16" },
     cells: ["r8 16 16+4", "r16 16 8 4", "8. 16+4", "r8 8 4", "16 16 8+4", "4 r4", "r4 r8 16 16", "8 8 r4", "r16 8 16+4", "2", "8t 8t 8t 4", "r8. 16 4"],
-    phrase: { chromatic: 0.3, enclosure: 0.1, blue: 0.15, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
+    phrase: { chromatic: 0.3, enclosure: 0.1, blue: 0.15, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 , duet: { octave: 0.1, sixth: 0.25 } },
   },
   {
     id: "gospel", label: "Gospel americano",
@@ -164,9 +184,13 @@ export const STYLES = [
       { id: "walkresposta", kind: "ostinato", label: "Baixo andando com resposta", pattern: "S1/4 S3/4 S5/4 S6/8 S7/8 ; r/8 D/8+4 r/8 D!/8+4" },
     ],
     beats: [
-      { id: "pulso", label: "Pulso", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/8 K/8 K/4 r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "128", label: "Balanço em tercinas (12/8)", bars: ["H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t ; K/4 r/4t K/8t K/4 r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "shout", label: "Shout (dobrado)", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/8 r/8 K/8 r/8 K/8 r/8 K/8 r/8 ; r/8 S!/8 r/8 S!/8 r/8 S!/8 r/8 S!/8"] },
+      { id: "pulso", label: "Pulso", bars: ["H/8 O/8 H/8 H?/8 H/8 O/8 H/8 H?/8 ; K/4 r/8 K/8 K/4 r/4 ; r/4 S!/4 r/4 S!/4", "H/8 H?/8 H/16 H?/16 H?/8 H/8 H?/8 H/8 O/8 ; K/4 r/8 K/8 K/4 r/8 K/8 ; r/4 S!/4 r/8. S?/16 S!/4"] },
+      { id: "128", label: "Balanço em tercinas (12/8)", bars: ["H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t ; K/4 r/4t K/8t K/4 r/4 ; r/4 S!/4 r/4 S!/4", "H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t H?/8t H/8t H?/8t O/8t ; K/4 r/4t K/8t K/4 r/4t K/8t ; r/4 S!/4 r/4 S!/4t S?/8t"] },
+      { id: "shout", label: "Shout (dobrado)", bars: ["H!/16 H?/16 H/16 O/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 O/16 H!/16 H?/16 H/16 H?/16 ; K/8 r/8 K/8 r/8 K/8 r/8 K/8 r/8 ; r/8 S!/8 r/8 S!/8 r/8 S!/8 r/8 S!/8", "H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 O/8 ; K/8 r/8 K/8 r/8 K/8 r/8 K/8 r/8 ; r/8 S!/8 r/8 S!/8 r/8 S!/8 S?/16 S?/16 S!/8"] },
+    ],
+    percussion: [
+      { id: "pandeirola", label: "Pandeirola", bars: ["A?/8 A?/8 A!/8 A?/8 A?/8 A?/8 A!/8 A?/8"] },
+      { id: "pandeirola16", label: "Pandeirola em semicolcheias", bars: ["A?/16 A?/16 A!/16 A?/16 A?/16 A?/16 A!/16 A?/16 A?/16 A?/16 A!/16 A?/16 A?/16 A?/16 A!/16 A?/16"] },
     ],
     fills: ["S/16 S/16 T/16 T/16 M/16 M/16 F/16 F!/16", "S/16 S/16 S/16 r/16 K/16 S/16 S/16 F!/16", "S/16 S/16 S/16 S!/16", "S/8 S/8 T/8 F!/8", "S/16t S/16t S/16t S/16t S/16t S/16t F!/4"],
     bass: [
@@ -179,7 +203,7 @@ export const STYLES = [
       "16 16 16 16 4", "r8 16 16 4", "32 32 32 32 16 16 4", "8 16 16 4", "16t 16t 16t 16t 16t 16t 4", "r4 16 16 16 16", "8. 16+4",
       "4 r4", "r8 8 4", "16 16 8 4", "8t 8t 8t 4", "r16 16 16 16 4", "2",
     ],
-    phrase: { chromatic: 0.35, enclosure: 0.1, blue: 0.4, leap: 0.2, rest: 0.2, motif: 0.45, pentatonic: true, minNotes: 4 },
+    phrase: { chromatic: 0.35, enclosure: 0.1, blue: 0.4, leap: 0.2, rest: 0.2, motif: 0.45, pentatonic: true, minNotes: 4 , duet: { octave: 0.3, sixth: 0.3 } },
   },
   {
     id: "funk", label: "Funk (16 avos)",
@@ -194,9 +218,13 @@ export const STYLES = [
       { id: "clavmelodico", kind: "ostinato", label: "Clavinete melódico", pattern: "E/1 ; M1/16 M1?/16 r/16 M3/16 r/16 M4/16 M5/16 r/16 M5?/16 M4/16 r/16 M3/16 M1/16 r/16 M1?/16 r/16" },
     ],
     beats: [
-      { id: "basico", label: "Funk básico", bars: ["H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 ; K/8 r/8 r/8. K/16 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "fantasmas", label: "Caixa com fantasmas", bars: ["H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 ; K/8 r/8 r/8. K/16 r/8 K/8 r/4 ; r/4 S!/8. S?/16 r/8 S?/16 r/16 S!/4"] },
-      { id: "aberto", label: "Chimbal aberto no contratempo", bars: ["H/8 O/8 H/8 O/8 H/8 O/8 H/8 O/8 ; K/8 r/8 r/8. K/16 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "basico", label: "Funk básico", bars: ["H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 ; K/8 r/8 r/8. K/16 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4", "H!/16 H?/16 H/16 O/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 O/16 H!/16 H?/16 H/16 H?/16 ; K/8 r/8 r/8. K/16 r/8 K/8 r/8. K/16 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "fantasmas", label: "Caixa com fantasmas", bars: ["H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 H!/16 H?/16 H/16 H?/16 ; K/8 r/8 r/8. K/16 r/8 K/8 r/4 ; r/4 S!/8. S?/16 r/8 S?/16 r/16 S!/4", "H!/16 H?/16 H/16 H?/16 H/8 O/8 H!/16 H?/16 H/16 H?/16 H/16 H?/16 O/8 ; K/8 r/8 r/8. K/16 r/8 K/8 r/8. K/16 ; r/4 S!/8. S?/16 r/16 S?/16 S?/16 r/16 S!/4"] },
+      { id: "aberto", label: "Chimbal aberto no contratempo", bars: ["H/8 O/8 H/8 O/8 H/8 O/8 H/8 O/8 ; K/8 r/8 r/8. K/16 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4", "H/8 O/8 H/8 O/8 H/16 H?/16 O/8 H/8 O!/8 ; K/8 r/8 r/8. K/16 r/8 K/8 r/8 K/8 ; r/4 S!/4 r/4 S!/4"] },
+    ],
+    percussion: [
+      { id: "congas", label: "Congas", bars: ["U?/16 r/16 G/16 r/16 N!/8 r/16 G/16 U?/16 r/16 G/16 G/16 N!/8 r/8"] },
+      { id: "pandeirola", label: "Pandeirola em semicolcheias", bars: ["A?/16 A?/16 A!/16 A?/16 A?/16 A?/16 A!/16 A?/16 A?/16 A?/16 A!/16 A?/16 A?/16 A?/16 A!/16 A?/16"] },
     ],
     fills: ["S/16 S/16 T/16 T/16 M/16 M/16 F/16 F!/16", "S/16 S/16 S/16 r/16 K/16 S/16 S/16 F!/16", "S/16 S/16 S/16 S!/16", "S/8 S/8 T/8 F!/8"],
     bass: [
@@ -206,7 +234,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.5, figure: "16" },
     cells: ["16 r16 16 16", "r16 16 r16 16", "16 16 r8", "r8 16 16", "16 r16 r16 16", "8 r16 16", "16 16 16 r16", "r4", "16 r16 16 r16 r16 16 16 r16", "8 8", "r16 16 16 r16 16 r16 8"],
-    phrase: { chromatic: 0.2, enclosure: 0, blue: 0.3, leap: 0.15, rest: 0.2, motif: 0.7, pentatonic: true, minNotes: 4 },
+    phrase: { chromatic: 0.2, enclosure: 0, blue: 0.3, leap: 0.15, rest: 0.2, motif: 0.7, pentatonic: true, minNotes: 4 , duet: { octave: 0.2, sixth: 0.1 } },
   },
   {
     id: "salsa", label: "Salsa",
@@ -221,9 +249,13 @@ export const STYLES = [
       { id: "bajocantado", kind: "ostinato", label: "Baixo cantado", pattern: "S1/4. S5/8+4 S8/4 ; D/8 r/8 D/8 D/8 r/8 D/8 r/8 D/8" },
     ],
     beats: [
-      { id: "clave", label: "Clave e cáscara (2-3)", bars: ["r/4 L/4 L/4 r/4 ; B/4 B/8 B/8 r/8 B/8 B/4 ; r/2. G/8 G/8 ; r/4. K/8 r/4 K/4", "L/4. L/4. L/4 ; B/4 B/8 B/8 r/8 B/8 B/4 ; r/2. G/8 G/8 ; r/4. K/8 r/4 K/4"] },
-      { id: "campana", label: "Campana", bars: ["r/4 L/4 L/4 r/4 ; B!/4 B?/8 B?/8 B!/4 B?/8 B?/8 ; r/2. G/8 G/8 ; r/4. K/8 r/4 K/4", "L/4. L/4. L/4 ; B!/4 B?/8 B?/8 B!/4 B?/8 B?/8 ; r/2. G/8 G/8 ; r/4. K/8 r/4 K/4"] },
-      { id: "conga", label: "Só clave e congas", bars: ["r/4 L/4 L/4 r/4 ; N/8 r/8 G?/8 r/8 N/8 r/8 G/8 G/8", "L/4. L/4. L/4 ; N/8 r/8 G?/8 r/8 N/8 r/8 G/8 G/8"] },
+      { id: "cascara", label: "Cáscara, clave e bombo (2-3)", bars: ["R/8 r/8 R/8 r/8 R/8 R/8 r/8 R/8 ; r/4 L/4 L/4 r/4 ; r/4. K/8 r/4 K/4 ; r/2. X/4", "R/8 r/8 R/8 R/8 r/8 R/8 r/8 R/8 ; L/4. L/4. L/4 ; r/4. K/8 r/4 K/4 ; r/2. X/4"] },
+      { id: "campana", label: "Campana de mambo", bars: ["B!/4 B?/8 B/8 B!/4 B?/8 B/8 ; r/4 L/4 L/4 r/4 ; r/4. K/8 r/4 K/4 ; r/2. X/4 ; C!/4 r/2.", "B!/4 B?/8 B/8 B!/8 B/8 B?/8 B/8 ; L/4. L/4. L/4 ; r/4. K/8 r/4 K/4 ; r/2. X/4"] },
+      { id: "abanico", label: "Cáscara com abanico nos timbales", bars: ["R/8 r/8 R/8 r/8 R/8 R/8 r/8 R/8 ; r/4 L/4 L/4 r/4 ; r/4. K/8 r/4 K/4 ; r/2. Y/4", "R/8 r/8 R/8 R/8 r/8 R/8 r/8 R/8 ; L/4. L/4. L/4 ; r/4. K/8 r/4 K/4 ; r/2 r/8 Y/16 Y/16 Y/16 Y/16 Z!/8"] },
+    ],
+    percussion: [
+      { id: "completa", label: "Congas, bongô e güiro", bars: ["U?/8 U?/8 U!/8 U?/8 U?/8 U?/8 N/8 N/8 ; V!/8 W?/8 V/8 W?/8 V!/8 W?/8 V/8 W?/8 ; I/8 J/16 J/16 I/8 J/16 J/16 I/8 J/16 J/16 I/8 J/16 J/16"] },
+      { id: "congas", label: "Congas e güiro", bars: ["U?/8 U?/8 U!/8 U?/8 U?/8 U?/8 N/8 N/8 ; I/8 J/16 J/16 I/8 J/16 J/16 I/8 J/16 J/16 I/8 J/16 J/16"] },
     ],
     fills: ["T/8 T/8 M/8 M!/8", "T/16 T/16 T/8 M/8 F!/8", "T/16 T/16 M!/8"],
     bass: [
@@ -233,7 +265,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.3, figure: "8" },
     cells: ["8 8 8 8", "r8 8 8 8", "8 r8 8 8", "8 8 r8 8", "r8 8+8 8", "8 8+4", "4 r8 8", "r8 8 r8 8", "8 8 8 8+4 r4", "4 4", "r8 8 4"],
-    phrase: { chromatic: 0.15, enclosure: 0.05, blue: 0, leap: 0.3, rest: 0.15, motif: 0.6, pentatonic: false, minNotes: 4 },
+    phrase: { chromatic: 0.15, enclosure: 0.05, blue: 0, leap: 0.3, rest: 0.15, motif: 0.6, pentatonic: false, minNotes: 4 , duet: { octave: 0.75, sixth: 0.05 } },
   },
   {
     id: "samba", label: "Samba",
@@ -247,9 +279,13 @@ export const STYLES = [
       { id: "baixocantado", kind: "ostinato", label: "Baixo cantado", pattern: "S1/8. S5/16 S8/8 S5/8 S1/8. S5/16 S7/8 S5/8 ; D/16 r/16 D/16 r/16 r/16 D/16 r/16 D/16 r/16 D/16 r/16 D/16 r/16 r/16 D/16 r/16" },
     ],
     beats: [
-      { id: "samba", label: "Samba", bars: ["H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; A/16 r/16 A/16 r/16 r/16 A/16 r/16 A/16 r/16 A/16 r/16 A/16 r/16 r/16 A/16 r/16"] },
-      { id: "partido", label: "Partido alto", bars: ["H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; X/8 r/8 X/8 r/16 X/16 r/8 X/8 r/8 X/8"] },
-      { id: "batucada", label: "Batucada com ganzá", bars: ["Q/16 Q?/16 Q/16 Q?/16 Q/16 Q?/16 Q/16 Q?/16 Q/16 Q?/16 Q/16 Q?/16 Q/16 Q?/16 Q/16 Q?/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; r/4 X/4 r/4 X/8 X/8"] },
+      { id: "samba", label: "Samba", bars: ["H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; X/16 r/16 X/16 r/16 r/16 X/16 r/16 X/16 r/16 X/16 r/16 X/16 r/16 r/16 X/16 r/16", "H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 O/8 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; X/16 r/16 X/16 r/16 r/16 X/16 r/16 X/16 r/16 X/16 r/16 X/16 r/16 r/16 X/16 r/16"] },
+      { id: "partido", label: "Partido alto", bars: ["H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; X/8 r/8 X/8 r/16 X/16 r/8 X/8 r/8 X/8", "H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 O/8 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; X/8 r/8 X/8 r/16 X/16 r/8 X/8 X/16 X/16 X!/8"] },
+      { id: "batucada", label: "Batucada", bars: ["H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; r/4 X/4 r/4 X/8 X/8", "H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 H?/16 H?/16 H/16 H!/16 ; K?/8. K/16 K!/4 K?/8. K/16 K!/4 ; r/4 X/4 r/8 X/16 X/16 X/8 X!/8 ; r/2. O/4"] },
+    ],
+    percussion: [
+      { id: "escola", label: "Tamborim, ganzá e agogô", bars: ["A/16 r/16 A/16 r/16 r/16 A/16 r/16 A/16 r/16 A/16 r/16 A/16 r/16 r/16 A/16 r/16 ; Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 ; D/8 r/8 D/8 D/8 r/8 D/8 r/4"] },
+      { id: "ganza", label: "Ganzá e tamborim", bars: ["A/16 r/16 A/16 r/16 r/16 A/16 r/16 A/16 r/16 A/16 r/16 A/16 r/16 r/16 A/16 r/16 ; Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16"] },
     ],
     fills: ["S/16 S/16 S/16 S/16 S/16 r/16 S!/8", "T/16 T/16 M/16 M/16 F/8 F!/8", "S/16 S/16 S!/8"],
     bass: [
@@ -259,7 +295,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.35, figure: "16" },
     cells: ["16 8 16", "16 16 16 16", "r16 16 16 16", "16 8 16 16 8 16", "8. 16", "16 16 8", "8 16 16", "r16 8 16+4", "16 8 16+4", "4", "r8 16 16", "16 16 16 16 16 8 16"],
-    phrase: { chromatic: 0.2, enclosure: 0.05, blue: 0, leap: 0.25, rest: 0.1, motif: 0.55, pentatonic: false, minNotes: 6 },
+    phrase: { chromatic: 0.2, enclosure: 0.05, blue: 0, leap: 0.25, rest: 0.1, motif: 0.55, pentatonic: false, minNotes: 6 , duet: { octave: 0.15, sixth: 0.35 } },
   },
   {
     id: "bossa", label: "Bossa nova",
@@ -273,9 +309,13 @@ export const STYLES = [
       { id: "descendente", kind: "ostinato", label: "Motivo descendente", pattern: "B/2 B/2 ; M5/4. M4/8+4 M3/8 M2/8" },
     ],
     beats: [
-      { id: "bossa", label: "Bossa nova", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 K/4. K/8 ; X/4. X/4. X/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 K/4. K/8 ; r/4 X/4. X/4."] },
-      { id: "ride", label: "Na condução", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4. K/8 K/4. K/8 ; X/4. X/4. X/4", "R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4. K/8 K/4. K/8 ; r/4 X/4. X/4."] },
-      { id: "ganza", label: "Só ganzá e aro", bars: ["Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 ; X/4. X/4. X/4", "Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 ; r/4 X/4. X/4."] },
+      { id: "bossa", label: "Bossa nova", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 K/4. K/8 ; X/4. X/4. X/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 O?/8 ; K/4. K/8 K/4. K/8 ; r/4 X/4. X/4."] },
+      { id: "ride", label: "Na condução", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4. K/8 K/4. K/8 ; X/4. X/4. X/4 ; r/4 P/4 r/4 P/4", "R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4. K/8 K/4. K/8 ; r/4 X/4. X/4. ; r/4 P/4 r/4 P/4"] },
+      { id: "vassourinha", label: "Chimbal em semicolcheias leves", bars: ["H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 ; K/4. K/8 K/4. K/8 ; X/4. X/4. X/4", "H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 H/16 H?/16 H?/16 H?/16 O?/8 ; K/4. K/8 K/4. K/8 ; r/4 X/4. X/4."] },
+    ],
+    percussion: [
+      { id: "ganza", label: "Ganzá suave", bars: ["Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16"] },
+      { id: "ganzaclave", label: "Ganzá e clave", bars: ["Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 ; L/4. L/4. L/4", "Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 Q?/16 Q?/16 Q/16 Q?/16 ; r/4 L/4. L/4."] },
     ],
     fills: ["T/8 M/8 F/4", "X/8 X/8 X/4", "S?/8 S/8"],
     bass: [
@@ -285,7 +325,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.3, figure: "8" },
     cells: ["r8 8 4", "8 8+4", "4 r8 8", "r8 8+4", "4. 8", "8 4 8", "2", "r4 8 8", "8 8 8 8", "r8 8 8 8+4 r4", "4 4"],
-    phrase: { chromatic: 0.25, enclosure: 0.1, blue: 0, leap: 0.2, rest: 0.25, motif: 0.5, pentatonic: false, minNotes: 3 },
+    phrase: { chromatic: 0.25, enclosure: 0.1, blue: 0, leap: 0.2, rest: 0.25, motif: 0.5, pentatonic: false, minNotes: 3 , duet: { octave: 0.1, sixth: 0.3 } },
   },
   {
     id: "rock", label: "Rock",
@@ -300,9 +340,13 @@ export const STYLES = [
       { id: "riffsincopado", kind: "ostinato", label: "Riff sincopado", pattern: "S1/8. S1/16 r/8 S3/8 S4/8. S5/16+4 ; r/2 D!/2" },
     ],
     beats: [
-      { id: "basico", label: "Rock básico", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/4 K/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4"] },
-      { id: "meio", label: "Meio tempo", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4 r/8 K/8 r/2 ; r/2 S!/2"] },
-      { id: "aberto", label: "Chimbal aberto e bumbo nos quatro", bars: ["O/4 O/4 O/4 O/4 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "basico", label: "Rock básico", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/4 K/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 O!/8 ; K/4 r/4 K/8 K/8 r/8 K/8 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "meio", label: "Meio tempo", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4 r/8 K/8 r/2 ; r/2 S!/2", "R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4 r/8 K/8 r/4 r/8 K/8 ; r/2 S!/2 ; r/2. O/4"] },
+      { id: "aberto", label: "Chimbal aberto e bumbo nos quatro", bars: ["O/8 H?/8 O/8 H?/8 O/8 H?/8 O/8 H?/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4", "O/8 H?/8 O/8 H?/8 O/8 H?/8 O/4 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/8 S/8"] },
+    ],
+    percussion: [
+      { id: "pandeirola", label: "Pandeirola em colcheias", bars: ["A?/8 A!/8 A?/8 A!/8 A?/8 A!/8 A?/8 A!/8"] },
+      { id: "cowbell", label: "Cowbell", bars: ["B!/4 B/4 B!/4 B/4"] },
     ],
     fills: ["S/16 S/16 T/16 T/16 M/16 M/16 F/16 F!/16", "S/16 S/16 S/16 r/16 K/16 S/16 S/16 F!/16", "S/16 S/16 S/16 S!/16", "S/8 S/8 T/8 F!/8"],
     bass: [
@@ -312,7 +356,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.35, figure: "8" },
     cells: ["8 8 8 8", "8 8 4", "4 8 8", "r8 8 8 8", "4 4", "8 8 r4", "16 16 8 4", "2", "r4 8 8", "8. 16 4"],
-    phrase: { chromatic: 0.1, enclosure: 0, blue: 0.5, leap: 0.25, rest: 0.2, motif: 0.75, pentatonic: true, minNotes: 4 },
+    phrase: { chromatic: 0.1, enclosure: 0, blue: 0.5, leap: 0.25, rest: 0.2, motif: 0.75, pentatonic: true, minNotes: 4 , duet: { octave: 0.25, sixth: 0.1 } },
   },
   {
     id: "ska", label: "Ska",
@@ -326,9 +370,13 @@ export const STYLES = [
       { id: "metais", bass: "metais", kind: "ostinato", label: "Riff de metais", pattern: "B/8 D!/16 r/16 B/8 D!/16 r/16 B/8 D!/16 r/16 B/8 D!/16 r/16 ; r/8 M5/8 M3/8 M1/8 r/8 M3/8 M5/4" },
     ],
     beats: [
-      { id: "ska", label: "Ska tradicional", bars: ["r/8 H!/8 r/8 H!/8 r/8 H!/8 r/8 H!/8 ; r/4 K/4 r/4 K/4 ; r/4 X!/4 r/4 X!/4"] },
-      { id: "onedrop", label: "One drop", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; r/2 K!/2 ; r/2 X!/2"] },
-      { id: "twotone", label: "2 tone (bumbo nos quatro)", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "ska", label: "Ska tradicional", bars: ["r/8 H!/8 r/8 H!/8 r/8 H!/8 r/8 H!/8 ; r/4 K/4 r/4 K/4 ; r/4 X!/4 r/4 X!/4", "r/8 H!/8 r/8 H!/8 r/8 H!/8 r/8 O!/8 ; r/4 K/4 r/4 K/4 ; r/4 X!/4 r/4 X!/4"] },
+      { id: "onedrop", label: "One drop", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; r/2 K!/2 ; r/2 X!/2", "H/8 H?/8 H/8 O?/8 H/8 H?/8 H/16 H?/16 O/8 ; r/2 K!/2 ; r/2 X!/2"] },
+      { id: "twotone", label: "2 tone (bumbo nos quatro)", bars: ["H/8 O/8 H/8 O/8 H/8 O/8 H/8 O/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4", "H/8 O/8 H/8 O/8 H/8 O/8 H/16 H/16 O!/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/8 S?/8"] },
+    ],
+    percussion: [
+      { id: "pandeirola", label: "Pandeirola no contratempo", bars: ["r/8 A!/8 r/8 A!/8 r/8 A!/8 r/8 A!/8"] },
+      { id: "shaker", label: "Shaker e cowbell", bars: ["Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 ; B/4 r/4 B/4 r/4"] },
     ],
     fills: ["S/8 S/8 T/8 F!/8", "S/16 S/16 S/8 S!/4", "S/8 S!/8"],
     bass: [
@@ -338,7 +386,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.35, figure: "8" },
     cells: ["r8 8 r8 8", "r8 8 8 8", "8 8 r8 8", "r8 8 4", "4 r8 8", "r8 8 r4", "8 8 8 8", "r8 8+4", "4 4"],
-    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.2, motif: 0.7, pentatonic: false, minNotes: 3 },
+    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.2, motif: 0.7, pentatonic: false, minNotes: 3 , duet: { octave: 0.3, sixth: 0.2 } },
   },
 ];
 

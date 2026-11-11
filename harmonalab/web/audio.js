@@ -119,6 +119,14 @@ export class Player {
       case 70: hiss(6000, 0.05, 0.16); break; // ganzá
       case 63: tone(340, 300, 0.12, 0.5); break; // congas
       case 64: tone(240, 200, 0.16, 0.5); break;
+      case 62: hiss(2200, 0.03, 0.3, "bandpass"); tone(380, 360, 0.04, 0.3); break; // conga muda (tapa)
+      case 60: tone(620, 560, 0.08, 0.45); break; // bongô agudo
+      case 61: tone(440, 400, 0.1, 0.45); break; // bongô grave
+      case 65: tone(700, 640, 0.12, 0.35, "triangle"); hiss(3000, 0.06, 0.15, "bandpass"); break; // timbal agudo
+      case 66: tone(500, 450, 0.14, 0.35, "triangle"); hiss(2500, 0.07, 0.15, "bandpass"); break; // timbal grave
+      case 73: hiss(4200, 0.05, 0.22, "bandpass"); break; // güiro curto
+      case 74: hiss(4200, 0.18, 0.18, "bandpass"); break; // güiro longo
+      case 67: tone(1050, 1040, 0.12, 0.18, "square"); break; // agogô
       default: hiss(5000, 0.05, 0.15);
     }
   }

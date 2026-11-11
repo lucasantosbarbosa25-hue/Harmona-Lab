@@ -102,6 +102,7 @@ class ChordEvent:
     comp_layers: list[tuple[list[CompHit], int]] = field(default_factory=list)  # derivado de comp
     # Derivados da frase e da escala, preenchidos na leitura (não fazem parte do JSON).
     phrase_events: list[PhraseEvent] = field(default_factory=list)
+    phrase_extra: list[PhraseEvent] = field(default_factory=list)
     phrase_pcs: list[tuple[int, str]] = field(default_factory=list)
 
     def part(self, name: str) -> list[Note]:
@@ -180,6 +181,8 @@ class Project:
     style: str = ""  # levada das frases (ex.: "Neo-soul"), só informativa
     drums: str = ""  # bateria: compassos separados por "|" (ver phrase.py); vai para o canal 10
     drum_bars: list = field(default_factory=list)  # derivado de drums
+    percussion: str = ""  # percussão, na mesma notação da bateria; canal 10, numa faixa própria
+    percussion_bars: list = field(default_factory=list)  # derivado de percussion
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
@@ -221,6 +224,8 @@ class Project:
             d["style"] = self.style
         if self.drums:
             d["drums"] = self.drums
+        if self.percussion:
+            d["percussion"] = self.percussion
         if self.comment:
             d["comment"] = self.comment
         return d
@@ -302,15 +307,19 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         project.key = data["key"].strip()
     if isinstance(data.get("style"), str):
         project.style = data["style"].strip()
-    drums = data.get("drums")
-    if drums not in (None, ""):
-        if isinstance(drums, (str, list, tuple)):
-            project.drums = drums_text(drums)
-            project.drum_bars, errors = parse_drums(project.drums)
+    for key, label in (("drums", "A bateria"), ("percussion", "A percussão")):
+        value = data.get(key)
+        if value in (None, ""):
+            continue
+        if isinstance(value, (str, list, tuple)):
+            text = drums_text(value)
+            bars, errors = parse_drums(text)
+            setattr(project, key, text)
+            setattr(project, "drum_bars" if key == "drums" else "percussion_bars", bars)
             for message in errors:
-                issues.append(Issue("error", message, None, "drums"))
+                issues.append(Issue("error", message if key == "drums" else message.replace("na bateria", "na percussão"), None, key))
         else:
-            issues.append(Issue("error", 'A bateria ("drums") deve ser um texto, por exemplo "H/8 H/8 H/8 H/8 ; K/4 r/4 ; r/4 S/4".', None, "drums"))
+            issues.append(Issue("error", f'{label} ("{key}") deve ser um texto, por exemplo "H/8 H/8 H/8 H/8 ; K/4 r/4 ; r/4 S/4".', None, key))
     refs = data.get("references")
     if isinstance(refs, str):
         refs = [t for t in re.split(r"[,;]", refs)]
@@ -449,7 +458,8 @@ def _load_phrase(raw: dict[str, Any], chord: ChordEvent, index: int, project: Pr
             if total > beats_to_ticks(chord.duration_beats):
                 issues.append(Issue("error", f"A frase dura {total / TICKS_PER_BEAT:g} tempos, mais que os "
                                              f"{chord.duration_beats:g} do acorde.", index, "phrase"))
-            chord.phrase_events = events
+            chord.phrase_events = [e for e in events if e.voice == 0]  # a melodia (é ela que a conferência lê)
+            chord.phrase_extra = [e for e in events if e.voice != 0]  # as segundas vozes dos duetos
         else:
             issues.append(Issue("error", 'A frase ("phrase") deve ser um texto, por exemplo "G5/8 F5/8 Eb5/4*alvo".', index, "phrase"))
     scale = raw.get("phrase_scale")

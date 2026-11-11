@@ -133,10 +133,13 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   teleco-teco, skank, Charleston…), e dois **ostinatos ou riffs** por estilo (boogie-woogie, baixo andando, guajeo, dedilhado
   de violão, riff de baixo…). O ostinato repete o mesmo desenho e segue a escala de cada acorde. Desligada, cada acorde soa
   inteiro, como antes.
-- **Bateria:** o beat do estilo (um básico e duas variações), com **viradas** sorteadas no último compasso e, nas
+- **Bateria:** o beat do estilo (um básico e duas variações, cada um em dois compassos: o segundo varia o chimbal, com
+  semicolcheias, notas leves e aberturas), com **viradas** sorteadas no último compasso e, nas
   progressões longas, a cada quatro. A virada interrompe o beat no fim do compasso e ele volta no tempo 1, com um ataque
   de prato. "Outra virada" sorteia de novo. No app ela toca com um kit sintético simples; com um banco de sons, usa o kit
   do banco, se houver.
+- **Percussão:** camada própria, como o baixo, com duas opções por estilo (congas, bongô e güiro na salsa; tamborim, ganzá e
+  agogô no samba; pandeirola e congas no gospel…). No MIDI, faixa "Percussão" no canal 10.
 - **Baixo:** três linhas por estilo (walking, shuffle, tumbao, surdo, riff com oitava…), que seguem a levada escolhida.
   Começam na nota de baixo de cada acorde e, às vezes, terminam com uma virada pela pentatônica do acorde que chega ao
   próximo por semitom. No MIDI, faixa própria (canal 3). Com banco de sons, toca com o som dos acordes.
@@ -144,6 +147,8 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
   conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
+- **Notas de repouso** (alvos e a última nota da frase) duram até a próxima nota, sem buracos.
+- **Duetos:** conforme o estilo, a frase sai em oitavas (frequente na salsa) ou em sextas da escala, abaixo da melodia.
 - **Sem nota repetida:** nas frases que o app escreve, nunca a mesma nota duas vezes seguidas (uma pausa de até um tempo
   no meio não conta como fim de frase). De um acorde para o outro, pode. Baixo e levadas não seguem essa regra.
 - **Tags das frases:** estilos combinados (as células rítmicas de todos os marcados), escalas de origem (escala do acorde,
@@ -290,12 +295,13 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `key`, `references` | não | Tom (`"Em"`) e artistas ou músicas de referência (lista): aparecem em destaque na progressão. |
 | `chords[].function`, `scale` | não | Função em graus (`"V7alt"`) e escala ou modo: aparecem sob o nome do acorde. |
 | `chords[].comment` | não (a IA sempre preenche) | A frase de função do acorde: o que ele faz ali e por quê. Aparece sob o nome do acorde. |
-| `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto, `+` ligadura, como em `8+4`); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. |
+| `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto, `+` ligadura, como em `8+4`); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. Dueto: duas notas ligadas por `&` soam juntas (`C5&A4/8`). |
 | `chords[].phrase_scale` | não (a IA sempre preenche) | Notas da escala do acorde, sem oitava (`"B C D Eb F G A"`): o app escreve e confere as frases com ela, e avisa se ela não contém as notas do acorde. |
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
 | `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO`. Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
+| `percussion` | não | Percussão da progressão, na mesma notação da bateria, em faixa própria. Peças extras: U conga muda, V/W bongô agudo e grave, Y/Z timbal agudo e grave, J/I güiro curto e longo, D agogô. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 
 **Papéis das notas da frase.** `*alvo` (nota de chegada: cai num tempo e é nota do acorde) e `*aprox` (aproximação: resolve por

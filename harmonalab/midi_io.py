@@ -134,12 +134,13 @@ def _merge_same_keys(notes: list[tuple[int, int, int, int]]) -> list[tuple[int, 
     return sorted((n for group in by_pitch.values() for n in group if n[1] > n[0]), key=lambda n: (n[0], n[2]))
 
 
-def drum_notes(project: Project, total: int, ticks_per_beat: int = TICKS_PER_BEAT) -> list[tuple[int, int, int, int]]:
-    """Notas da bateria (canal 10): [(início, fim, nota, velocity)] em ticks desde o começo da progressão.
+def drum_notes(project: Project, total: int, ticks_per_beat: int = TICKS_PER_BEAT, bars: list | None = None) -> list[tuple[int, int, int, int]]:
+    """Notas da bateria (ou da percussão, com ``bars``), no canal 10: [(início, fim, nota, velocity)] em ticks.
 
     Os compassos escritos se repetem até o fim; em cada compasso, cada camada se repete até o fim do compasso.
     """
-    if not project.drum_bars or total <= 0:
+    drum_bars = project.drum_bars if bars is None else bars
+    if not drum_bars or total <= 0:
         return []
     bar_ticks = max(1, beats_to_ticks(project.beats_per_bar, ticks_per_beat))
     notes: list[tuple[int, int, int, int]] = []
@@ -147,7 +148,7 @@ def drum_notes(project: Project, total: int, ticks_per_beat: int = TICKS_PER_BEA
     bar_start = 0
     while bar_start < total:
         bar_end = min(bar_start + bar_ticks, total)
-        for hits, layer_ticks in project.drum_bars[index % len(project.drum_bars)]:
+        for hits, layer_ticks in drum_bars[index % len(drum_bars)]:
             base = bar_start
             while base < bar_end:
                 for hit in hits:
@@ -184,7 +185,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
             events.append((tick + e.start, 2, pitch, BASS_CHANNEL, mido.Message("note_on", channel=BASS_CHANNEL, note=pitch, velocity=velocity)))
             events.append((tick + e.start + e.length, 0, pitch, BASS_CHANNEL, mido.Message("note_off", channel=BASS_CHANNEL, note=pitch, velocity=0)))
         if phrase_mode != "chords":
-            for e in chord.phrase_events:
+            for e in [*chord.phrase_events, *chord.phrase_extra]:
                 pitch = e.note.midi
                 events.append((tick + e.start, 2, pitch, PHRASE_CHANNEL,
                                mido.Message("note_on", channel=PHRASE_CHANNEL, note=pitch, velocity=velocity)))
@@ -197,6 +198,11 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
              for start, _, pitch, vel in drum_notes(project, end_tick, ticks_per_beat)]
     drums += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
               for _, end, pitch, _ in drum_notes(project, end_tick, ticks_per_beat)]
+    percussion_notes = drum_notes(project, end_tick, ticks_per_beat, project.percussion_bars)
+    percussion = [(start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel))
+                  for start, _, pitch, vel in percussion_notes]
+    percussion += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
+                   for _, end, pitch, _ in percussion_notes]
     phrase = [e for e in events if e[3] == PHRASE_CHANNEL]
     bass = [e for e in events if e[3] == BASS_CHANNEL]
     chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL)]
@@ -216,7 +222,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         return track
 
     title = project.title or "Harmona Lab"
-    if not phrase and not drums and not bass:
+    if not phrase and not drums and not bass and not percussion:
         midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
         midi.tracks.append(make_track(title, chords, True))
         return midi
@@ -228,6 +234,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         midi.tracks.append(make_track("Baixo", bass, False))
     if drums:
         midi.tracks.append(make_track("Bateria", drums, False))
+    if percussion:
+        midi.tracks.append(make_track("Percussão", percussion, False))
     return midi
 
 

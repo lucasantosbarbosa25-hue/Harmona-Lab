@@ -147,13 +147,13 @@ function mergeSameKeys(notes) {
  * Notas da bateria (canal 10): [[início, fim, nota, velocity]] em ticks desde o começo da progressão.
  * Os compassos escritos se repetem até o fim; em cada compasso, cada camada se repete até o fim do compasso.
  */
-export function drumNotes(project, total, ticksPerBeat = TICKS_PER_BEAT) {
-  if (!project.drum_bars.length || total <= 0) return [];
+export function drumNotes(project, total, ticksPerBeat = TICKS_PER_BEAT, bars = project.drum_bars) {
+  if (!bars.length || total <= 0) return [];
   const barTicks = Math.max(1, beatsToTicks(beatsPerBar(project), ticksPerBeat));
   const notes = [];
   for (let index = 0, barStart = 0; barStart < total; index++, barStart += barTicks) {
     const barEnd = Math.min(barStart + barTicks, total);
-    for (const { hits, ticks } of project.drum_bars[index % project.drum_bars.length]) {
+    for (const { hits, ticks } of bars[index % bars.length]) {
       for (let base = barStart; base < barEnd; base += ticks) {
         for (const hit of hits) {
           const start = base + hit.start;
@@ -187,7 +187,7 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     }
     if (phraseMode !== "chords") {
       const velocity = velocityFor(project, chord);
-      for (const e of chord.phrase_events) {
+      for (const e of [...chord.phrase_events, ...chord.phrase_extra]) {
         notes.push({ start: tick + e.start, end: tick + e.start + e.length, pitch: e.note.midi, velocity, channel: PHRASE_CHANNEL, chord: index });
       }
     }
@@ -195,6 +195,9 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
   });
   for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat) : []) {
     notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1 });
+  }
+  for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat, project.percussion_bars) : []) {
+    notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1, percussion: true });
   }
   return { notes, starts, end: tick };
 }
@@ -204,13 +207,14 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   const [num, den] = project.time_signature;
   const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [DRUM_CHANNEL]: [] };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
   for (const n of notes) {
-    events[n.channel].push([n.start, 2, n.pitch, { bytes: [0x90 | n.channel, n.pitch, n.velocity] }, n.channel]);
-    events[n.channel].push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
+    const list = n.percussion ? events.percussion : events[n.channel];
+    list.push([n.start, 2, n.pitch, { bytes: [0x90 | n.channel, n.pitch, n.velocity] }, n.channel]);
+    list.push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
   }
   const tempo = roundHalfEven(((60 * 1e6) / project.tempo) * 4 / 4);
 
@@ -248,6 +252,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
   if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
   if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));
+  if (events.percussion.length) tracks.push(trackBytes("Percussão", events.percussion, false));
   const u32 = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   const u16 = (n) => [(n >> 8) & 0xff, n & 0xff];
   return new Uint8Array([

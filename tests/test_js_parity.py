@@ -165,6 +165,15 @@ CASES = [
     {"drums": "K/4 S/4", "chords": [{"notes": "C4 E4", "phrase": "C5/4", "bass_line": "C2/8t C2/8t G1/8t C2/2.", "duration_beats": 4}]},
     {"middle_c": "C3", "chords": [{"notes": "C3", "bass_line": "C1/4 G0/4"}]},
     {"chords": [{"notes": "C4", "duration_beats": 1, "bass_line": "C2/2 H2/4 C2/9"}, {"notes": "C4", "bass_line": {"a": 1}}]},
+    # duetos na frase (segunda voz no mesmo tempo) e percussão numa faixa própria do canal 10
+    {"chords": [{"notes": "C4 E4 G4", "phrase": "E5&C5/8 G5&E5/8*alvo r/8 C6&C5/8+4 B5&G5/4*aprox", "phrase_scale": "C D E F G A B"},
+                {"notes": "C4 E4 G4", "phrase": "C6&C5&E5/4*alvo D6&H5/4 E6&/4"}]},
+    {"middle_c": "C3", "chords": [{"notes": "C3", "phrase": "C5&A4/4"}]},
+    {"percussion": "U/4 r/8 N/8 N/4 G/8 G/8 ; V/8 W/8 V/8 W/8 V/8 W/8 V/8 W/8 ; I/4 J/8 J/8 I/4 J/8 J/8 ; Y/4 Z/4 D/4 L/4",
+     "drums": "R/8 R/8 R/8 R/8 R/8 R/8 R/8 R/8 ; r/4. K/8 r/4 K/4", "chords": [{"notes": "C4 E4", "duration_beats": 6}]},
+    {"percussion": "A/8 A/8 A/8 A/8 | Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16 Q/16", "chords": [{"notes": "C4", "duration_beats": 8}]},
+    {"percussion": "Ç/4 K", "chords": [{"notes": "C4"}]},
+    {"percussion": 7, "chords": [{"notes": "C4"}]},
 ]
 
 
