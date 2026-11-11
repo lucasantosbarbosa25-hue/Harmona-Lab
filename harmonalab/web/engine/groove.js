@@ -51,18 +51,29 @@ export const beatOptions = (style) => (style?.beats ?? []).map(({ id, label }) =
 const BINARY = [[1920, "1"], [960, "2"], [480, "4"], [240, "8"], [120, "16"], [60, "32"], [30, "64"]];
 const TRIPLETS = [[320, "4t"], [160, "8t"], [80, "16t"], [40, "32t"], [20, "64t"]];
 
-/** Uma duração qualquer escrita como soma de figuras ("2+4", "4+4t"), para pausas e cortes. */
+const QUINTUPLETS = [[384, "4q"], [192, "8q"], [96, "16q"], [48, "32q"], [24, "64q"]];
+const FIGURES = [...BINARY, ...TRIPLETS, ...QUINTUPLETS];
+const sumCache = new Map();
+
+/**
+ * Uma duração qualquer escrita como soma de figuras ("2+4", "4+4t", "8q+16q"), com o menor número de figuras, as binárias
+ * primeiro. "" se não houver soma exata.
+ */
 export function ticksText(ticks) {
-  const triplets = [];
-  while (ticks % 30 !== 0) {
-    const figure = TRIPLETS.find(([value]) => value <= ticks);
-    if (!figure) break;
-    triplets.push(figure[1]);
-    ticks -= figure[0];
+  if (ticks <= 0) return "";
+  if (sumCache.has(ticks)) return sumCache.get(ticks);
+  const best = new Array(ticks + 1).fill(null);
+  best[0] = [];
+  for (let t = 1; t <= ticks; t++) {
+    for (const figure of FIGURES) {
+      const before = best[t - figure[0]];
+      if (t >= figure[0] && before && (!best[t] || before.length + 1 < best[t].length)) best[t] = [...before, figure];
+    }
   }
-  const binary = [];
-  for (const [value, name] of BINARY) while (ticks >= value) { binary.push(name); ticks -= value; }
-  return [...binary, ...triplets].join("+");
+  const order = (f) => FIGURES.indexOf(f);
+  const text = best[ticks] ? [...best[ticks]].sort((x, y) => order(x) - order(y)).map((f) => f[1]).join("+") : "";
+  sumCache.set(ticks, text);
+  return text;
 }
 
 /** Corta uma camada do beat em `cut` ticks (repetindo-a se for mais curta) e completa o compasso com pausa. */
@@ -265,6 +276,163 @@ function buildRhythm(style, length, rng, previousCells, { cellTexts = style.cell
 
 const mod12 = (n) => ((n % 12) + 12) % 12;
 
+// ---------------------------------------------------------------- plano do solo: motivos e arco de intensidade
+//
+// O solo é planejado de trecho em trecho (1 a 4 compassos), atravessando os acordes:
+//   motivo (uma célula do estilo) -> o mesmo ritmo de novo, com outras notas (seguindo o desenho do original) ->
+//   uma variação (o motivo em diminuição ou só o começo dele) -> resposta -> uma nota longa de chegada -> respiração.
+// Cada trecho tem uma intensidade (0 calmo a 3 virtuoso), que segue um arco: começa espaçado, cresce até o clímax
+// (por volta de 70% do solo) e resolve. A intensidade vira notas por segundo, então o andamento entra na conta: a 80 BPM
+// o app usa mais semicolcheias e fusas; a 160 BPM, menos. Trechos calmos podem sair em oitavas, sextas ou tríades;
+// trechos rápidos, sempre numa voz só (tem de ser tocável).
+
+/** Os níveis do controle "Intensidade do solo". */
+export const INTENSITIES = [
+  { id: "contido", label: "Contido" },
+  { id: "equilibrado", label: "Equilibrado" },
+  { id: "virtuoso", label: "Virtuoso" },
+];
+const INTENSITY_NPS = [2.4, 3.8, 5.5, 7]; // notas por segundo de cada intensidade (0 calmo ... 3 virtuoso)
+const LEVEL_CURVE = { contido: [-0.6, 1.7], equilibrado: [0.1, 2.3], virtuoso: [1.0, 2.2] }; // [base, altura do arco]
+const DUET_MIN_SECONDS = 0.25; // nota mais curta que dá para tocar em oitavas ou sextas
+const TRIAD_MIN_SECONDS = 0.36; // e em tríades
+
+/** Uma figura aumentada (factor 2) ou diminuída (0.5, 0.25): "8" -> "4" ou "16". null se não existir. */
+function scaleToken(token, factor) {
+  const rest = token.startsWith("r");
+  const parts = (rest ? token.slice(1) : token).split("+").map((part) => {
+    const m = /^(\d+)(.*)$/.exec(part);
+    if (!m) return null;
+    const n = Number(m[1]) / factor;
+    return Number.isInteger(n) && n >= 1 && n <= 32 ? `${n}${m[2]}` : null;
+  });
+  if (parts.includes(null)) return null;
+  try { durationTicks(parts.join("+")); } catch { return null; }
+  return `${rest ? "r" : ""}${parts.join("+")}`;
+}
+
+function makeCell(text) {
+  const tokens = text.split(" ").map((tok) => {
+    const rest = tok.startsWith("r");
+    const dur = rest ? tok.slice(1) : tok;
+    return { dur, ticks: durationTicks(dur), rest };
+  });
+  return { text, tokens, ticks: tokens.reduce((n, t) => n + t.ticks, 0), sounds: tokens.filter((t) => !t.rest).length };
+}
+
+/** O planejador: devolve, acorde por acorde, o ritmo da frase ({dur, ticks, start, rest} e as marcas do plano). */
+function makePlanner({ style, cellTexts, rng, level, tempo, totalTicks, barTicks }) {
+  const [base, height] = LEVEL_CURVE[level] ?? LEVEL_CURVE.equilibrado;
+  const secondsPerTick = 60 / (tempo || 100) / TICKS_PER_BEAT;
+  const nps = (cell) => cell.sounds / (cell.ticks * secondsPerTick);
+  const cells = [...new Set(cellTexts)].map(makeCell).filter((c) => c.ticks > 0);
+  const variants = [];
+  for (const cell of cells) {
+    for (const factor of [2, 1, 0.5, 0.25]) {
+      const tokens = cell.text.split(" ").map((t) => scaleToken(t, factor));
+      if (!tokens.includes(null) && cell.sounds) variants.push({ ...makeCell(tokens.join(" ")), cost: Math.abs(Math.log2(factor)) * 0.2 });
+    }
+  }
+  const triplets = cells.flatMap((c) => c.tokens).filter((t) => /t/.test(t.dur)).length > 0.4 * cells.flatMap((c) => c.tokens).length;
+  const runFigures = triplets ? ["16t", "32t"] : ["16", "32"];
+  const vocabulary = (intensity) => {
+    const target = INTENSITY_NPS[intensity];
+    const scored = variants.map((v) => ({ v, score: Math.abs(Math.log(nps(v) / target)) + v.cost })).sort((a, b) => a.score - b.score);
+    return scored.filter((x) => x.score <= scored[0].score + 0.35).slice(0, 6).map((x) => x.v);
+  };
+  const runCell = (intensity) => {
+    const target = INTENSITY_NPS[intensity] * 1.5; // rajada: bem mais rápida que o resto do trecho
+    const figure = runFigures.map(makeCell).sort((a, b) => Math.abs(Math.log(nps(a) / target)) - Math.abs(Math.log(nps(b) / target)))[0];
+    const count = Math.round(TICKS_PER_BEAT / figure.ticks);
+    return makeCell(Array(count).fill(figure.text).join(" "));
+  };
+  const duet = style.phrase.duet ?? {};
+
+  let at = 0;
+  let queue = [];
+  const newSegment = () => {
+    const p = totalTicks ? Math.min(1, at / totalTicks) : 0;
+    const curve = p < 0.7 ? p / 0.7 : 1 - ((p - 0.7) / 0.3) * 0.55;
+    let intensity = Math.max(0, Math.min(3, Math.round(base + height * curve + (rng.next() - 0.5) * 0.9)));
+    let texture = null;
+    if (intensity <= 1) {
+      const r = rng.next();
+      const o = duet.octave ?? 0;
+      const x = o + (duet.sixth ?? 0);
+      const t = x + (duet.triad ?? 0);
+      texture = r < o ? "octave" : r < x ? "sixth" : r < t ? "triad" : null;
+      if (texture === "triad") intensity = 0; // em tríades, mais devagar ainda
+    }
+    const vocab = vocabulary(intensity);
+    const motifs = vocab.filter((c) => c.sounds >= 2 && !c.tokens[0].rest);
+    const motif = rng.pick(motifs.length ? motifs : vocab);
+    const segment = { statement: null, texture, intensity, vocab };
+    const length = rng.pick([1, 2, 2, 2, 4]) * barTicks;
+    const items = [{ cell: motif, kind: "motivo" }];
+    const repeats = rng.chance(style.phrase.motif ?? 0.5) ? 2 : 1;
+    for (let i = 0; i < repeats; i++) items.push({ cell: motif, kind: "eco" });
+    const smaller = motif.text.split(" ").map((t) => scaleToken(t, 0.5));
+    if (!smaller.includes(null) && rng.chance(intensity >= 1 ? 0.6 : 0.3)) {
+      const dim = makeCell(smaller.join(" "));
+      items.push({ cell: dim, kind: "eco" }, { cell: dim, kind: "eco" }); // diminuição: o motivo duas vezes mais rápido
+    } else if (motif.tokens.length >= 3) {
+      // fragmento: só o começo do motivo, completado com pausa até a grade de colcheias
+      const head = makeCell(motif.text.split(" ").slice(0, Math.ceil(motif.tokens.length / 2)).join(" "));
+      const pad = (SHORT - (head.ticks % SHORT)) % SHORT;
+      const padText = pad ? ticksText(pad) : "";
+      if (!pad || padText) items.push({ cell: makeCell(pad ? `${head.text} r${padText}` : head.text), kind: "eco" });
+    }
+    let used = items.reduce((n, it) => n + it.cell.ticks, 0);
+    const burst = [0, 0.05, 0.15, 0.3][intensity];
+    while (used < length - TICKS_PER_BEAT) {
+      // rajada (corrida rápida de um tempo): nunca duas seguidas, para a velocidade vir em momentos
+      const run = !texture && items.at(-1).kind !== "corrida" && rng.chance(burst);
+      const cell = run ? runCell(intensity) : rng.pick(vocab);
+      items.push({ cell, kind: run ? "corrida" : "resposta" });
+      used += cell.ticks;
+    }
+    // chegada: uma nota longa (que vira alvo), às vezes uma respiração
+    items.push({ cell: makeCell(intensity >= 2 ? "4" : rng.pick(["4", "2"])), kind: "chegada" });
+    if (rng.chance(Math.min(0.8, (style.phrase.rest ?? 0.2) * 2.5))) items.push({ cell: makeCell(intensity >= 2 ? "r8" : "r4"), kind: "pausa" });
+    queue = items.map((it) => ({ ...it, segment, tokens: [...it.cell.tokens] }));
+  };
+
+  /** Tira do plano `length` ticks de ritmo (um acorde). */
+  const take = (length) => {
+    const slots = [];
+    let tick = 0;
+    while (tick < length) {
+      if (!queue.length) newSegment();
+      const room = length - tick;
+      let item = queue[0];
+      if (item.cell.ticks > room) {
+        // a célula não cabe no que sobra do acorde: ela fica para o próximo (sem cortar figura no meio, para as quiálteras
+        // não saírem da grade) e o resto do acorde leva uma célula menor do trecho, ou uma pausa
+        if (tick === 0) { queue.shift(); continue; } // nem num acorde inteiro ela cabe: sai do plano
+        const fits = item.segment.vocab.filter((c) => c.ticks <= room);
+        if (fits.length) item = { cell: rng.pick(fits), kind: "resposta", segment: item.segment, tokens: null };
+        else item = { cell: makeCell(`r${ticksText(room)}`), kind: "pausa", segment: item.segment, tokens: null };
+        item.tokens = [...item.cell.tokens];
+      } else queue.shift();
+      for (const token of item.tokens) {
+        const slot = { dur: token.dur, ticks: token.ticks, start: tick, rest: token.rest, texture: item.segment.texture, intensity: item.segment.intensity };
+        if (item.kind === "corrida") slot.run = true;
+        if (item.kind === "chegada") slot.end = true;
+        if (!token.rest && item.kind === "motivo") (item.segment.statement ??= []).push(slot);
+        if (!token.rest && item.kind === "eco" && item.segment.statement) {
+          item.echo = (item.echo ?? -1) + 1;
+          slot.echo = { statement: item.segment.statement, index: item.echo };
+        }
+        slots.push(slot);
+        tick += token.ticks;
+        at += token.ticks;
+      }
+    }
+    return slots;
+  };
+  return { take, skip: (ticks) => { at += ticks; } };
+}
+
 /** Fundamental para blue notes e pentatônica: a letra da cifra, ou a nota mais grave se a cifra não ajudar. */
 function rootPc(chord) {
   const m = /^([A-G])([#b♯♭]?)/.exec(chord.symbol || "");
@@ -377,17 +545,48 @@ export function composePhrase(ctx) {
   const targetPool = range(targetSet.size ? targetSet : chordPcs);
 
   const motif = color === "outside" && length >= 2 * TICKS_PER_BEAT;
-  const { slots, cells, motifSlots } = buildRhythm(style, length, rng, motif ? null : ctx.previousCells, { cellTexts: ctx.cellTexts ?? style.cells, motif });
-  const notes = slots.map((s) => ({ ...s, midi: null, role: "" }));
+  const planned = !motif && ctx.slots;
+  const { slots, cells, motifSlots } = planned ? { slots: ctx.slots, cells: null, motifSlots: 0 }
+    : buildRhythm(style, length, rng, motif ? null : ctx.previousCells, { cellTexts: ctx.cellTexts ?? style.cells, motif });
+  const notes = planned ? slots.map((s) => Object.assign(s, { midi: null, role: "" })) : slots.map((s) => ({ ...s, midi: null, role: "" }));
   const sounding = notes.filter((n) => !n.rest);
   if (!sounding.length || !linePool.length || !targetPool.length) return { notes: [], cursor: ctx.cursor, cells };
 
   // 1) notas: alvos (notas do acorde) nos tempos, o resto andando pela escala
   let cursor = nearest(targetPool, ctx.cursor ?? 72);
   let direction = rng.chance(0.5) ? 1 : -1;
+  const indexIn = (pitch) => linePool.indexOf(nearest(linePool, pitch));
+  let runDirection = null;
   sounding.forEach((note, i) => {
     const onBeat = note.start % TICKS_PER_BEAT === 0;
-    const isTarget = onBeat && (note.ticks >= SHORT || i === 0 || i === sounding.length - 1);
+    const echo = note.echo && note.echo.index > 0 ? note.echo : null;
+    const from = echo?.statement[echo.index - 1]?.midi;
+    const to = echo?.statement[echo.index]?.midi;
+    if (!note.run) runDirection = null;
+    if (echo && i > 0 && from != null && to != null) {
+      // eco do motivo: o mesmo desenho (em graus da escala) a partir de outra nota
+      const index = indexIn(cursor) + (indexIn(to) - indexIn(from));
+      note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
+      if (onBeat && targetSet.has(mod12(note.midi))) note.role = "alvo";
+      cursor = note.midi;
+      return;
+    }
+    if (note.run) {
+      // corrida: grau a grau, sempre na mesma direção, até a nota de chegada
+      runDirection ??= cursor >= HIGH - 7 ? -1 : cursor <= LOW + 7 ? 1 : direction;
+      let index = indexIn(cursor) + runDirection;
+      if (index < 0 || index >= linePool.length) { runDirection = -runDirection; index = indexIn(cursor) + runDirection; }
+      note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
+      cursor = note.midi;
+      return;
+    }
+    if (note.end && !onBeat) {
+      // chegada fora do tempo (antecipação): uma nota do acorde, sem o papel de alvo
+      note.midi = nearest(targetPool, cursor + direction * 2, i > 0 ? sounding[i - 1].midi : null);
+      cursor = note.midi;
+      return;
+    }
+    const isTarget = (note.end && onBeat) || (onBeat && (note.ticks >= SHORT || i === 0 || i === sounding.length - 1));
     if (isTarget) {
       const aim = cursor + direction * (rng.chance(params.leap) ? 5 : 2);
       const previous = i > 0 ? sounding[i - 1].midi : null;
@@ -399,6 +598,12 @@ export function composePhrase(ctx) {
       let index = at + direction * step;
       if (index < 0 || index >= linePool.length) { direction = -direction; index = at + direction * step; }
       note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
+    }
+    const original = note.echo?.index === 0 ? note.echo.statement[0]?.midi : null;
+    if (original != null && note.midi === original) {
+      // o eco repete o ritmo, não as notas: começa em outra nota (do acorde, se for alvo)
+      const pool = note.role === "alvo" ? targetPool : linePool;
+      note.midi = nearest(pool.filter((p) => p !== original && p !== (i > 0 ? sounding[i - 1].midi : null)), original + direction * 3) ?? note.midi;
     }
     cursor = note.midi;
     if (cursor >= HIGH - 4) direction = -1;
@@ -518,7 +723,7 @@ function sustainRests(notes, length) {
     const holder = out.at(-1);
     if (note.rest && holder && !holder.rest && !holder.locked && (holder.role === "alvo" || holder === last)) {
       holder.ticks += note.ticks;
-      holder.dur = ticksText(holder.ticks);
+      holder.dur = ticksText(holder.ticks) || `${holder.dur}+${note.dur}`; // uma figura só quando dá; senão, ligadura
       continue;
     }
     out.push(note);
@@ -526,28 +731,52 @@ function sustainRests(notes, length) {
   // se o ritmo não encheu o acorde, a última nota segura até o fim dele
   const end = out.reduce((sum, n) => sum + n.ticks, 0);
   const tail = out.at(-1);
-  if (end < length && tail && !tail.rest && !tail.locked) { tail.ticks += length - end; tail.dur = ticksText(tail.ticks); }
+  if (end < length && tail && !tail.rest && !tail.locked) {
+    tail.dur = ticksText(tail.ticks + length - end) || `${tail.dur}+${ticksText(length - end)}`;
+    tail.ticks += length - end;
+  }
   return out;
 }
 
 /**
- * Dueto da frase: a segunda voz em oitava abaixo ou em sexta da escala abaixo. Notas fora da escala (aproximações,
- * outside, blue notes) andam paralelas, com o mesmo intervalo da nota anterior. Devolve um mapa nota -> segunda voz.
+ * As vozes de baixo de cada nota da frase, conforme a textura do trecho: oitava, sexta da escala ou tríade (a melodia em
+ * cima e duas notas do acorde logo abaixo; numa nota da escala que não é do acorde, a tríade da escala). Notas fora da
+ * escala (aproximações, outside, blue notes) andam paralelas, com os mesmos intervalos da nota anterior. Só ganha vozes a
+ * nota que dá para tocar assim: tríades a partir de TRIAD_MIN_SECONDS, oitavas e sextas a partir de DUET_MIN_SECONDS.
+ * Devolve um mapa nota -> [alturas abaixo dela].
  */
-function duetVoices(notes, kind, scalePcs) {
-  const second = new Map();
-  let interval = kind === "octave" ? 12 : 9;
+function extraVoices(notes, { scalePcs, chordPcs, tempo }) {
+  const out = new Map();
+  const seconds = (note) => (note.ticks * 60) / (tempo || 100) / TICKS_PER_BEAT;
+  const stepsDown = (pitch, steps) => {
+    for (let s = 0; s < steps; s++) { pitch -= 1; while (!scalePcs.has(mod12(pitch))) pitch -= 1; }
+    return pitch;
+  };
+  let previous = null; // intervalos da última nota com vozes
   for (const note of notes) {
-    if (note.rest) continue;
-    if (kind === "sixth" && scalePcs.has(mod12(note.midi))) {
-      // sexta abaixo = cinco graus da escala para baixo
-      let pitch = note.midi;
-      for (let step = 0; step < 5; step++) { pitch -= 1; while (!scalePcs.has(mod12(pitch))) pitch -= 1; }
-      interval = note.midi - pitch;
-    } else if (kind === "octave") interval = 12;
-    second.set(note, note.midi - interval);
+    const allowed = note.rest || !note.texture ? 0 : seconds(note) >= TRIAD_MIN_SECONDS - 1e-9 ? 2 : seconds(note) >= DUET_MIN_SECONDS - 1e-9 ? 1 : 0;
+    if (!allowed) { previous = null; continue; }
+    const texture = note.texture === "triad" && allowed < 2 ? "sixth" : note.texture;
+    const pc = mod12(note.midi);
+    let below = null;
+    if (texture === "octave") below = [note.midi - 12];
+    else if (texture === "sixth" && scalePcs.has(pc)) below = [stepsDown(note.midi, 5)];
+    else if (texture === "triad" && (chordPcs.has(pc) || scalePcs.has(pc))) {
+      // em terças e quartas (nada de cluster): cada voz de 3 a 5 semitons abaixo da de cima; notas do acorde, ou da escala
+      const stack = (pcs) => {
+        const third = (top) => { for (let p = top - 3; p >= top - 5; p--) if (pcs.has(mod12(p)) && mod12(p) !== pc) return p; return null; };
+        const first = third(note.midi);
+        const second = first !== null ? third(first) : null;
+        return second !== null ? [first, second] : null;
+      };
+      below = stack(chordPcs.has(pc) ? chordPcs : scalePcs) ?? (scalePcs.has(pc) ? [stepsDown(note.midi, 5)] : null);
+    } else if (previous) below = previous.map((gap) => note.midi - gap);
+    if (below && below.length > allowed) below = allowed === 1 && scalePcs.has(pc) ? [stepsDown(note.midi, 5)] : below.slice(0, allowed);
+    if (!below) { previous = null; continue; }
+    out.set(note, below);
+    previous = below.map((b) => note.midi - b);
   }
-  return second;
+  return out;
 }
 
 /** Nome da nota com a grafia da escala ou do acorde (Eb, não D#, quando a escala diz Eb). */
@@ -571,7 +800,7 @@ function speller(chord, middleC) {
  */
 export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
-  phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null,
+  phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null, intensity = "equilibrado",
 } = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
@@ -586,9 +815,15 @@ export function generateGroove(data, {
     let cursor = null;
     let previousCells = null;
     let withoutScale = 0;
+    const cellTexts = phraseStyles?.length ? phraseStyles.flatMap((x) => x.cells) : style.cells;
+    const planner = makePlanner({
+      style, cellTexts, rng: makeRng(`${style.id}|${variation}|plano|${intensity}`), level: intensity, tempo: project.tempo,
+      totalTicks: Math.round(totalBeats(project) * TICKS_PER_BEAT), barTicks: Math.round(beatsPerBar(project) * TICKS_PER_BEAT),
+    });
     project.chords.forEach((chord, i) => {
       const voices = sounding(chord);
-      if (!voices.length) { out[i].phrase = ""; previousCells = null; return; }
+      const chordTicks = Math.round(chord.duration_beats * TICKS_PER_BEAT);
+      if (!voices.length) { out[i].phrase = ""; previousCells = null; planner.skip(chordTicks); return; }
       const chordPcs = new Set(voices.map((v) => pitchClass(v.note)));
       const hasScale = chord.phrase_pcs.length > 0;
       if (!hasScale) withoutScale += 1;
@@ -598,19 +833,18 @@ export function generateGroove(data, {
       const own = chord.phrase_color.toLowerCase();
       const color = ["dentro", "cromatico", "outside"].includes(own) ? own : ["dentro", "cromatico", "outside"].includes(globalColor) ? globalColor : "";
       const rng = makeRng(`${style.id}|${variation}|${i}|${chord.symbol}|${voices.map((v) => v.note.midi).join(",")}`);
-      const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
-      const cellTexts = phraseStyles?.length ? phraseStyles.flatMap((x) => x.cells) : style.cells;
-      const result = composePhrase({ style, color, chordPcs, scalePcs, root: rootPc(chord), length, nextPcs, rng, cursor, previousCells, cellTexts, scales });
+      const length = chordTicks;
+      const outsideMotif = color === "outside" && length >= 2 * TICKS_PER_BEAT;
+      const slots = outsideMotif ? null : planner.take(length);
+      if (outsideMotif) planner.skip(length);
+      const result = composePhrase({ style, color, chordPcs, scalePcs, root: rootPc(chord), length, nextPcs, rng, cursor, previousCells, cellTexts, scales, slots });
       cursor = result.cursor;
       previousCells = result.cells;
       const spell = speller(chord, project.middle_c);
-      const duet = style.phrase.duet ?? {};
-      const roll = makeRng(`${style.id}|${variation}|${i}|dueto`).next();
-      const kind = roll < (duet.octave ?? 0) ? "octave" : roll < (duet.octave ?? 0) + (duet.sixth ?? 0) ? "sixth" : null;
-      const second = kind ? duetVoices(result.notes, kind, scalePcs) : new Map();
+      const below = extraVoices(result.notes, { scalePcs, chordPcs, tempo: project.tempo });
       out[i].phrase = result.notes.map((n) => {
         if (n.rest) return `r/${n.dur}`;
-        const name = second.has(n) ? `${spell(n.midi)}&${spell(second.get(n))}` : spell(n.midi);
+        const name = [n.midi, ...(below.get(n) ?? [])].map(spell).join("&");
         return `${name}/${n.dur}${n.role ? `*${n.role}` : ""}`;
       }).join(" ");
       if (!hasScale) out[i].phrase_scale = [...new Map(voices.map((v) => [pitchClass(v.note), pitchClassName(v.note)])).values()].join(" ");

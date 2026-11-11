@@ -7,7 +7,7 @@ import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
-import { SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
+import { INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
@@ -146,6 +146,7 @@ function grooveSettings(raw) {
   return {
     comp: String(g.comp || ""), drums: String(g.drums || ""), bass: String(g.bass || ""), percussion: String(g.percussion || ""),
     phraseStyles: list(g.phraseStyles), scales: list(g.scales), color: ["dentro", "cromatico", "outside"].includes(g.color) ? g.color : "",
+    intensity: INTENSITIES.some((i) => i.id === g.intensity) ? g.intensity : "equilibrado",
   };
 }
 
@@ -253,6 +254,7 @@ function snapshot() {
   return () => {
     state.project = JSON.parse(saved);
     renderAll();
+    saveDraftSoon(); // o desfeito também fica salvo para a próxima vez
   };
 }
 
@@ -966,6 +968,10 @@ function renderGroove() {
     type: "button", "aria-pressed": String((g.color || "") === value),
     onclick: () => applyGroove({ phrases: true, settings: { color: value } }, `Cor das frases: ${label}.`),
   }, label)));
+  $("#tags-intensity").replaceChildren(...INTENSITIES.map(({ id, label }) => h("button", {
+    type: "button", "aria-pressed": String((g.intensity || "equilibrado") === id),
+    onclick: () => applyGroove({ phrases: true, settings: { intensity: id } }, `Intensidade do solo: ${label}.`),
+  }, label)));
 }
 
 /** Liga ou desliga uma tag (sempre fica pelo menos uma) e refaz as frases. */
@@ -988,6 +994,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
     bass: bass || null, percussion: percussion || null,
     phraseStyles: (state.project.groove?.phraseStyles || []).map(findStyle).filter(Boolean),
     scales: state.project.groove?.scales || [], color: state.project.groove?.color || "",
+    intensity: state.project.groove?.intensity || "equilibrado",
   });
   if (bass !== undefined) {
     state.project.chords.forEach((chord, i) => { chord.bass_line = bass ? result.chords[i]?.bass_line ?? "" : ""; });

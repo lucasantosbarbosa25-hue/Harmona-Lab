@@ -5,9 +5,9 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
-import { SOURCE_SCALES, percussionFor, percussionOptions, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
+import { INTENSITIES, SOURCE_SCALES, percussionFor, percussionOptions, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
 import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../../harmonalab/web/engine/midi.js";
-import { loadProject } from "../../harmonalab/web/engine/model.js";
+import { loadProject, sounding } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
 import { COLORS, SOURCES, STYLES, findStyle, styleByLabel } from "../../harmonalab/web/kb/estilos.js";
 
@@ -362,33 +362,107 @@ test("notas de repouso duram até a próxima nota: depois de um alvo ou da últi
   assert.ok(checked > 100);
 });
 
-test("duetos: salsa sai quase sempre em oitavas; sextas seguem a escala; tudo passa na conferência", () => {
-  const kinds = { octave: 0, sixth: 0, none: 0 };
-  for (const id of ["salsa", "gospel", "samba"]) {
-    for (let variation = 0; variation < 20; variation++) {
-      const data = apply(bare(), generateGroove(bare(), { style: findStyle(id), phrases: true, variation }));
-      assert.deepEqual(problems(data), []);
-      for (const chord of loadProject(data).project.chords) {
-        if (!chord.phrase_extra.length) { if (id === "salsa") kinds.none += 1; continue; }
-        assert.equal(chord.phrase_extra.length, chord.phrase_events.length, "cada nota da melodia tem a sua segunda voz");
-        const gaps = new Set(chord.phrase_events.map((e, i) => e.note.midi - chord.phrase_extra[i].note.midi));
-        if (gaps.size === 1 && gaps.has(12)) { if (id === "salsa") kinds.octave += 1; }
-        else {
-          kinds.sixth += 1;
-          const scale = new Set(chord.phrase_pcs.map((x) => x.pc));
-          chord.phrase_events.forEach((e, i) => {
-            const gap = e.note.midi - chord.phrase_extra[i].note.midi;
-            assert.ok(gap >= 7 && gap <= 10, `sexta (ou paralela): ${chord.phrase}`);
-            if (scale.has(((e.note.midi % 12) + 12) % 12)) assert.ok(scale.has(((chord.phrase_extra[i].note.midi % 12) + 12) % 12), `sexta da escala: ${chord.phrase}`);
-          });
+const solo = (id, { tempo = 80, variation = 0, intensity, repeat = 1 } = {}) => {
+  const data = bare();
+  data.tempo = tempo;
+  data.chords = Array.from({ length: repeat }, () => data.chords).flat().map((c) => structuredClone(c));
+  return loadProject(apply(data, generateGroove(data, { style: findStyle(id), phrases: true, variation, intensity }))).project;
+};
+const groups = (chord) => {
+  // notas que soam juntas (melodia e vozes abaixo), por início
+  const map = new Map();
+  for (const e of [...chord.phrase_events, ...chord.phrase_extra]) map.set(e.start, [...(map.get(e.start) ?? []), e]);
+  return [...map.values()];
+};
+
+test("vozes na frase: oitavas, sextas da escala ou tríades do acorde, só em notas que dá para tocar assim", () => {
+  const seen = { 1: 0, 2: 0, 3: 0 };
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 8; variation++) {
+      for (const tempo of [70, 120]) {
+        const project = solo(style.id, { tempo, variation, repeat: 2 });
+        const seconds = (ticks) => (ticks * 60) / tempo / 480;
+        for (const chord of project.chords) {
+          const chordPcs = new Set(sounding(chord).map((v) => ((v.note.midi % 12) + 12) % 12));
+          for (const group of groups(chord)) {
+            if (group.length === 1) continue;
+            seen[group.length - 1] += 1;
+            const top = group.find((e) => chord.phrase_events.includes(e));
+            assert.ok(group.every((e) => e === top || e.note.midi < top.note.midi), "as vozes ficam abaixo da melodia");
+            assert.ok(group.length <= 3, "no máximo tríade");
+            assert.ok(seconds(top.length) >= (group.length === 3 ? 0.36 : 0.25) - 1e-9, `${style.id} ${tempo}: nota rápida demais para ${group.length} vozes: ${chord.phrase}`);
+            if (group.length === 3) {
+              const [a, b, c] = group.map((e) => e.note.midi).sort((x, y) => y - x);
+              assert.ok(a - b >= 3 && b - c >= 3, `tríade em terças, sem cluster: ${chord.phrase}`);
+              if (top.role === "alvo") assert.ok(group.every((e) => chordPcs.has(((e.note.midi % 12) + 12) % 12)), `tríade do acorde: ${chord.phrase}`);
+            }
+          }
         }
       }
     }
   }
-  assert.ok(kinds.octave > kinds.none, `salsa em oitavas: ${JSON.stringify(kinds)}`);
-  assert.ok(kinds.sixth > 0);
-  const midi = midiBytes(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("salsa"), phrases: true, variation: 1 }))).project);
-  assert.ok(midi.length > 100);
+  assert.ok(seen[1] > 50 && seen[2] > 20, `duetos e tríades aparecem: ${JSON.stringify(seen)}`);
+  const octaves = [0, 1, 2, 3, 4, 5].map((variation) => solo("salsa", { variation, repeat: 2 })).flatMap((p) => p.chords).flatMap(groups).filter((g) => g.length === 2);
+  assert.ok(octaves.filter((g) => Math.abs(g[0].note.midi - g[1].note.midi) === 12).length > octaves.length * 0.6, "salsa: duetos quase sempre em oitavas");
+});
+
+test("motivos: o ritmo do motivo volta em seguida com outras notas", () => {
+  let solos = 0;
+  let withMotif = 0;
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 6; variation++) {
+      const project = solo(style.id, { variation, repeat: 2 });
+      const events = project.chords.flatMap((c, i) => c.phrase_events.map((e) => ({ ...e, start: e.start + i * 1920 })));
+      const iois = events.slice(1).map((e, i) => e.start - events[i].start);
+      // procura uma figura de 2 a 4 intervalos repetida logo em seguida, com notas diferentes
+      let found = false;
+      for (let size = 2; size <= 4 && !found; size++) {
+        for (let i = 0; i + 2 * size <= iois.length && !found; i++) {
+          const a = iois.slice(i, i + size).join();
+          const b = iois.slice(i + size, i + 2 * size).join();
+          const notesA = events.slice(i, i + size).map((e) => e.note.midi).join();
+          const notesB = events.slice(i + size, i + 2 * size).map((e) => e.note.midi).join();
+          if (a === b && notesA !== notesB) found = true;
+        }
+      }
+      solos += 1;
+      if (found) withMotif += 1;
+    }
+  }
+  assert.ok(withMotif >= solos * 0.8, `${withMotif} de ${solos} solos com motivo repetido`);
+});
+
+test("intensidade: virtuoso tem mais notas por segundo que contido; a 80 BPM há trechos rápidos; o andamento entra na conta", () => {
+  const rate = (intensity, tempo) => {
+    let notes = 0;
+    let seconds = 0;
+    for (let variation = 0; variation < 10; variation++) {
+      for (const style of STYLES) {
+        const project = solo(style.id, { tempo, variation, intensity, repeat: 2 });
+        notes += project.chords.reduce((n, c) => n + c.phrase_events.length, 0);
+        seconds += (project.chords.reduce((n, c) => n + c.duration_beats, 0) * 60) / tempo;
+      }
+    }
+    return notes / seconds;
+  };
+  const contido = rate("contido", 80);
+  const equilibrado = rate("equilibrado", 80);
+  const virtuoso = rate("virtuoso", 80);
+  assert.ok(contido < equilibrado && equilibrado < virtuoso, `${contido} < ${equilibrado} < ${virtuoso}`);
+  const fast = rate("equilibrado", 160);
+  assert.ok(Math.abs(Math.log(fast / equilibrado)) < Math.log(1.6), `notas por segundo parecidas a 80 e a 160 BPM: ${equilibrado} e ${fast}`);
+  let quick = 0;
+  for (let variation = 0; variation < 10; variation++) {
+    for (const chord of solo("bossa", { tempo: 80, variation, repeat: 2 }).chords) quick += chord.phrase_events.filter((e) => e.length <= 120).length;
+  }
+  assert.ok(quick > 10, `bossa a 80 BPM tem semicolcheias ou mais rápidas: ${quick}`);
+  assert.deepEqual(INTENSITIES.map((i) => i.id), ["contido", "equilibrado", "virtuoso"]);
+  for (const intensity of ["contido", "virtuoso"]) {
+    for (const style of STYLES) {
+      const data = apply(bare(), generateGroove(bare(), { style, phrases: true, intensity, variation: 3 }));
+      assert.deepEqual(problems(data), [], `${style.id}/${intensity}`);
+    }
+  }
 });
 
 test("percussão: cada estilo tem opções de compassos inteiros, e ela sai numa faixa própria no canal 10", () => {

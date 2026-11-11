@@ -148,7 +148,16 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 - **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
   conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
 - **Notas de repouso** (alvos e a última nota da frase) duram até a próxima nota, sem buracos.
-- **Duetos:** conforme o estilo, a frase sai em oitavas (frequente na salsa) ou em sextas da escala, abaixo da melodia.
+- **Motivos:** o solo é planejado em trechos de 1 a 4 compassos que atravessam os acordes. Cada trecho apresenta um motivo
+  rítmico, repete o mesmo ritmo com outras notas (seguindo o desenho do original), varia (o motivo duas vezes mais rápido,
+  ou só o começo dele), responde e chega numa nota longa.
+- **Intensidade do solo** (Contido, Equilibrado ou Virtuoso): em todos os níveis há partes calmas e rápidas, num arco que
+  cresce até o clímax (perto de 70% do solo) e resolve; o nível muda a proporção. A velocidade é medida em notas por
+  segundo, então o andamento entra na conta: a 80 BPM vêm mais semicolcheias e rajadas curtas de fusas (sempre chegando
+  num alvo no tempo); a 160 BPM, menos.
+- **Vozes na frase:** nos trechos calmos, a melodia pode ganhar oitavas (frequente na salsa), sextas da escala ou tríades
+  (notas do acorde em terças e quartas logo abaixo), com o peso de cada estilo. Trechos rápidos ficam numa voz só, e só
+  ganha vozes a nota que dá para tocar assim (oitavas e sextas a partir de 0,25 s; tríades a partir de 0,36 s).
 - **Sem nota repetida:** nas frases que o app escreve, nunca a mesma nota duas vezes seguidas (uma pausa de até um tempo
   no meio não conta como fim de frase). De um acorde para o outro, pode. Baixo e levadas não seguem essa regra.
 - **Tags das frases:** estilos combinados (as células rítmicas de todos os marcados), escalas de origem (escala do acorde,
