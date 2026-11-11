@@ -111,6 +111,82 @@ export function drumsFor(style, beatId, project, variation = 0) {
   return out.join(" | ");
 }
 
+// ---------------------------------------------------------------- baixo
+
+/** As linhas de baixo que a tela oferece para um estilo. */
+export const bassOptions = (style) => (style?.bass ?? []).map(({ id, label }) => ({ id, label }));
+/** A linha de baixo que combina com uma levada (a que a levada indicar, ou a primeira do estilo). */
+export const bassForComp = (style, compId) => style?.comps.find((c) => c.id === compId)?.bass ?? style?.bass?.[0]?.id ?? "";
+
+const BASS_LOW = 28; // E1
+const BASS_TOP = 40; // E2: a nota de baixo do acorde fica entre E1 e D#2; a linha sobe até perto de C3
+
+/** A nota de baixo do acorde (a mais grave do voicing, para respeitar inversões e pedais), perto da anterior. */
+function bassRootMidi(pc, previous) {
+  const options = [];
+  for (let m = BASS_LOW; m < BASS_TOP; m++) if (mod12(m) === pc) options.push(m);
+  return previous == null ? options[0] : nearest(options, previous);
+}
+
+/** Anda `steps - 1` graus na escala a partir de `from` (para cima com dir = 1, para baixo com dir = -1). */
+function scaleStep(from, steps, dir, scale) {
+  let pitch = from;
+  for (let i = 1; i < steps; i++) {
+    pitch += dir;
+    while (!scale.has(mod12(pitch))) pitch += dir;
+  }
+  return pitch;
+}
+
+/** Linha de baixo de um acorde: o desenho do estilo repetido até o fim e, às vezes, uma virada que chega ao próximo acorde. */
+function composeBass({ style, lineId, chord, next, length, rng, previous }) {
+  const line = style.bass.find((b) => b.id === lineId) ?? style.bass[0];
+  const voices = sounding(chord);
+  const rootPc = pitchClass(voices[0].note);
+  const scale = new Set(chord.phrase_pcs.length ? chord.phrase_pcs.map((x) => x.pc) : voices.map((v) => pitchClass(v.note)));
+  scale.add(rootPc);
+  const root = bassRootMidi(rootPc, previous);
+  const nextVoices = next ? sounding(next) : [];
+  const nextRoot = nextVoices.length ? bassRootMidi(pitchClass(nextVoices[0].note), root) : null;
+  const fill = nextRoot != null && length >= 2 * TICKS_PER_BEAT && rng.chance(style.bassFill?.chance ?? 0);
+  const body = fill ? length - TICKS_PER_BEAT : length;
+
+  const pitchOf = (degree) => {
+    if (degree === "x") return nextRoot != null ? nextRoot - 1 : root;
+    const down = degree.startsWith("_");
+    return scaleStep(root, Number(down ? degree.slice(1) : degree), down ? -1 : 1, scale);
+  };
+  const out = [];
+  const tokens = line.pattern.split(" ");
+  for (let at = 0, i = 0; at < body; i++) {
+    const [degree, dur] = tokens[i % tokens.length].split("/");
+    const ticks = Math.min(durationTicks(dur), body - at);
+    const text = ticks === durationTicks(dur) ? dur : ticksText(ticks);
+    out.push(degree === "r" ? { rest: true, dur: text } : { midi: pitchOf(degree), dur: text, role: degree === "x" ? "aprox" : "" });
+    at += ticks;
+  }
+  if (fill) {
+    // virada: corrida pela pentatônica do acorde, chegando ao baixo do próximo acorde por semitom
+    const figure = style.bassFill.figure;
+    const count = Math.round(TICKS_PER_BEAT / durationTicks(figure));
+    const arrival = rng.chance(0.7) ? nextRoot - 1 : nextRoot + 1;
+    const penta = pentatonicOf(scale, rootPc) ?? scale;
+    const pool = [];
+    for (let m = BASS_LOW - 4; m <= BASS_TOP + 12; m++) if (penta.has(mod12(m))) pool.push(m);
+    const start = out.filter((n) => !n.rest).at(-1)?.midi ?? root;
+    const dir = arrival >= start ? 1 : -1;
+    let pitch = start;
+    for (let i = 0; i < count - 1; i++) {
+      const candidates = pool.filter((m) => (dir > 0 ? m > pitch && m < arrival : m < pitch && m > arrival));
+      // sem nota da pentatônica no caminho: a vizinha mais perto (a corrida não fica parada numa nota só)
+      pitch = candidates.length ? (dir > 0 ? candidates[0] : candidates.at(-1)) : nearest(pool.filter((m) => m !== pitch && m !== arrival), pitch);
+      out.push({ midi: pitch, dur: figure, role: "" });
+    }
+    out.push({ midi: arrival, dur: figure, role: "aprox" });
+  }
+  return { notes: out, last: out.filter((n) => !n.rest).at(-1)?.midi ?? root, root };
+}
+
 // ---------------------------------------------------------------- frases
 
 const cellTicks = (cell) => cell.split(" ").reduce((sum, tok) => sum + durationTicks(tok.replace(/^r/, "")), 0);
@@ -398,7 +474,7 @@ function speller(chord, middleC) {
  */
 export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
-  phraseStyles = null, scales = null, color: globalColor = "",
+  phraseStyles = null, scales = null, color: globalColor = "", bass = null,
 } = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
@@ -437,6 +513,19 @@ export function generateGroove(data, {
     if (withoutScale) {
       warnings.push(`${withoutScale} acorde(s) sem escala declarada: as frases deles usam só as notas do acorde. Peça à sua IA as notas da escala (ou escreva em “Mais”).`);
     }
+  }
+  if (bass) {
+    let previous = null;
+    project.chords.forEach((chord, i) => {
+      if (!sounding(chord).length) { out[i].bass_line = ""; return; }
+      const following = project.chords.slice(i + 1).find((c) => sounding(c).length) ?? null;
+      const rng = makeRng(`${style.id}|baixo|${bass}|${drumVariation}|${i}`);
+      const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
+      const result = composeBass({ style, lineId: bass, chord, next: following, length, rng, previous });
+      previous = result.root;
+      const spell = speller(chord, project.middle_c);
+      out[i].bass_line = result.notes.map((n) => (n.rest ? `r/${n.dur}` : `${spell(n.midi)}/${n.dur}${n.role ? `*${n.role}` : ""}`)).join(" ");
+    });
   }
   return drums ? { chords: out, drums: drumsFor(style, drums, project, drumVariation), notes: warnings } : { chords: out, notes: warnings };
 }

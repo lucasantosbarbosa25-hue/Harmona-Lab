@@ -12,6 +12,7 @@ import { TICKS_PER_BEAT } from "./phrase.js";
 export { TICKS_PER_BEAT };
 const CHANNEL = 0;
 const PHRASE_CHANNEL = 1;
+export const BASS_CHANNEL = 2;
 export const DRUM_CHANNEL = 9;
 /** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
 export const PHRASE_MODES = ["both", "chords", "line"];
@@ -181,6 +182,9 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     for (const [start, end, pitch, velocity] of chordNotes(project, chord, length, phraseMode, ticksPerBeat)) {
       notes.push({ start: tick + start, end: tick + end, pitch, velocity, channel: CHANNEL, chord: index });
     }
+    for (const e of chord.bass_events) {
+      notes.push({ start: tick + e.start, end: tick + e.start + e.length, pitch: e.note.midi, velocity: velocityFor(project, chord), channel: BASS_CHANNEL, chord: index });
+    }
     if (phraseMode !== "chords") {
       const velocity = velocityFor(project, chord);
       for (const e of chord.phrase_events) {
@@ -200,7 +204,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   const [num, den] = project.time_signature;
   const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [DRUM_CHANNEL]: [] };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [DRUM_CHANNEL]: [] };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
@@ -242,6 +246,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   const title = project.title || "Harmona Lab";
   const tracks = [trackBytes(title, events[CHANNEL], true)];
   if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
+  if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
   if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));
   const u32 = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   const u16 = (n) => [(n >> 8) & 0xff, n & 0xff];

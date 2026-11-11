@@ -366,3 +366,16 @@ def test_midi_com_bateria_tem_faixas_separadas_e_canal_10():
     assert plain.type == 0 and len(plain.tracks) == 1  # só acordes: o arquivo de sempre
     assert Project.from_dict(data).to_dict()["drums"] == ROCK
     assert not analyze_data({"drums": "Z/4", "chords": [{"notes": "C4"}]})["ok"]
+
+
+def test_linha_de_baixo_vai_numa_faixa_propria_no_canal_3():
+    data = {"title": "T", "chords": [{"notes": "E3 G3 B3", "bass_line": "E1/4. B1/8+4 E2/8 D#2/8*aprox"}, {"notes": "C4", "bass_line": "C2/1"}]}
+    midi = build_midi(Project.from_dict(data))
+    assert midi.type == 1 and [t.name for t in midi.tracks] == ["T", "Baixo"]
+    notes = [n for n in summarize_midi(midi).notes if n.channel == 2]
+    assert [(n.pitch, n.start, n.end) for n in notes] == [(28, 0, 720), (35, 720, 1440), (40, 1440, 1680), (39, 1680, 1920), (36, 1920, 3840)]
+    assert Project.from_dict(data).to_dict()["chords"][0]["bass_line"] == "E1/4. B1/8+4 E2/8 D#2/8*aprox"
+    report = analyze_data({"chords": [{"notes": "C4", "duration_beats": 1, "bass_line": "C2/2 H2/4"}]})
+    assert [i["message"] for i in report["issues"] if i["field"] == "bass_line"] == [
+        'Baixo: Não entendi "H2". Use nomes como C4, F#2, Eb3 ou números MIDI (0–127).', "A linha de baixo dura 3 tempos, mais que os 1 do acorde."]
+    assert rename_project_notes({"chords": [{"bass_line": "E1/4"}]}, "C3")["chords"][0]["bass_line"] == "E0/4"

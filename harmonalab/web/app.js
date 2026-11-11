@@ -7,7 +7,7 @@ import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
-import { SOURCE_SCALES, beatOptions, compOptions, generateGroove } from "./engine/groove.js";
+import { SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove } from "./engine/groove.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
@@ -23,7 +23,7 @@ const CUSTOM_COMP = "custom"; // levada escrita à mão (ou vinda num projeto), 
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
-const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale", "comp"];
+const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale", "comp", "bass_line"];
 const PHRASE_MODES = ["both", "line", "chords"];
 const COLORS = [["", "Estilo"], ["dentro", "Dentro"], ["cromatico", "Cromático"], ["outside", "Outside"]]; // acorde + frase · mão esquerda + frase · só acorde
 const STRUM_LABEL = { up: "grave → agudo", down: "agudo → grave" };
@@ -135,7 +135,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", ...extra,
   };
 }
 
@@ -144,7 +144,7 @@ function grooveSettings(raw) {
   const g = raw && typeof raw === "object" ? raw : {};
   const list = (v) => (Array.isArray(v) ? v.map(String) : []);
   return {
-    comp: String(g.comp || ""), drums: String(g.drums || ""),
+    comp: String(g.comp || ""), drums: String(g.drums || ""), bass: String(g.bass || ""),
     phraseStyles: list(g.phraseStyles), scales: list(g.scales), color: ["dentro", "cromatico", "outside"].includes(g.color) ? g.color : "",
   };
 }
@@ -167,7 +167,7 @@ function toEditable(data) {
       bass: text(c.bass), notes: text(c.notes),
       top_note: text(c.top_note), velocity: c.velocity ?? "", strum: text(c.strum),
       omitted: text(c.omitted), comment: text(c.comment), function: text(c.function), scale: text(c.scale),
-      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color),
+      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color), bass_line: text(c.bass_line),
       comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
     };
   });
@@ -512,6 +512,7 @@ function chordCard(chord, index, total) {
       phraseField("Frase (nota/duração, * para o papel)", "phrase", "ex.: G5/8 F5/8 Eb5/4*alvo", true),
       phraseField("Notas da escala (sem oitava)", "phrase_scale", "ex.: B C D Eb F G A", true),
       phraseField("Levada (ritmo do acorde)", "comp", "ex.: E/4 D/8 D/8 E/4 D/4", true),
+      phraseField("Linha de baixo (nota/duração)", "bass_line", "ex.: E1/4. B1/8+4 E2/4", true),
       h("label", { class: "field wide", for: `f-${chord.id}-strum` }, h("span", { class: "label" }, "Strum deste acorde"), r.strum, r.msgs.strum),
       noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
       noteField(chord, r, "notes", "ex.: G3 B3"),
@@ -668,7 +669,7 @@ function renderAnalysis() {
       if (r.inputs[field]) r.inputs[field].setAttribute("aria-invalid", String(messages.length > 0));
       if (messages.length) {
         hasError = true;
-        if (["bass", "notes", "omitted", "strum", "phrase", "phrase_scale", "comp"].includes(field)) r.more.open = true;
+        if (["bass", "notes", "omitted", "strum", "phrase", "phrase_scale", "comp", "bass_line"].includes(field)) r.more.open = true;
       }
     }
     const rest = issues.filter((i) => !(i.level === "error" && CHORD_FIELDS.includes(i.field)));
@@ -927,7 +928,17 @@ function renderGroove() {
     ...(drumValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizada (do projeto)")] : []),
   );
   $("#groove-drums").value = drumValue;
-  $("#groove-fill-row").hidden = !hasDrums || drumValue === CUSTOM_COMP;
+  const lines = bassOptions(style);
+  const hasBass = anyChord("bass_line");
+  const bassId = state.project.groove?.bass || "";
+  const bassValue = !hasBass ? "" : lines.some((o) => o.id === bassId) ? bassId : CUSTOM_COMP;
+  $("#groove-bass").replaceChildren(
+    h("option", { value: "" }, "Desligado"),
+    ...lines.map((o) => h("option", { value: o.id }, o.label)),
+    ...(bassValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizado (do projeto)")] : []),
+  );
+  $("#groove-bass").value = bassValue;
+  $("#groove-fill-row").hidden = !((hasDrums && drumValue !== CUSTOM_COMP) || (hasBass && bassValue !== CUSTOM_COMP));
 
   const phrases = anyChord("phrase");
   $("#groove-phrases").checked = phrases;
@@ -953,7 +964,7 @@ function toggleTag(key, id, current) {
 }
 
 /** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
-function applyGroove({ comp, phrases, drums, settings, before }, message) {
+function applyGroove({ comp, phrases, drums, bass, settings, before }, message) {
   const undo = snapshot();
   before?.();
   if (settings) state.project.groove = { ...state.project.groove, ...settings };
@@ -962,9 +973,14 @@ function applyGroove({ comp, phrases, drums, settings, before }, message) {
   const result = generateGroove(toPayload(), {
     style, comp: comp || null, phrases: phrases === true, variation: state.groove.variation,
     drums: drums || null, drumVariation: state.groove.drumVariation,
+    bass: bass || null,
     phraseStyles: (state.project.groove?.phraseStyles || []).map(findStyle).filter(Boolean),
     scales: state.project.groove?.scales || [], color: state.project.groove?.color || "",
   });
+  if (bass !== undefined) {
+    state.project.chords.forEach((chord, i) => { chord.bass_line = bass ? result.chords[i]?.bass_line ?? "" : ""; });
+    state.project.groove = { ...state.project.groove, bass: bass || "" };
+  }
   if (drums !== undefined) {
     state.project.drums = drums ? result.drums ?? "" : "";
     state.project.groove = { ...state.project.groove, drums: drums || "" };
@@ -980,7 +996,7 @@ function applyGroove({ comp, phrases, drums, settings, before }, message) {
     }
   });
   if (comp !== undefined) state.project.groove = { ...state.project.groove, comp: comp || "" };
-  if (comp || drums || phrases === true) state.project.style = style.label;
+  if (comp || drums || bass || phrases === true) state.project.style = style.label;
   renderSettings();
   renderChords();
   validateNow();
@@ -1004,16 +1020,20 @@ function bindGroove() {
     const phrases = anyChord("phrase");
     const beat = state.project.groove?.drums || "";
     const hasDrums = Boolean(String(state.project.drums || "").trim()) && beat && beat !== CUSTOM_COMP;
-    if (!hasComp && !phrases && !hasDrums) { renderGroove(); return; }
+    if (!hasComp && !phrases && !hasDrums && !anyChord("bass_line")) { renderGroove(); return; }
     const comp = hasComp ? (compOptions(style).some((o) => o.id === current) ? current : style.comps[0].id) : undefined;
     const drums = hasDrums ? (beatOptions(style).some((o) => o.id === beat) ? beat : style.beats[0].id) : undefined;
-    applyGroove({ comp, drums, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
+    const hasBass = anyChord("bass_line") && state.project.groove?.bass && state.project.groove.bass !== CUSTOM_COMP;
+    const bass = hasBass ? bassForComp(style, comp ?? current) : undefined;
+    applyGroove({ comp, drums, bass, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
   });
   $("#groove-comp").addEventListener("change", (e) => {
     const id = e.target.value;
     if (id === CUSTOM_COMP) return;
     const label = e.target.selectedOptions[0]?.textContent ?? "";
-    applyGroove({ comp: id }, id ? `Levada nos acordes: ${label}.` : "Levada desligada: cada acorde volta a soar inteiro.");
+    // o baixo segue a levada: com o baixo ligado, ele troca para a linha que combina com ela
+    const bass = anyChord("bass_line") && id ? bassForComp(grooveStyle(), id) : undefined;
+    applyGroove({ comp: id, bass }, id ? `Levada nos acordes: ${label}.` : "Levada desligada: cada acorde volta a soar inteiro.");
   });
   $("#groove-drums").addEventListener("change", (e) => {
     const id = e.target.value;
@@ -1021,10 +1041,19 @@ function bindGroove() {
     const label = e.target.selectedOptions[0]?.textContent ?? "";
     applyGroove({ drums: id }, id ? `Bateria: ${label}.` : "Bateria desligada.");
   });
+  $("#groove-bass").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id === CUSTOM_COMP) return;
+    const label = e.target.selectedOptions[0]?.textContent ?? "";
+    applyGroove({ bass: id }, id ? `Baixo: ${label}.` : "Baixo desligado.");
+  });
   $("#groove-fill").addEventListener("click", () => {
     state.groove.drumVariation += 1;
     saveGroove();
-    applyGroove({ drums: state.project.groove?.drums }, "Outras viradas sorteadas.");
+    const g = state.project.groove || {};
+    const drums = String(state.project.drums || "").trim() && g.drums && g.drums !== CUSTOM_COMP ? g.drums : undefined;
+    const bass = anyChord("bass_line") && g.bass && g.bass !== CUSTOM_COMP ? g.bass : undefined;
+    applyGroove({ drums, bass }, "Outras viradas sorteadas.");
   });
   $("#groove-phrases").addEventListener("change", (e) => {
     if (e.target.checked) applyGroove({ phrases: true }, `Frases escritas em ${grooveStyle().label}.`);

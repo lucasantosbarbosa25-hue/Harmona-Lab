@@ -38,8 +38,8 @@ export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
     top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
-    phrase: "", phrase_scale: "", phrase_color: "", comp: "",
-    phrase_events: [], phrase_pcs: [], comp_layers: [], // derivados da frase, da escala e da levada, preenchidos na leitura
+    phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "",
+    phrase_events: [], phrase_pcs: [], comp_layers: [], bass_events: [], // derivados da frase, da escala e da levada, preenchidos na leitura
   };
 }
 
@@ -75,6 +75,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   if (chord.phrase_scale) d.phrase_scale = chord.phrase_scale;
   if (chord.phrase_color) d.phrase_color = chord.phrase_color;
   if (chord.comp) d.comp = chord.comp;
+  if (chord.bass_line) d.bass_line = chord.bass_line;
   return d;
 }
 
@@ -332,6 +333,21 @@ function loadPhrase(raw, chord, index, project, issues) {
       issues.push(issue("error", 'A escala da frase ("phrase_scale") deve ser um texto, por exemplo "B C D Eb F G A".', index, "phrase_scale"));
     }
   }
+  const line = raw.bass_line;
+  if (line !== undefined && line !== null && line !== "") {
+    if (isText(line)) {
+      chord.bass_line = phraseText(line);
+      const { events, ticks, errors } = parsePhrase(chord.bass_line, project.middle_c);
+      for (const message of errors) issues.push(issue("error", message.replace("Frase:", "Baixo:").replace("na frase", "na linha de baixo"), index, "bass_line"));
+      if (ticks > roundHalfEven(chord.duration_beats * TICKS_PER_BEAT)) {
+        issues.push(issue("error", `A linha de baixo dura ${fmtG(ticks / TICKS_PER_BEAT)} tempos, mais que os `
+          + `${fmtG(chord.duration_beats)} do acorde.`, index, "bass_line"));
+      }
+      chord.bass_events = events;
+    } else {
+      issues.push(issue("error", 'A linha de baixo ("bass_line") deve ser um texto, por exemplo "E2/4. B1/8+4 E2/4".', index, "bass_line"));
+    }
+  }
   const comp = raw.comp;
   if (comp !== undefined && comp !== null && comp !== "") {
     if (isText(comp)) {
@@ -357,7 +373,9 @@ export function renameProjectNotes(data, toMiddleC) {
     for (const key of [...PARTS, "top_note"]) {
       if (c[key] !== undefined && c[key] !== null && c[key] !== "") c[key] = renameNoteText(c[key], fromMiddleC, toMiddleC);
     }
-    if (c.phrase !== undefined && c.phrase !== null && c.phrase !== "") c.phrase = renamePhraseText(c.phrase, fromMiddleC, toMiddleC);
+    for (const key of ["phrase", "bass_line"]) {
+      if (c[key] !== undefined && c[key] !== null && c[key] !== "") c[key] = renamePhraseText(c[key], fromMiddleC, toMiddleC);
+    }
     return c;
   });
   return out;

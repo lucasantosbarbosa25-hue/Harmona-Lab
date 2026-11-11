@@ -137,6 +137,10 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   progressões longas, a cada quatro. A virada interrompe o beat no fim do compasso e ele volta no tempo 1, com um ataque
   de prato. "Outra virada" sorteia de novo. No app ela toca com um kit sintético simples; com um banco de sons, usa o kit
   do banco, se houver.
+- **Baixo:** três linhas por estilo (walking, shuffle, tumbao, surdo, riff com oitava…), que seguem a levada escolhida.
+  Começam na nota de baixo de cada acorde e, às vezes, terminam com uma virada pela pentatônica do acorde que chega ao
+  próximo por semitom. No MIDI, faixa própria (canal 3). Com banco de sons, toca com o som dos acordes.
+- **Diagramas:** no menu, "Exportar diagramas dos acordes" gera uma imagem com o desenho do teclado de cada acorde.
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
   conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.

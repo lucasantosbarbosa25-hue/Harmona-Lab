@@ -97,6 +97,8 @@ class ChordEvent:
     phrase_scale: str = ""  # classes de altura da escala do acorde ("B C D Eb F G A")
     phrase_color: str = ""  # cor pedida para a frase: "dentro", "cromatico" ou "outside" (só informativa para o motor)
     comp: str = ""  # levada: o ritmo em que o voicing é tocado ("E/4 D/8 D/8 ..."; ver phrase.py)
+    bass_line: str = ""  # linha de baixo, na notação da frase ("E2/4. B1/8+4 E2/4"); vai para o canal 3
+    bass_events: list[PhraseEvent] = field(default_factory=list)  # derivado de bass_line
     comp_layers: list[tuple[list[CompHit], int]] = field(default_factory=list)  # derivado de comp
     # Derivados da frase e da escala, preenchidos na leitura (não fazem parte do JSON).
     phrase_events: list[PhraseEvent] = field(default_factory=list)
@@ -161,6 +163,8 @@ class ChordEvent:
             d["phrase_color"] = self.phrase_color
         if self.comp:
             d["comp"] = self.comp
+        if self.bass_line:
+            d["bass_line"] = self.bass_line
         return d
 
 
@@ -457,6 +461,19 @@ def _load_phrase(raw: dict[str, Any], chord: ChordEvent, index: int, project: Pr
                 issues.append(Issue("error", message, index, "phrase_scale"))
         else:
             issues.append(Issue("error", 'A escala da frase ("phrase_scale") deve ser um texto, por exemplo "B C D Eb F G A".', index, "phrase_scale"))
+    line = raw.get("bass_line")
+    if line not in (None, ""):
+        if isinstance(line, (str, list, tuple)):
+            chord.bass_line = phrase_text(line)
+            events, total, errors = parse_phrase(chord.bass_line, project.middle_c)
+            for message in errors:
+                issues.append(Issue("error", message.replace("Frase:", "Baixo:").replace("na frase", "na linha de baixo"), index, "bass_line"))
+            if total > beats_to_ticks(chord.duration_beats):
+                issues.append(Issue("error", f"A linha de baixo dura {total / TICKS_PER_BEAT:g} tempos, mais que os "
+                                             f"{chord.duration_beats:g} do acorde.", index, "bass_line"))
+            chord.bass_events = events
+        else:
+            issues.append(Issue("error", 'A linha de baixo ("bass_line") deve ser um texto, por exemplo "E2/4. B1/8+4 E2/4".', index, "bass_line"))
     comp = raw.get("comp")
     if comp not in (None, ""):
         if isinstance(comp, (str, list, tuple)):
@@ -489,8 +506,9 @@ def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, An
         for key in (*PARTS, "top_note"):
             if c.get(key) not in (None, ""):
                 c[key] = rename_note_text(c[key], from_middle_c, to_middle_c)
-        if c.get("phrase") not in (None, ""):
-            c["phrase"] = rename_phrase_text(c["phrase"], from_middle_c, to_middle_c)
+        for key in ("phrase", "bass_line"):
+            if c.get(key) not in (None, ""):
+                c[key] = rename_phrase_text(c[key], from_middle_c, to_middle_c)
         chords.append(c)
     out["chords"] = chords
     return out

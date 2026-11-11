@@ -160,6 +160,11 @@ CASES = [
     {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
     {"drums": 5, "chords": [{"notes": "C4"}]},
     {"drums": " | ; ", "chords": [{"notes": "C4"}]},
+    # linha de baixo (canal 3, faixa própria), com e sem frase e bateria, erros e troca de oitava
+    {"chords": [{"left_hand": "E3 B3", "right_hand": "D4 F#4", "bass_line": "E1/4. B1/8+4 E2/8 D2/8"}, {"notes": "A3 C4", "bass_line": ["A1/2", "r/4 G1/8*aprox G#1/8*aprox"]}]},
+    {"drums": "K/4 S/4", "chords": [{"notes": "C4 E4", "phrase": "C5/4", "bass_line": "C2/8t C2/8t G1/8t C2/2.", "duration_beats": 4}]},
+    {"middle_c": "C3", "chords": [{"notes": "C3", "bass_line": "C1/4 G0/4"}]},
+    {"chords": [{"notes": "C4", "duration_beats": 1, "bass_line": "C2/2 H2/4 C2/9"}, {"notes": "C4", "bass_line": {"a": 1}}]},
 ]
 
 

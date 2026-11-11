@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
-import { SOURCE_SCALES, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
+import { SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
 import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../../harmonalab/web/engine/midi.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
@@ -272,4 +272,47 @@ test("tags: estilos combinados, escalas de origem e cor geral (a cor do acorde m
     }
   }
   assert.ok(mixed.size >= 3, "com fusion marcado junto, a bossa ganha semicolcheias");
+});
+
+test("baixo: linhas por estilo, a levada escolhe a sua, viradas que chegam ao próximo acorde por semitom", () => {
+  for (const style of STYLES) {
+    assert.ok(style.bass.length >= 3, `${style.id}: pelo menos três linhas de baixo`);
+    for (const line of style.bass) {
+      const ticks = line.pattern.split(" ").reduce((n, t) => n + durationTicks(t.split("/")[1]), 0);
+      assert.equal(ticks, 1920, `${style.id}/${line.id}`);
+    }
+    for (const comp of style.comps) if (comp.bass) assert.ok(style.bass.some((b) => b.id === comp.bass), `${style.id}/${comp.id}`);
+  }
+  assert.equal(bassForComp(findStyle("blues"), "lento"), "lento");
+  assert.equal(bassForComp(findStyle("blues"), "shuffle"), "shuffle"); // sem indicação: a primeira
+  assert.deepEqual(bassOptions(findStyle("salsa")).map((o) => o.id), ["tumbao", "tumbao2", "antecipado"]);
+  let fills = 0;
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 8; variation++) {
+      const made = generateGroove(bare(), { style, bass: style.bass[variation % 3].id, drumVariation: variation }).chords;
+      const data = apply(bare(), { chords: made });
+      const report = analyzeData(data);
+      assert.equal(report.ok, true, `${style.id} variação ${variation}`);
+      const { project } = loadProject(data);
+      project.chords.forEach((chord, i) => {
+        const events = chord.bass_events;
+        assert.ok(events.length, `${style.id}: todo acorde tem baixo`);
+        for (const e of events) assert.ok(e.note.midi >= 23 && e.note.midi <= 52, `${style.id}: registro de baixo (${e.note.midi})`);
+        const lowest = Math.min(...chord.left_hand.concat(chord.right_hand, chord.bass).map((n) => n.midi));
+        const first = events.find((e) => e.start === 0);
+        if (first) assert.equal(first.note.midi % 12, lowest % 12, `${style.id}: o baixo começa na nota de baixo do acorde`);
+        const last = events.at(-1);
+        const next = project.chords[i + 1];
+        if (next && last.role === "aprox" && last.start + last.length === Math.round(chord.duration_beats * 480)) {
+          const nextLow = Math.min(...next.left_hand.concat(next.right_hand, next.bass).map((n) => n.midi)) % 12;
+          assert.ok([1, 11].includes((((last.note.midi - nextLow) % 12) + 12) % 12), `${style.id}: a virada chega por semitom`);
+          fills += 1;
+        }
+      });
+    }
+  }
+  assert.ok(fills >= 40, `${fills} chegadas por semitom`);
+  const bytes = midiBytes(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("funk"), bass: "pop" }))).project);
+  assert.ok(Buffer.from(bytes).toString("latin1").includes("Baixo"));
+  assert.ok(noteEvents(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("funk"), bass: "pop" }))).project).notes.some((n) => n.channel === 2));
 });

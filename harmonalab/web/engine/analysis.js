@@ -207,6 +207,7 @@ export function analyzeChord(project, chord, index, startBeats) {
       })),
     } : null,
     comp: chord.comp || null,
+    bass_line: chord.bass_line || null,
   };
 }
 

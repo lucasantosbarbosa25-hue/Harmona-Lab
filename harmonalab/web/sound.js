@@ -9,6 +9,7 @@ const VENDOR = new URL("./vendor/spessasynth/", import.meta.url);
 const SOUNDS = new URL("./sons/", import.meta.url);
 const DEVICE = "aparelho"; // o id do banco carregado do aparelho
 const DRUM_CHANNEL = 9;
+const BASS_CHANNEL = 2;
 /** Cada banco embutido de teclado ganha um deslocamento de banco próprio, para não colidir com os outros (todos usam o programa 0). */
 const builtinOffset = (id) => 64 + BUILTIN_BANKS.findIndex((b) => b.id === id);
 const DB_NAME = "harmonalab";
@@ -271,6 +272,7 @@ export class SoundFontPlayer {
     this.stop();
     this.#setPatch(CHORD_CHANNEL, chordPatch);
     this.#setPatch(PHRASE_CHANNEL, phrasePatch);
+    this.#setPatch(BASS_CHANNEL, chordPatch); // o baixo toca com o som dos acordes (a mão esquerda de um tecladista)
     if (drumPatch) {
       // o banco da bateria escolhida fica na frente, para o canal 10 pegar o kit dele
       const bank = parsePatchValue(drums).bank;

@@ -63,7 +63,7 @@ FORMATO DO PROJETO (JSON)
 ```
 
 CRITÉRIOS MUSICAIS
-- Tocável: mão esquerda com 1 a 3 notas, em geral entre C2 e C4; mão direita com 3 a 5 notas, em geral entre C3 e C6; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.
+- Tocável e na região média: mão esquerda com 1 a 3 notas, em geral entre C3 e C4, e mão direita com 3 a 5 notas, em geral entre C4 e C6. O grave fica para a linha de baixo, que o Harmona Lab escreve; desça a mão esquerda até C2 só quando o pedido pedir baixo ou pedal na mão do tecladista; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.
 - Se o pedido fixar a ponta (uma nota ou uma sequência), respeite exatamente e escolha a oitava que cabe na mão direita. Se pedir pedal no baixo, repita a nota no bass dos acordes pedidos.
 - Sem número de acordes, faça de 4 a 8. Sem BPM, o andamento típico do estilo. Sem compasso, 4/4 com um acorde por compasso.
 

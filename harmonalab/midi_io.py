@@ -3,8 +3,9 @@
 Usa ``mido``: controle total de ticks, sem conversões em ponto flutuante.
 
 Decisões:
-  - Só acordes: arquivo MIDI tipo 0 (uma única faixa), que abre igual em qualquer DAW. Com frase ou bateria: tipo 1,
-    com uma faixa para os acordes, uma para a frase (canal 2) e uma para a bateria (canal 10, General MIDI).
+  - Só acordes: arquivo MIDI tipo 0 (uma única faixa), que abre igual em qualquer DAW. Com frase, baixo ou bateria:
+    tipo 1, com uma faixa para os acordes, uma para a frase (canal 2), uma para o baixo (canal 3) e uma para a
+    bateria (canal 10, General MIDI).
   - 480 ticks por semínima. Todas as posições são somadas em ticks inteiros,
     então não há deriva: 4 tempos em 4/4 = 1920 ticks = 1 compasso, em
     qualquer BPM.
@@ -30,6 +31,7 @@ from .timing import TICKS_PER_BEAT, beats_to_ticks, strum_plan  # noqa: F401 (re
 
 CHANNEL = 0
 PHRASE_CHANNEL = 1
+BASS_CHANNEL = 2
 DRUM_CHANNEL = 9
 #: O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase).
 PHRASE_MODES = ("both", "chords", "line")
@@ -177,6 +179,10 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         for start, end, pitch, vel in chord_notes(project, chord, length, phrase_mode, ticks_per_beat):
             events.append((tick + start, 2, pitch, CHANNEL, mido.Message("note_on", channel=CHANNEL, note=pitch, velocity=vel)))
             events.append((tick + end, 0, pitch, CHANNEL, mido.Message("note_off", channel=CHANNEL, note=pitch, velocity=0)))
+        for e in chord.bass_events:
+            pitch = e.note.midi
+            events.append((tick + e.start, 2, pitch, BASS_CHANNEL, mido.Message("note_on", channel=BASS_CHANNEL, note=pitch, velocity=velocity)))
+            events.append((tick + e.start + e.length, 0, pitch, BASS_CHANNEL, mido.Message("note_off", channel=BASS_CHANNEL, note=pitch, velocity=0)))
         if phrase_mode != "chords":
             for e in chord.phrase_events:
                 pitch = e.note.midi
@@ -192,7 +198,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     drums += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
               for _, end, pitch, _ in drum_notes(project, end_tick, ticks_per_beat)]
     phrase = [e for e in events if e[3] == PHRASE_CHANNEL]
-    chords = [e for e in events if e[3] != PHRASE_CHANNEL]
+    bass = [e for e in events if e[3] == BASS_CHANNEL]
+    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL)]
 
     def make_track(name: str, items: list, header: bool) -> mido.MidiTrack:
         track = mido.MidiTrack()
@@ -209,7 +216,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         return track
 
     title = project.title or "Harmona Lab"
-    if not phrase and not drums:
+    if not phrase and not drums and not bass:
         midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
         midi.tracks.append(make_track(title, chords, True))
         return midi
@@ -217,6 +224,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     midi.tracks.append(make_track(title, chords, True))
     if phrase:
         midi.tracks.append(make_track("Frase", phrase, False))
+    if bass:
+        midi.tracks.append(make_track("Baixo", bass, False))
     if drums:
         midi.tracks.append(make_track("Bateria", drums, False))
     return midi
