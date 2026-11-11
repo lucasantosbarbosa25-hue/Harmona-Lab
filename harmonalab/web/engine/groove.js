@@ -176,8 +176,12 @@ export const bassOptions = (style) => (style?.bass ?? []).map(({ id, label }) =>
 /** A linha de baixo que combina com uma levada (a que a levada indicar, ou a primeira do estilo). */
 export const bassForComp = (style, compId) => style?.comps.find((c) => c.id === compId)?.bass ?? style?.bass?.[0]?.id ?? "";
 
+// Baixo de 4 cordas (afinação padrão): nada abaixo do E1, a corda solta mais grave; no agudo, até o G4 (casa 24 da corda G).
 const BASS_LOW = 28; // E1
-const BASS_TOP = 40; // E2: a nota de baixo do acorde fica entre E1 e D#2; a linha sobe até perto de C3
+const BASS_TOP = 40; // E2: a nota de baixo do acorde fica entre E1 e D#2
+const BASS_HIGHEST = 67; // G4
+/** Põe uma nota na extensão do baixo de 4 cordas, por oitavas. */
+const inBassRange = (m) => { while (m < BASS_LOW) m += 12; while (m > BASS_HIGHEST) m -= 12; return m; };
 
 /** A nota de baixo do acorde (a mais grave do voicing, para respeitar inversões e pedais), perto da anterior. */
 function bassRootMidi(pc, previous) {
@@ -221,7 +225,8 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
   const body = length - fillTicks;
 
   const pitchOf = (degree) => {
-    if (degree === "x") return nextRoot != null ? nextRoot - 1 : root;
+    // aproximação: meio tom abaixo do próximo baixo; se cair abaixo do E1, vem por cima
+    if (degree === "x") return nextRoot != null ? (nextRoot - 1 >= BASS_LOW ? nextRoot - 1 : nextRoot + 1) : root;
     const down = degree.startsWith("_");
     return scaleStep(root, Number(down ? degree.slice(1) : degree), down ? -1 : 1, scale);
   };
@@ -241,11 +246,11 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
   if (fillTicks) {
     const count = Math.max(2, Math.round(fillTicks / figureTicks));
     const penta = pentatonicOf(scale, rootPc) ?? scale;
-    const top = BASS_TOP + params.high;
+    const top = Math.min(BASS_HIGHEST, BASS_TOP + params.high);
     const pool = [];
-    for (let m = BASS_LOW - 4; m <= top; m++) if (penta.has(mod12(m))) pool.push(m);
+    for (let m = BASS_LOW; m <= top; m++) if (penta.has(mod12(m))) pool.push(m);
     const start = out.filter((n) => !n.rest).at(-1)?.midi ?? root;
-    const approach = rng.chance(0.7) ? nextRoot - 1 : nextRoot + 1;
+    const approach = rng.chance(0.7) && nextRoot - 1 >= BASS_LOW ? nextRoot - 1 : nextRoot + 1;
     const indexOf = (pitch) => pool.indexOf(nearest(pool, pitch));
     const shape = rng.pick(params.shapes);
     const notes = [];
@@ -289,6 +294,8 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
     const used = out.reduce((n, x) => n + durationTicks(x.dur), 0);
     if (used < length) out.push({ rest: true, dur: ticksText(length - used) });
   }
+  // tudo dentro do baixo de 4 cordas (graus abaixo da fundamental, por exemplo, sobem uma oitava)
+  for (const n of out) if (!n.rest) n.midi = inBassRange(n.midi);
   return { notes: out, last: out.filter((n) => !n.rest).at(-1)?.midi ?? root, root };
 }
 

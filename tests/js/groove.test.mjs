@@ -299,7 +299,7 @@ test("baixo: linhas por estilo, a levada escolhe a sua, viradas que chegam ao pr
       project.chords.forEach((chord, i) => {
         const events = chord.bass_events;
         assert.ok(events.length, `${style.id}: todo acorde tem baixo`);
-        for (const e of events) assert.ok(e.note.midi >= 23 && e.note.midi <= 64, `${style.id}: registro de baixo (${e.note.midi})`);
+        for (const e of events) assert.ok(e.note.midi >= 28 && e.note.midi <= 67, `${style.id}: baixo de 4 cordas, do E1 ao G4 (${e.note.midi})`);
         const lowest = Math.min(...chord.left_hand.concat(chord.right_hand, chord.bass).map((n) => n.midi));
         const first = events.find((e) => e.start === 0);
         if (first) assert.equal(first.note.midi % 12, lowest % 12, `${style.id}: o baixo começa na nota de baixo do acorde`);

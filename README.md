@@ -145,7 +145,9 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   Começam na nota de baixo de cada acorde, com "pops" de oitava no gospel, funk, neo-soul e fusion, e muitas vezes terminam
   com uma virada pela pentatônica de 1 ou 2 tempos: chegando ao próximo acorde por semitom, descendo do agudo, subindo
   até uma nota aguda do próximo acorde (perto do C4, e o acorde seguinte cai no grave, como no gospel americano) ou em
-  arco. No MIDI, faixa própria (canal 3). Com banco de sons, toca com o som dos acordes.
+  arco. Tudo dentro do **baixo de 4 cordas** (do E1, a corda solta mais grave, ao G4): uma nota que cairia abaixo sobe
+  uma oitava, e uma aproximação abaixo do E1 vem por cima. No MIDI, faixa própria (canal 3). Com banco de sons, toca com
+  o som dos acordes.
 - **Diagramas:** no menu, "Exportar diagramas dos acordes" gera uma imagem com o desenho do teclado de cada acorde.
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): o app escreve o solo como um improvisador pensa, **a partir da chegada**. Primeiro
