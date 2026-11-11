@@ -93,27 +93,66 @@ function cutLayer(layer, cut, barTicks) {
 }
 
 /**
- * A bateria da progressão inteira (texto "drums"): o beat do estilo, com uma virada no último compasso (e a cada quatro,
- * nas progressões longas). A virada substitui o fim do compasso e o beat volta no tempo 1, com um ataque de prato.
+ * Dinâmica do chimbal e da condução (H, R e cúpula E): cada toque ganha um nível de velocity pela posição no compasso,
+ * a não ser que a base já marque o seu. No swing e no blues, acento no 2 e no 4 e as notas "pulo" leves; nos outros
+ * estilos, acento nos tempos, contratempo normal, semicolcheias leves e algumas fantasmas. Cada compasso varia um pouco.
+ */
+function hatDynamics(layer, { swing, rng }) {
+  let pos = 0;
+  return layer.trim().split(/\s+/).map((token) => {
+    const [head, dur] = token.split("/");
+    const ticks = durationTicks(dur);
+    const at = pos;
+    pos += ticks;
+    const m = /^([A-Z])(!!|\?\?|[!?])?$/.exec(head);
+    if (!m || !["H", "R", "E"].includes(m[1]) || m[2]) return token;
+    const beat = at % TICKS_PER_BEAT === 0;
+    const index = Math.floor(at / TICKS_PER_BEAT);
+    let mark;
+    if (swing) mark = beat ? (index % 2 ? (rng.chance(0.2) ? "!!" : "!") : rng.chance(0.3) ? "?" : "") : rng.chance(0.25) ? "??" : "?";
+    else if (beat) mark = index === 0 && rng.chance(0.3) ? "!!" : rng.chance(0.1) ? "" : "!";
+    else if (at % (TICKS_PER_BEAT / 2) === 0) mark = rng.chance(0.15) ? "?" : "";
+    else mark = rng.chance(0.3) ? "??" : "?";
+    return `${m[1]}${mark}/${dur}`;
+  }).join(" ");
+}
+
+/** Uma camada completada com pausa até `ticks`. */
+const padLayer = (layer, ticks) => {
+  const used = layer.trim().split(/\s+/).reduce((n, t) => n + durationTicks(t.split("/")[1]), 0);
+  return used < ticks ? `${layer.trim()} r/${ticksText(ticks - used)}` : layer.trim();
+};
+
+/**
+ * A bateria da progressão inteira (texto "drums"): o beat do estilo, com dinâmica no chimbal e uma virada no último
+ * compasso (e a cada quatro, nas progressões longas). A virada (que pode ter várias camadas, como bumbo por baixo)
+ * substitui o fim do compasso; a do fim prefere as de dois tempos. Depois dela, o beat volta no tempo 1 com um ataque de prato.
  */
 export function drumsFor(style, beatId, project, variation = 0) {
   const beat = style?.beats.find((b) => b.id === beatId);
   if (!beat) return "";
   const barTicks = Math.round(beatsPerBar(project) * TICKS_PER_BEAT);
   const bars = Math.ceil((totalBeats(project) * TICKS_PER_BEAT) / barTicks - 1e-9);
-  if (bars < 2 || barTicks < 2 * TICKS_PER_BEAT) return beat.bars.join(" | ");
   const rng = makeRng(`${style.id}|${beatId}|bateria|${variation}`);
-  const fills = style.fills.map((text) => ({ text, ticks: text.split(/\s+/).reduce((n, t) => n + durationTicks(t.split("/")[1]), 0) }))
-    .filter((f) => f.ticks <= barTicks / 2);
+  const swing = ["swing", "blues"].includes(style.id);
+  const dynamic = (bar) => bar.split(";").map((l) => hatDynamics(l, { swing, rng })).join(" ; ");
+  if (bars < 2 || barTicks < 2 * TICKS_PER_BEAT) return beat.bars.map(dynamic).join(" | ");
+  const fills = style.fills.map((text) => {
+    const layers = text.split(";").map((l) => l.trim()).filter(Boolean);
+    const ticks = Math.max(...layers.map((l) => l.split(/\s+/).reduce((n, t) => n + durationTicks(t.split("/")[1]), 0)));
+    return { layers: layers.map((l) => padLayer(l, ticks)), ticks };
+  }).filter((f) => f.ticks <= barTicks / 2);
   const out = [];
   let crash = false;
   for (let i = 0; i < bars; i++) {
-    let layers = beat.bars[i % beat.bars.length].split(";").map((l) => l.trim());
-    const isFill = fills.length && (i === bars - 1 || (bars >= 8 && i % 4 === 3));
+    let layers = dynamic(beat.bars[i % beat.bars.length]).split(";").map((l) => l.trim());
+    const last = i === bars - 1;
+    const isFill = fills.length && (last || (bars >= 8 && i % 4 === 3));
     if (isFill) {
-      const fill = rng.pick(fills);
+      const long = fills.filter((f) => f.ticks === Math.max(...fills.map((x) => x.ticks)));
+      const fill = rng.pick((last || i % 8 === 7) && long.length ? long : fills);
       const cut = barTicks - fill.ticks;
-      layers = [...layers.map((l) => cutLayer(l, cut, barTicks)), `r/${ticksText(cut)} ${fill.text}`];
+      layers = [...layers.map((l) => cutLayer(l, cut, barTicks)), ...fill.layers.map((l) => `r/${ticksText(cut)} ${l}`)];
     }
     if (crash) layers.push(`C!/4 r/${ticksText(barTicks - TICKS_PER_BEAT)}`);
     crash = isFill;
@@ -157,7 +196,14 @@ function scaleStep(from, steps, dir, scale) {
   return pitch;
 }
 
-/** Linha de baixo de um acorde: o desenho do estilo repetido até o fim e, às vezes, uma virada que chega ao próximo acorde. */
+/**
+ * Linha de baixo de um acorde: o desenho do estilo repetido até o fim (com "pops" de oitava de vez em quando, nos estilos
+ * que pedem) e, às vezes, uma virada pela pentatônica no fim do acorde, de 1 ou 2 tempos (bassFill), num destes desenhos:
+ *   chegada: anda até o baixo do próximo acorde e chega por semitom;
+ *   descida: salta para o agudo e desce correndo até a aproximação do próximo acorde;
+ *   subida: sobe correndo até uma nota aguda do próximo acorde, e o acorde seguinte cai no grave (bem gospel);
+ *   arco: sobe até o agudo e desce até a aproximação.
+ */
 function composeBass({ style, lineId, chord, next, length, rng, previous }) {
   const line = style.bass.find((b) => b.id === lineId) ?? style.bass[0];
   const voices = sounding(chord);
@@ -167,8 +213,12 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
   const root = bassRootMidi(rootPc, previous);
   const nextVoices = next ? sounding(next) : [];
   const nextRoot = nextVoices.length ? bassRootMidi(pitchClass(nextVoices[0].note), root) : null;
-  const fill = nextRoot != null && length >= 2 * TICKS_PER_BEAT && rng.chance(style.bassFill?.chance ?? 0);
-  const body = fill ? length - TICKS_PER_BEAT : length;
+  const params = { chance: 0, figure: "8", beats: 1, high: 12, shapes: ["chegada"], pop: 0, ...style.bassFill };
+  const figureTicks = durationTicks(params.figure);
+  const wantFill = nextRoot != null && length >= 2 * TICKS_PER_BEAT && rng.chance(params.chance);
+  const fillBeats = wantFill ? Math.min(rng.chance(params.long ?? 0.5) ? params.beats : 1, length / TICKS_PER_BEAT - 1) : 0;
+  const fillTicks = Math.max(0, Math.floor(fillBeats)) * TICKS_PER_BEAT;
+  const body = length - fillTicks;
 
   const pitchOf = (degree) => {
     if (degree === "x") return nextRoot != null ? nextRoot - 1 : root;
@@ -181,27 +231,63 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
     const [degree, dur] = tokens[i % tokens.length].split("/");
     const ticks = Math.min(durationTicks(dur), body - at);
     const text = ticks === durationTicks(dur) ? dur : ticksText(ticks);
-    out.push(degree === "r" ? { rest: true, dur: text } : { midi: pitchOf(degree), dur: text, role: degree === "x" ? "aprox" : "" });
+    if (degree === "r") { out.push({ rest: true, dur: text }); at += ticks; continue; }
+    let midi = pitchOf(degree);
+    // pop: a fundamental fora do tempo 1 salta uma oitava (slap de gospel e funk)
+    if (degree === "1" && at > 0 && rng.chance(params.pop)) midi += 12;
+    out.push({ midi, dur: text, role: degree === "x" && nextRoot != null ? "aprox" : "" });
     at += ticks;
   }
-  if (fill) {
-    // virada: corrida pela pentatônica do acorde, chegando ao baixo do próximo acorde por semitom
-    const figure = style.bassFill.figure;
-    const count = Math.round(TICKS_PER_BEAT / durationTicks(figure));
-    const arrival = rng.chance(0.7) ? nextRoot - 1 : nextRoot + 1;
+  if (fillTicks) {
+    const count = Math.max(2, Math.round(fillTicks / figureTicks));
     const penta = pentatonicOf(scale, rootPc) ?? scale;
+    const top = BASS_TOP + params.high;
     const pool = [];
-    for (let m = BASS_LOW - 4; m <= BASS_TOP + 12; m++) if (penta.has(mod12(m))) pool.push(m);
+    for (let m = BASS_LOW - 4; m <= top; m++) if (penta.has(mod12(m))) pool.push(m);
     const start = out.filter((n) => !n.rest).at(-1)?.midi ?? root;
-    const dir = arrival >= start ? 1 : -1;
-    let pitch = start;
-    for (let i = 0; i < count - 1; i++) {
-      const candidates = pool.filter((m) => (dir > 0 ? m > pitch && m < arrival : m < pitch && m > arrival));
-      // sem nota da pentatônica no caminho: a vizinha mais perto (a corrida não fica parada numa nota só)
-      pitch = candidates.length ? (dir > 0 ? candidates[0] : candidates.at(-1)) : nearest(pool.filter((m) => m !== pitch && m !== arrival), pitch);
-      out.push({ midi: pitch, dur: figure, role: "" });
+    const approach = rng.chance(0.7) ? nextRoot - 1 : nextRoot + 1;
+    const indexOf = (pitch) => pool.indexOf(nearest(pool, pitch));
+    const shape = rng.pick(params.shapes);
+    const notes = [];
+    if (shape === "subida") {
+      // sobe correndo e chega numa nota aguda do próximo acorde (a fundamental uma ou duas oitavas acima)
+      let i = indexOf(start);
+      for (let k = 0; k < count - 1; k++) { i = Math.min(pool.length - 1, i + 1); notes.push(pool[i]); }
+      const peaks = [nextRoot + 12, nextRoot + 24].filter((m) => m <= top + 2 && m > (notes.at(-1) ?? start));
+      notes.push(peaks[0] ?? Math.min(top, (notes.at(-1) ?? start) + 2));
+    } else if (shape === "descida") {
+      // salta para o agudo e desce correndo, grau a grau, até a aproximação do próximo acorde
+      let i = Math.min(pool.length - 1, indexOf(approach) + count - 1);
+      for (let k = 0; k < count - 1; k++) notes.push(pool[Math.max(0, i - k)]);
+      notes.push(approach);
+    } else if (shape === "arco") {
+      // sobe metade da corrida e desce a outra metade, até a aproximação
+      const up = Math.floor((count - 1) / 2);
+      let i = indexOf(start);
+      for (let k = 0; k < up; k++) { i = Math.min(pool.length - 1, i + 1); notes.push(pool[i]); }
+      for (let k = up; k < count - 1; k++) { i = Math.max(0, i - 1); notes.push(pool[i]); }
+      notes.push(approach);
+    } else {
+      // chegada: anda pela pentatônica até a aproximação
+      const dir = approach >= start ? 1 : -1;
+      let pitch = start;
+      for (let k = 0; k < count - 1; k++) {
+        const candidates = pool.filter((m) => (dir > 0 ? m > pitch && m < approach : m < pitch && m > approach));
+        pitch = candidates.length ? (dir > 0 ? candidates[0] : candidates.at(-1)) : nearest(pool.filter((m) => m !== pitch && m !== approach), pitch);
+        notes.push(pitch);
+      }
+      notes.push(approach);
     }
-    out.push({ midi: arrival, dur: figure, role: "aprox" });
+    // nunca a mesma nota duas vezes seguidas na corrida
+    for (let k = 1; k < notes.length; k++) {
+      if (notes[k] === notes[k - 1]) notes[k - 1] = nearest(pool.filter((m) => m !== notes[k] && m !== notes[k - 2]), notes[k - 1]);
+    }
+    notes.forEach((midi, k) => {
+      const last = k === notes.length - 1;
+      out.push({ midi, dur: params.figure, role: last && Math.abs(midi - nextRoot) === 1 ? "aprox" : "" });
+    });
+    const used = out.reduce((n, x) => n + durationTicks(x.dur), 0);
+    if (used < length) out.push({ rest: true, dur: ticksText(length - used) });
   }
   return { notes: out, last: out.filter((n) => !n.rest).at(-1)?.midi ?? root, root };
 }

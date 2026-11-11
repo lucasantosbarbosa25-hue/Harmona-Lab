@@ -293,7 +293,7 @@ def test_levada_camadas_partes_e_acentos():
     assert total1 == 960 and total2 == 1920
     assert [h.part for h in second] == ["B", "1", "9", "P"] and second[1].accent == -24
     assert comp_text(" E/4,D/8 | r/8 ;; T/1 ") == "E/4 D/8 r/8 ; T/1"
-    _, errors = parse_comp("X/4 T T/9 0/4 10/4 E!!/4")
+    _, errors = parse_comp("X/4 T T/9 0/4 10/4 E!?/4")  # "!!" (forte) existe; "!?" não
     assert len(errors) == 6
 
 

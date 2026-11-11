@@ -134,15 +134,18 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   de violão, riff de baixo…). O ostinato repete o mesmo desenho e segue a escala de cada acorde. Desligada, cada acorde soa
   inteiro, como antes.
 - **Bateria:** o beat do estilo (um básico e duas variações, cada um em dois compassos: o segundo varia o chimbal, com
-  semicolcheias, notas leves e aberturas), com **viradas** sorteadas no último compasso e, nas
-  progressões longas, a cada quatro. A virada interrompe o beat no fim do compasso e ele volta no tempo 1, com um ataque
-  de prato. "Outra virada" sorteia de novo. No app ela toca com um kit sintético simples; com um banco de sons, usa o kit
+  semicolcheias, notas leves e aberturas), com **dinâmica no chimbal e na condução** (forte, acento, normal, leve e
+  fantasma, que variam a cada compasso; no swing, acento no 2 e no 4) e **viradas** cheias, de 1 ou 2 tempos, com bumbo
+  por baixo, notas fantasma e rulos, sorteadas no último compasso (sempre uma de dois tempos) e, nas progressões longas,
+  a cada quatro. A virada interrompe o beat no fim do compasso e ele volta no tempo 1, com um ataque de prato. "Outra virada" sorteia de novo. No app ela toca com um kit sintético simples; com um banco de sons, usa o kit
   do banco, se houver.
 - **Percussão:** camada própria, como o baixo, com duas opções por estilo (congas, bongô e güiro na salsa; tamborim, ganzá e
   agogô no samba; pandeirola e congas no gospel…). No MIDI, faixa "Percussão" no canal 10.
 - **Baixo:** três linhas por estilo (walking, shuffle, tumbao, surdo, riff com oitava…), que seguem a levada escolhida.
-  Começam na nota de baixo de cada acorde e, às vezes, terminam com uma virada pela pentatônica do acorde que chega ao
-  próximo por semitom. No MIDI, faixa própria (canal 3). Com banco de sons, toca com o som dos acordes.
+  Começam na nota de baixo de cada acorde, com "pops" de oitava no gospel, funk, neo-soul e fusion, e muitas vezes terminam
+  com uma virada pela pentatônica de 1 ou 2 tempos: chegando ao próximo acorde por semitom, descendo do agudo, subindo
+  até uma nota aguda do próximo acorde (perto do C4, e o acorde seguinte cai no grave, como no gospel americano) ou em
+  arco. No MIDI, faixa própria (canal 3). Com banco de sons, toca com o som dos acordes.
 - **Diagramas:** no menu, "Exportar diagramas dos acordes" gera uma imagem com o desenho do teclado de cada acorde.
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): o app escreve o solo como um improvisador pensa, **a partir da chegada**. Primeiro
@@ -317,7 +320,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
-| `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO`. Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
+| `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO` (dinâmica opcional depois da peça: `!!` forte, `!` acento, `?` leve, `??` fantasma). Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
 | `percussion` | não | Percussão da progressão, na mesma notação da bateria, em faixa própria. Peças extras: U conga muda, V/W bongô agudo e grave, Y/Z timbal agudo e grave, J/I güiro curto e longo, D agogô. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 

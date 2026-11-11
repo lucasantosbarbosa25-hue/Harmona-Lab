@@ -173,23 +173,24 @@ test("a virada interrompe o beat no fim do compasso, o beat volta no tempo 1 e e
   const text = generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums;
   const bars = text.split(" | ");
   assert.equal(bars.length, 8);
-  assert.equal(bars[0], style.beats[0].bars[0]);
+  const plain = (text) => text.replace(/([HRE])(!!|\?\?|[!?])?\//g, "$1/"); // sem a dinâmica que o app dá ao chimbal
+  assert.equal(plain(bars[0]), plain(style.beats[0].bars[0]));
   const { project } = loadProject({ ...data, drums: text });
   const notes = drumNotes(project, 8 * 1920);
   const inBar = (i) => notes.filter((n) => n[0] >= i * 1920 && n[0] < (i + 1) * 1920);
   const sameBeat = (i) => JSON.stringify(inBar(i).map((n) => [n[0] - i * 1920, n[2]]));
   assert.equal(sameBeat(2), sameBeat(0)); // compassos comuns: o beat inteiro (dois compassos: o segundo varia o chimbal)
-  assert.equal(bars[1], style.beats[0].bars[1]);
+  assert.equal(plain(bars[1]), plain(style.beats[0].bars[1]));
   for (const fillBar of [3, 7]) {
     assert.notEqual(sameBeat(fillBar), sameBeat(0), `compasso ${fillBar + 1} tem virada`);
-    const tail = inBar(fillBar).filter((n) => n[0] - fillBar * 1920 >= 960);
+    const tail = inBar(fillBar).filter((n) => n[0] - fillBar * 1920 >= 1440); // o último tempo é sempre da virada
     assert.ok(tail.every((n) => [38, 50, 47, 43, 36].includes(n[2])) && tail.length >= 2, "no fim do compasso só soa a virada (caixa, tons, bumbo)");
   }
   assert.ok(inBar(4).some((n) => n[0] === 4 * 1920 && n[2] === 49), "ataque de prato no tempo 1 depois da virada");
   assert.ok(inBar(4).some((n) => n[0] === 4 * 1920 && n[2] === 36), "e o beat volta no tempo 1");
   assert.notEqual(generateGroove(data, { style, drums: "basico", drumVariation: 5 }).drums, text); // outra virada
   assert.equal(generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums, text);
-  assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project), style.beats[0].bars.join(" | ")); // um compasso só: sem virada
+  assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project).split(" | ").map(plain).join(" | "), plain(style.beats[0].bars.join(" | "))); // um compasso só: sem virada
   assert.equal(drumsFor(style, "nao-existe", project), "");
   assert.deepEqual(beatOptions(style).map((o) => o.id), ["basico", "meio", "aberto"]);
 });
@@ -298,7 +299,7 @@ test("baixo: linhas por estilo, a levada escolhe a sua, viradas que chegam ao pr
       project.chords.forEach((chord, i) => {
         const events = chord.bass_events;
         assert.ok(events.length, `${style.id}: todo acorde tem baixo`);
-        for (const e of events) assert.ok(e.note.midi >= 23 && e.note.midi <= 52, `${style.id}: registro de baixo (${e.note.midi})`);
+        for (const e of events) assert.ok(e.note.midi >= 23 && e.note.midi <= 64, `${style.id}: registro de baixo (${e.note.midi})`);
         const lowest = Math.min(...chord.left_hand.concat(chord.right_hand, chord.bass).map((n) => n.midi));
         const first = events.find((e) => e.start === 0);
         if (first) assert.equal(first.note.midi % 12, lowest % 12, `${style.id}: o baixo começa na nota de baixo do acorde`);
@@ -312,7 +313,22 @@ test("baixo: linhas por estilo, a levada escolhe a sua, viradas que chegam ao pr
       });
     }
   }
-  assert.ok(fills >= 40, `${fills} chegadas por semitom`);
+  assert.ok(fills >= 30, `${fills} chegadas por semitom`);
+  // o baixo do gospel brinca: corridas que vão ao agudo (perto de C4), pops de oitava, e nunca a mesma nota seguida na corrida
+  let high = 0;
+  let runs = 0;
+  for (let variation = 0; variation < 12; variation++) {
+    const made = generateGroove(bare(), { style: findStyle("gospel"), bass: ["pulso", "oitavas", "shout"][variation % 3], drumVariation: variation }).chords;
+    const { project } = loadProject(apply(bare(), { chords: made }));
+    for (const chord of project.chords) {
+      const ev = chord.bass_events;
+      if (ev.some((e) => e.note.midi >= 55)) high += 1;
+      const fast = ev.filter((e) => e.length <= 120);
+      if (fast.length >= 4) runs += 1;
+      for (let k = 1; k < fast.length; k++) if (fast[k].start === fast[k - 1].start + fast[k - 1].length) assert.notEqual(fast[k].note.midi, fast[k - 1].note.midi, `corrida sem nota repetida: ${chord.bass_line}`);
+    }
+  }
+  assert.ok(high >= 8 && runs >= 15, `gospel: ${high} acordes chegam ao agudo, ${runs} corridas`);
   const bytes = midiBytes(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("funk"), bass: "pop" }))).project);
   assert.ok(Buffer.from(bytes).toString("latin1").includes("Baixo"));
   assert.ok(noteEvents(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("funk"), bass: "pop" }))).project).notes.some((n) => n.channel === 2));
@@ -624,4 +640,24 @@ test("9ª e 11ª como chegada preferida só nos menores: nos maiores e dominante
   console.log(`9ª/11ª nas chegadas: menores ${(100 * share(count.menor)).toFixed(0)}%, outros ${(100 * share(count.outros)).toFixed(0)}%`);
   assert.ok(share(count.menor) >= 0.3, `menores chegam em 9ª/11ª: ${JSON.stringify(count.menor)}`);
   assert.ok(share(count.outros) <= 0.15, `maiores e dominantes quase nunca chegam em 9ª/11ª: ${JSON.stringify(count.outros)}`);
+});
+
+test("bateria rica: chimbal com vários níveis de velocity, viradas cheias (de dois tempos no fim), em todos os estilos", () => {
+  const data = { ...bare(), chords: [...bare().chords, ...bare().chords] }; // 8 compassos
+  for (const style of STYLES) {
+    for (const beat of style.beats) {
+      for (const drumVariation of [0, 1, 2, 3]) {
+      const text = generateGroove(data, { style, drums: beat.id, drumVariation }).drums;
+      assert.deepEqual(parseDrums(text).errors, [], `${style.id}/${beat.id}`);
+      const { project } = loadProject({ ...data, drums: text });
+      const notes = drumNotes(project, 8 * 1920);
+      const hats = notes.filter((n) => [42, 46, 51, 53].includes(n[2]));
+      if (hats.length >= 16) assert.ok(new Set(hats.map((n) => n[3])).size >= 3, `${style.id}/${beat.id}: chimbal com pelo menos 3 velocities`);
+      // a virada do último compasso: pelo menos 4 toques e duas peças
+      const tail = notes.filter((n) => n[0] >= 7 * 1920 + 960 && ![42, 44, 46, 51, 53, 49].includes(n[2]));
+      assert.ok(tail.length >= 4 && new Set(tail.map((n) => n[2])).size >= 2, `${style.id}/${beat.id}: virada cheia no fim (${tail.length} toques)`);
+      }
+    }
+    assert.ok(style.fills.some((f) => parseDrums(f).bars[0][0].ticks === 960), `${style.id}: tem virada de dois tempos`);
+  }
 });

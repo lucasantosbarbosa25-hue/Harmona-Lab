@@ -37,11 +37,11 @@ SCALE_EXEMPT_ROLES = frozenset({"aprox", "passagem", "cromatica", "blue", "outsi
 #: Graus da escala do acorde (para ostinatos e riffs): S1 a S9 sobem a escala a partir da nota mais grave (S1 = ela mesma),
 #: M1 a M9 sobem a partir da nota mais grave da mão direita. Sem escala declarada, sobem pelas notas do acorde.
 COMP_PARTS = ("T", "E", "D", "B", "P")
-COMP_ACCENT = {"": 0, "!": 16, "?": -24}  # ! = acento, ? = toque leve (somados à velocity)
+COMP_ACCENT = {"": 0, "!": 16, "?": -24, "!!": 28, "??": -40}  # ! acento, ? leve, !! forte, ?? fantasma (somados à velocity)
 
 _SEPARATORS = re.compile(r"[\s,;|]+")
 _DURATION_RE = re.compile(r"^(\d+)([tq]?)(\.?)$")
-_COMP_TOKEN_RE = re.compile(r"^([TEDBPtedbp]|[1-9]|[sSmM][1-9]|[rR])([!?]?)$")
+_COMP_TOKEN_RE = re.compile(r"^([TEDBPtedbp]|[1-9]|[sSmM][1-9]|[rR])(!!|\?\?|[!?])?$")
 
 
 class PhraseError(ValueError):
@@ -211,7 +211,7 @@ def parse_comp(value) -> tuple[list[tuple[list[CompHit], int]], list[str]]:
                 continue
             part = m.group(1).upper()
             if part != "R":
-                hits.append(CompHit(part, tick, length, COMP_ACCENT[m.group(2)]))
+                hits.append(CompHit(part, tick, length, COMP_ACCENT[m.group(2) or ""]))
             tick += length
         if tick > 0:
             layers.append((hits, tick))
@@ -223,7 +223,7 @@ def parse_comp(value) -> tuple[list[tuple[list[CompHit], int]], list[str]]:
 #
 #   "H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"
 #
-# Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve). Cada camada se repete até o fim do compasso, e a
+# Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve, "!!" forte, "??" fantasma). Cada camada se repete até o fim do compasso, e a
 # sequência de compassos se repete até o fim da progressão. As peças seguem o padrão General MIDI (canal 10).
 # ---------------------------------------------------------------------------
 
@@ -236,7 +236,7 @@ DRUM_PIECES = {
 DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, " \
              "T/M/F tons, B cowbell (campana), L clave, A pandeirola, Q ganzá, G conga aberta aguda, N conga grave, U conga muda (tapa), " \
              "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô"
-_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)([!?]?)$")
+_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)(!!|\?\?|[!?])?$")
 
 
 def split_drums(value) -> list[list[list[str]]]:
@@ -274,7 +274,7 @@ def parse_drums(value) -> tuple[list[list[tuple[list[CompHit], int]]], list[str]
                     errors.append(f'{exc} (em "{token}")')
                     continue
                 if m.group(1) != "r":
-                    hits.append(CompHit(str(DRUM_PIECES[m.group(1)]), tick, length, COMP_ACCENT[m.group(2)]))
+                    hits.append(CompHit(str(DRUM_PIECES[m.group(1)]), tick, length, COMP_ACCENT[m.group(2) or ""]))
                 tick += length
             if tick > 0:
                 layers.append((hits, tick))

@@ -157,6 +157,8 @@ CASES = [
     {"drums": "K/1 ; K/2 ; K/4 X/4", "time_signature": "6/8", "chords": [{"notes": "C4", "duration_beats": 5}]},  # mesma peça em camadas
     {"drums": "r/4 | ; | K/4+8 Q/16q N/8. G/8 A/8 L/8 B/8 E/8 O/8 P/8 R/8", "chords": [{"duration_beats": 4}, {"notes": "C4"}]},
     {"drums": "Z/4 K K/9 k/4 R!!/4 r!/4 KS/4 K/4+x", "chords": [{"notes": "C4"}]},
+    {"drums": "H!!/8 H??/8 H/8 H?/8 O!/8 H??/8 R!!/8 H/8 ; K/4 S??/8 S??/8 S!!/4 r/4", "chords": [{"notes": "C4 E4", "comp": "T!!/8 D??/8 B?/4 E!/2"}]},  # níveis de dinâmica
+    {"drums": "H!?/4 H???/4 S!!!/4", "chords": [{"notes": "C4"}]},  # combinações que não existem
     {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
     {"drums": 5, "chords": [{"notes": "C4"}]},
     {"drums": " | ; ", "chords": [{"notes": "C4"}]},
