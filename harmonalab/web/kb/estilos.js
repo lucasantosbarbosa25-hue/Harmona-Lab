@@ -23,9 +23,11 @@
 //   durações: 4 = semínima, 8 = colcheia, 16 = semicolcheia, 32 = fusa; t = tercina, q = quiáltera de 5, . = ponto, + = ligadura.
 //
 // Parâmetros da frase (0 a 1): chromatic = chance de aproximação cromática antes de um alvo; enclosure = chance de envolvente
-// (duas aproximações); blue = chance de blue note; leap = chance de salto; repeat = chance de repetir a nota; rest = chance de respirar
+// (duas aproximações); blue = chance de blue note; leap = chance de salto; rest = chance de respirar
 // um tempo; motif = chance de repetir o ritmo do acorde anterior. pentatonic: prefere a pentatônica da escala.
 // minNotes: mínimo de notas a cada 4 tempos (a frase nunca fica vazia demais).
+// Regra fixa do gerador: dentro de uma frase, nunca a mesma nota duas vezes seguidas (pausa de até um tempo no meio não
+// conta como fim de frase). Entre o fim de uma frase e o começo da próxima, pode. Baixo e levadas não seguem essa regra.
 
 export const KB_VERSION = 1;
 
@@ -63,7 +65,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.5, figure: "8t" },
     cells: SWING_CELLS,
-    phrase: { chromatic: 0.55, enclosure: 0.3, blue: 0, leap: 0.25, repeat: 0.05, rest: 0.12, motif: 0.4, pentatonic: false, minNotes: 4 },
+    phrase: { chromatic: 0.55, enclosure: 0.3, blue: 0, leap: 0.25, rest: 0.12, motif: 0.4, pentatonic: false, minNotes: 4 },
   },
   {
     id: "blues", label: "Blues",
@@ -90,7 +92,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.45, figure: "8t" },
     cells: ["4t 8t 4", "8t 8t 8t 4", "r4t 8t 4", "4t 8t+4", "4 r4", "r4 4t 8t", "8t 8t 8t 8t 8t 8t", "4t 8t 4t 8t", "2", "4+4t 8t", "r4t 8t 8t 8t 8t"],
-    phrase: { chromatic: 0.25, enclosure: 0.05, blue: 0.55, leap: 0.2, repeat: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
+    phrase: { chromatic: 0.25, enclosure: 0.05, blue: 0.55, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
   },
   {
     id: "fusion", label: "Jazz fusion",
@@ -120,12 +122,12 @@ export const STYLES = [
       "16 16 16 16", "16 16 16 16 16 16 16 16", "8 16 16", "16 16 8", "r16 16 16 16", "16 16 r16 16", "8. 16", "16 8 16",
       "16q 16q 16q 16q 16q", "8t 8t 8t", "16t 16t 16t 16t 16t 16t", "8. 16+4", "r8 16 16 8 8", "4", "16 16 16 16 8. 16", "32 32 32 32 16 16 4",
     ],
-    phrase: { chromatic: 0.5, enclosure: 0.3, blue: 0, leap: 0.35, repeat: 0.05, rest: 0.1, motif: 0.3, pentatonic: false, minNotes: 8 },
+    phrase: { chromatic: 0.5, enclosure: 0.3, blue: 0, leap: 0.35, rest: 0.1, motif: 0.3, pentatonic: false, minNotes: 8 },
   },
   {
     id: "neosoul", label: "Neo-soul",
     influences: ["Robert Glasper", "D'Angelo", "Domi & JD Beck", "Ed Motta", "Joshua Domfeh"],
-    summary: "Pouca nota e muito espaço: semicolcheias sincopadas, notas repetidas, entradas depois do tempo e notas longas.",
+    summary: "Pouca nota e muito espaço: semicolcheias sincopadas, entradas depois do tempo e notas longas.",
     comps: [
       { id: "espaco", bass: "espaco", label: "Acorde longo e resposta leve", pattern: "T/4. r/8 r/4 r/8 D?/8" },
       { id: "sincope", label: "Antecipação em semicolcheia", pattern: "T/8. D?/16+4 r/4 r/8. D/16" },
@@ -147,7 +149,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.4, figure: "16" },
     cells: ["r8 16 16+4", "r16 16 8 4", "8. 16+4", "r8 8 4", "16 16 8+4", "4 r4", "r4 r8 16 16", "8 8 r4", "r16 8 16+4", "2", "8t 8t 8t 4", "r8. 16 4"],
-    phrase: { chromatic: 0.3, enclosure: 0.1, blue: 0.15, leap: 0.2, repeat: 0.3, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
+    phrase: { chromatic: 0.3, enclosure: 0.1, blue: 0.15, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 },
   },
   {
     id: "gospel", label: "Gospel americano",
@@ -177,12 +179,12 @@ export const STYLES = [
       "16 16 16 16 4", "r8 16 16 4", "32 32 32 32 16 16 4", "8 16 16 4", "16t 16t 16t 16t 16t 16t 4", "r4 16 16 16 16", "8. 16+4",
       "4 r4", "r8 8 4", "16 16 8 4", "8t 8t 8t 4", "r16 16 16 16 4", "2",
     ],
-    phrase: { chromatic: 0.35, enclosure: 0.1, blue: 0.4, leap: 0.2, repeat: 0.1, rest: 0.2, motif: 0.45, pentatonic: true, minNotes: 4 },
+    phrase: { chromatic: 0.35, enclosure: 0.1, blue: 0.4, leap: 0.2, rest: 0.2, motif: 0.45, pentatonic: true, minNotes: 4 },
   },
   {
     id: "funk", label: "Funk (16 avos)",
     influences: ["Stevie Wonder", "Bernie Worrell", "Jesús Molina", "Ed Motta"],
-    summary: "Semicolcheias curtas e secas, pausas marcantes, notas repetidas e síncopes no “e” e no “a” do tempo.",
+    summary: "Semicolcheias curtas e secas, pausas marcantes e síncopes no “e” e no “a” do tempo.",
     comps: [
       { id: "clav", label: "Clavinete", pattern: "T/16 r/16 T?/16 T/16 r/16 T?/16 r/16 T/16 r/8 T!/16 r/16 T?/16 T/16 r/8" },
       { id: "baixoacorde", label: "Baixo e acorde", pattern: "B/8 D!/16 r/16 r/16 D?/16 B/8 r/8 D!/8 B/16 D?/16 r/8" },
@@ -204,7 +206,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.5, figure: "16" },
     cells: ["16 r16 16 16", "r16 16 r16 16", "16 16 r8", "r8 16 16", "16 r16 r16 16", "8 r16 16", "16 16 16 r16", "r4", "16 r16 16 r16 r16 16 16 r16", "8 8", "r16 16 16 r16 16 r16 8"],
-    phrase: { chromatic: 0.2, enclosure: 0, blue: 0.3, leap: 0.15, repeat: 0.45, rest: 0.2, motif: 0.7, pentatonic: true, minNotes: 4 },
+    phrase: { chromatic: 0.2, enclosure: 0, blue: 0.3, leap: 0.15, rest: 0.2, motif: 0.7, pentatonic: true, minNotes: 4 },
   },
   {
     id: "salsa", label: "Salsa",
@@ -231,7 +233,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.3, figure: "8" },
     cells: ["8 8 8 8", "r8 8 8 8", "8 r8 8 8", "8 8 r8 8", "r8 8+8 8", "8 8+4", "4 r8 8", "r8 8 r8 8", "8 8 8 8+4 r4", "4 4", "r8 8 4"],
-    phrase: { chromatic: 0.15, enclosure: 0.05, blue: 0, leap: 0.3, repeat: 0.3, rest: 0.15, motif: 0.6, pentatonic: false, minNotes: 4 },
+    phrase: { chromatic: 0.15, enclosure: 0.05, blue: 0, leap: 0.3, rest: 0.15, motif: 0.6, pentatonic: false, minNotes: 4 },
   },
   {
     id: "samba", label: "Samba",
@@ -257,7 +259,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.35, figure: "16" },
     cells: ["16 8 16", "16 16 16 16", "r16 16 16 16", "16 8 16 16 8 16", "8. 16", "16 16 8", "8 16 16", "r16 8 16+4", "16 8 16+4", "4", "r8 16 16", "16 16 16 16 16 8 16"],
-    phrase: { chromatic: 0.2, enclosure: 0.05, blue: 0, leap: 0.25, repeat: 0.15, rest: 0.1, motif: 0.55, pentatonic: false, minNotes: 6 },
+    phrase: { chromatic: 0.2, enclosure: 0.05, blue: 0, leap: 0.25, rest: 0.1, motif: 0.55, pentatonic: false, minNotes: 6 },
   },
   {
     id: "bossa", label: "Bossa nova",
@@ -283,7 +285,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.3, figure: "8" },
     cells: ["r8 8 4", "8 8+4", "4 r8 8", "r8 8+4", "4. 8", "8 4 8", "2", "r4 8 8", "8 8 8 8", "r8 8 8 8+4 r4", "4 4"],
-    phrase: { chromatic: 0.25, enclosure: 0.1, blue: 0, leap: 0.2, repeat: 0.15, rest: 0.25, motif: 0.5, pentatonic: false, minNotes: 3 },
+    phrase: { chromatic: 0.25, enclosure: 0.1, blue: 0, leap: 0.2, rest: 0.25, motif: 0.5, pentatonic: false, minNotes: 3 },
   },
   {
     id: "rock", label: "Rock",
@@ -310,7 +312,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.35, figure: "8" },
     cells: ["8 8 8 8", "8 8 4", "4 8 8", "r8 8 8 8", "4 4", "8 8 r4", "16 16 8 4", "2", "r4 8 8", "8. 16 4"],
-    phrase: { chromatic: 0.1, enclosure: 0, blue: 0.5, leap: 0.25, repeat: 0.3, rest: 0.2, motif: 0.75, pentatonic: true, minNotes: 4 },
+    phrase: { chromatic: 0.1, enclosure: 0, blue: 0.5, leap: 0.25, rest: 0.2, motif: 0.75, pentatonic: true, minNotes: 4 },
   },
   {
     id: "ska", label: "Ska",
@@ -336,7 +338,7 @@ export const STYLES = [
     ],
     bassFill: { chance: 0.35, figure: "8" },
     cells: ["r8 8 r8 8", "r8 8 8 8", "8 8 r8 8", "r8 8 4", "4 r8 8", "r8 8 r4", "8 8 8 8", "r8 8+4", "4 4"],
-    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, repeat: 0.35, rest: 0.2, motif: 0.7, pentatonic: false, minNotes: 3 },
+    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.2, motif: 0.7, pentatonic: false, minNotes: 3 },
   },
 ];
 

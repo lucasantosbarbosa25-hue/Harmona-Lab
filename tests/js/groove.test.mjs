@@ -316,3 +316,27 @@ test("baixo: linhas por estilo, a levada escolhe a sua, viradas que chegam ao pr
   assert.ok(Buffer.from(bytes).toString("latin1").includes("Baixo"));
   assert.ok(noteEvents(loadProject(apply(bare(), generateGroove(bare(), { style: findStyle("funk"), bass: "pop" }))).project).notes.some((n) => n.channel === 2));
 });
+
+test("fraseado sem nota repetida: dentro da frase nunca a mesma nota duas vezes seguidas (entre frases, pode)", () => {
+  let phrases = 0;
+  for (const style of STYLES) {
+    for (const color of ["", ...COLORS]) {
+      for (const scales of [[], ["penta"], ["blues"], ["arpejo"]]) {
+        for (let variation = 0; variation < 4; variation++) {
+          const data = apply(bare(), generateGroove(bare(), { style, phrases: true, variation, color, scales }));
+          for (const chord of loadProject(data).project.chords) {
+            const ev = chord.phrase_events;
+            for (let i = 1; i < ev.length; i++) {
+              const gap = ev[i].start - (ev[i - 1].start + ev[i - 1].length);
+              assert.ok(!(ev[i].note.midi === ev[i - 1].note.midi && gap <= 480), `${style.id}/${color || "padrão"}: ${chord.phrase}`);
+            }
+            phrases += 1;
+          }
+          assert.equal(analyzeData(data).issues.filter((i) => i.level !== "info").length, 0);
+        }
+      }
+    }
+  }
+  assert.ok(phrases > 2000);
+  for (const style of STYLES) assert.equal("repeat" in style.phrase, false, `${style.id}: a base não tem mais chance de repetir nota`);
+});

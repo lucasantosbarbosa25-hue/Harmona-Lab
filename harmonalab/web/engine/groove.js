@@ -282,6 +282,41 @@ const nearest = (pool, pitch, avoid = null) => {
 };
 
 /**
+ * Regra do fraseado: dentro da frase, nunca a mesma nota duas vezes seguidas. Uma pausa de até um tempo no meio não conta
+ * como fim de frase; entre frases (de um acorde para o outro) a repetição continua permitida. A nota trocada vai para a
+ * vizinha mais perto (um alvo continua alvo, uma aproximação passa para o outro lado do alvo); numa cópia outside, quem muda
+ * é a nota de antes, para o motivo continuar igual.
+ */
+function noRepeatedNotes(notes, { linePool, targetPool, blue }) {
+  const sounding = notes.filter((n) => !n.rest);
+  const near = (pool, pitch, avoid) => {
+    let best = null;
+    for (const p of pool) if (!avoid.includes(p) && (best === null || Math.abs(p - pitch) < Math.abs(best - pitch))) best = p;
+    return best;
+  };
+  for (let i = 1; i < sounding.length; i++) {
+    const before = sounding[i - 1];
+    const note = sounding[i];
+    if (note.midi !== before.midi || note.start - (before.start + before.ticks) > TICKS_PER_BEAT) continue;
+    const after = sounding[i + 1];
+    if (note.locked && before.locked) continue; // dentro do motivo outside não se mexe (a emenda já foi evitada)
+    const fixPrevious = note.locked || (note.role === "outside" && before.role !== "outside" && before.role !== "alvo" && before.role !== "aprox");
+    const target = fixPrevious ? before : note;
+    const neighbours = [fixPrevious ? sounding[i - 2] : before, fixPrevious ? note : after].filter(Boolean).map((n) => n.midi);
+    if (target.role === "aprox" && after) {
+      target.midi = 2 * after.midi - target.midi === target.midi ? target.midi : 2 * after.midi - target.midi; // do outro lado do alvo
+      if (!neighbours.includes(target.midi)) continue;
+    }
+    const pool = target.role === "alvo" ? targetPool : linePool;
+    const replacement = near(pool, target.midi, neighbours) ?? near(linePool, target.midi, neighbours);
+    if (replacement !== null) {
+      target.midi = replacement;
+      if (target.role !== "alvo") target.role = blue.has(mod12(replacement)) ? "blue" : "";
+    }
+  }
+}
+
+/**
  * Uma frase para um acorde. ctx: { style, color, chordPcs (Set), scalePcs (Set), root, length, nextPcs (Set|null), rng, cursor, previousCells }.
  * Devolve { notes: [{dur, rest, midi, role}], cursor, cells }.
  */
@@ -348,10 +383,8 @@ export function composePhrase(ctx) {
     if (isTarget) {
       const aim = cursor + direction * (rng.chance(params.leap) ? 5 : 2);
       const previous = i > 0 ? sounding[i - 1].midi : null;
-      note.midi = nearest(targetPool, aim, rng.chance(params.repeat) ? null : previous);
+      note.midi = nearest(targetPool, aim, previous);
       note.role = "alvo";
-    } else if (i > 0 && rng.chance(params.repeat)) {
-      note.midi = cursor;
     } else {
       const at = linePool.indexOf(nearest(linePool, cursor));
       const step = rng.chance(params.leap) ? 2 : 1;
@@ -411,22 +444,32 @@ export function composePhrase(ctx) {
   // 5) blue notes da paleta (escala blues fora da escala do acorde) ficam marcadas
   for (const note of sounding) if (!note.role && palette.blue.has(mod12(note.midi))) note.role = "blue";
 
+  // a regra de não repetir vale antes de copiar o motivo, para a cópia sair igual ao original
+  noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue });
+
   // 6) outside em motivo: a mesma figura (ritmo e desenho) logo em seguida, meio tom acima ou abaixo, e resolve no alvo
   if (color === "outside") {
     if (motifSlots) {
-      const shift = rng.chance(0.5) ? 1 : -1;
+      let shift = rng.chance(0.5) ? 1 : -1;
       // o motivo original fica dentro da escala: aproximações dele resolveriam numa nota que agora está fora
       for (let i = 0; i < motifSlots; i++) {
         if (notes[i].rest || notes[i].role !== "aprox") continue;
         notes[i].midi = nearest(linePool, notes[i].midi);
         notes[i].role = palette.blue.has(mod12(notes[i].midi)) ? "blue" : "";
       }
+      noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue }); // o motivo já sai sem notas repetidas
+      // a emenda: a primeira nota da cópia não pode ser igual à última do original (aí a cópia vai para o outro lado)
+      const lastOriginal = notes.slice(0, motifSlots).filter((n) => !n.rest).at(-1);
+      const firstSounding = notes.slice(0, motifSlots).find((n) => !n.rest);
+      if (lastOriginal && firstSounding && firstSounding.midi + shift === lastOriginal.midi) shift = -shift;
       for (let i = 0; i < motifSlots; i++) {
         const source = notes[i];
         const copy = notes[motifSlots + i];
         if (source.rest) continue;
-        copy.midi = Math.max(LOW - 2, Math.min(HIGH + 2, source.midi + shift));
+        copy.midi = source.midi + shift;
         copy.role = "outside";
+        source.locked = true;
+        copy.locked = true;
       }
       // a nota seguinte resolve dentro: um alvo do acorde perto da última nota de fora
       const after = notes.slice(2 * motifSlots).find((n) => !n.rest);
@@ -450,6 +493,7 @@ export function composePhrase(ctx) {
       }
     }
   }
+  noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue });
   return { notes, cursor: sounding.at(-1).midi, cells };
 }
 
