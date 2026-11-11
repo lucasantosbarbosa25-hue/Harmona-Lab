@@ -488,3 +488,48 @@ test("percussão: cada estilo tem opções de compassos inteiros, e ela sai numa
   assert.ok(perc.some((n) => n.pitch === 62) && perc.some((n) => n.pitch === 60) && perc.some((n) => n.pitch === 73));
   assert.ok(Buffer.from(midiBytes(loadProject(data).project)).includes(Buffer.from("Percuss")));
 });
+
+// progressão variada, com escalas: ii-V-I, dominante alterado, meio-diminuto, frígio dominante, dórico, lídio
+const VARIED = {
+  title: "teste", tempo: 80, time_signature: "4/4", chords: [
+    { symbol: "Dm9", left_hand: "D3 A3", right_hand: "F4 C5 E5", duration_beats: 4, phrase_scale: "D E F G A B C" },
+    { symbol: "G13", left_hand: "G2 F3", right_hand: "B3 E4 A4", duration_beats: 4, phrase_scale: "G A B C D E F" },
+    { symbol: "Cmaj9", left_hand: "C3 G3", right_hand: "E4 B4 D5", duration_beats: 4, phrase_scale: "C D E F G A B" },
+    { symbol: "A7alt", left_hand: "A2 G3", right_hand: "C#4 F4 Bb4", duration_beats: 4, phrase_scale: "A Bb C C# Eb F G" },
+    { symbol: "Bm7b5", left_hand: "B2 A3", right_hand: "D4 F4 A4", duration_beats: 4, phrase_scale: "B C D E F G A" },
+    { symbol: "E7b9", left_hand: "E3 D4", right_hand: "G#4 B4 F5", duration_beats: 4, phrase_scale: "E F G# A B C D" },
+    { symbol: "Am9", left_hand: "A2 G3", right_hand: "C4 E4 B4", duration_beats: 4, phrase_scale: "A B C D E F# G" },
+    { symbol: "Fmaj7#11", left_hand: "F2 E3", right_hand: "A3 B3 C4", duration_beats: 4, phrase_scale: "F G A B C D E" },
+  ],
+};
+
+test("melodia com sentido: aproximação resolve no acorde seguinte, sem nota evitada exposta, nota do acorde no tempo", () => {
+  const mod = (n) => ((n % 12) + 12) % 12;
+  const avoidOf = { Cmaj9: [5], E7b9: [9], G13: [0], Bm7b5: [0], Fmaj7: [] }; // 4ª sobre terça maior; b9 fora dos dominantes
+  let beats = 0, onChord = 0, crossings = 0;
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 6; variation++) {
+      const data = apply(structuredClone(VARIED), generateGroove(structuredClone(VARIED), { style, phrases: true, variation }));
+      assert.deepEqual(problems(data), [], style.id);
+      const { project } = loadProject(data);
+      project.chords.forEach((chord, ci) => {
+        const tones = new Set(sounding(chord).map((v) => mod(v.note.midi)));
+        for (const e of chord.phrase_events) {
+          if (e.start % 480 === 0) { beats += 1; if (tones.has(mod(e.note.midi))) onChord += 1; }
+          const exposed = e.start % 480 === 0 || e.length >= 240;
+          if (exposed && e.role === "" && e.length >= 480) {
+            assert.ok(!(avoidOf[chord.symbol] ?? []).includes(mod(e.note.midi)), `${style.id}: nota evitada longa em ${chord.symbol}: ${chord.phrase}`);
+          }
+        }
+        const last = chord.phrase_events.at(-1);
+        const first = project.chords[ci + 1]?.phrase_events[0];
+        if (last?.role === "aprox" && first?.start === 0) {
+          crossings += 1;
+          assert.ok(Math.abs(first.note.midi - last.note.midi) <= 2, `${style.id}: a aproximação de ${chord.symbol} resolve em ${project.chords[ci + 1].symbol}`);
+        }
+      });
+    }
+  }
+  assert.ok(onChord / beats >= 0.93, `nota do acorde no tempo: ${((100 * onChord) / beats).toFixed(0)}%`);
+  assert.ok(crossings > 20, `${crossings} aproximações entre acordes`);
+});

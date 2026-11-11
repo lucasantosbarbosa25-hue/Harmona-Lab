@@ -476,7 +476,7 @@ function noRepeatedNotes(notes, { linePool, targetPool, blue }) {
     if (note.midi !== before.midi || note.start - (before.start + before.ticks) > TICKS_PER_BEAT) continue;
     const after = sounding[i + 1];
     if (note.locked && before.locked) continue; // dentro do motivo outside não se mexe (a emenda já foi evitada)
-    const fixPrevious = note.locked || (note.role === "outside" && before.role !== "outside" && before.role !== "alvo" && before.role !== "aprox");
+    const fixPrevious = !before.fixed && (note.locked || (note.role === "outside" && before.role !== "outside" && before.role !== "alvo" && before.role !== "aprox"));
     const target = fixPrevious ? before : note;
     const neighbours = [fixPrevious ? sounding[i - 2] : before, fixPrevious ? note : after].filter(Boolean).map((n) => n.midi);
     if (target.role === "aprox" && after) {
@@ -529,6 +529,22 @@ function paletteOf(scales, { scalePcs, chordPcs, root, stylePenta }) {
   return { set: out.size ? out : scalePcs, blue };
 }
 
+/**
+ * Notas evitadas do acorde: notas da escala que soam "erradas" no tempo forte ou sustentadas. A 4ª justa sobre a terça
+ * maior (F em Cmaj7, A em E7) e, fora dos dominantes, qualquer nota meio tom acima de uma nota do acorde (C em Bm7b5,
+ * B em Dm7). Nos dominantes, b9 e b13 são tensões e ficam liberadas. Como nota de passagem (curta, fora do tempo), podem.
+ */
+function avoidSetOf(chordPcs, scalePcs, root) {
+  const dominant = chordPcs.has(mod12(root + 4)) && chordPcs.has(mod12(root + 10));
+  const out = new Set();
+  for (const pc of scalePcs) {
+    if (chordPcs.has(pc)) continue;
+    if (chordPcs.has(mod12(root + 4)) && pc === mod12(root + 5)) out.add(pc);
+    else if (!dominant && [...chordPcs].some((t) => mod12(pc - t) === 1)) out.add(pc);
+  }
+  return out;
+}
+
 export function composePhrase(ctx) {
   const { style, color, chordPcs, scalePcs, root, length, nextPcs, rng } = ctx;
   const params = style.phrase;
@@ -543,6 +559,7 @@ export function composePhrase(ctx) {
   const linePool = range(lineSet);
   const targetSet = new Set([...chordPcs].filter((pc) => scalePcs.has(pc)));
   const targetPool = range(targetSet.size ? targetSet : chordPcs);
+  const avoid = avoidSetOf(chordPcs, scalePcs, root);
 
   const motif = color === "outside" && length >= 2 * TICKS_PER_BEAT;
   const planned = !motif && ctx.slots;
@@ -556,9 +573,26 @@ export function composePhrase(ctx) {
   let cursor = nearest(targetPool, ctx.cursor ?? 72);
   let direction = rng.chance(0.5) ? 1 : -1;
   const indexIn = (pitch) => linePool.indexOf(nearest(linePool, pitch));
+  // regra do bebop: no tempo, nota do acorde. Uma nota rápida que cai no tempo encosta na nota do acorde mais perto
+  // (até um tom, de preferência no sentido em que a linha anda), sem repetir a anterior
+  const onChord = (pitch, i, dir) => {
+    if (targetSet.has(mod12(pitch))) return pitch;
+    const before = i > 0 ? sounding[i - 1].midi : null;
+    const options = targetPool.filter((p) => Math.abs(p - pitch) <= 2 && p !== before);
+    if (!options.length) return pitch;
+    return options.sort((a, b) => Math.abs(a - pitch) - Math.abs(b - pitch) || (Math.sign(b - pitch) === dir) - (Math.sign(a - pitch) === dir))[0];
+  };
   let runDirection = null;
   sounding.forEach((note, i) => {
     const onBeat = note.start % TICKS_PER_BEAT === 0;
+    if (i === 0 && note.start === 0 && ctx.arrival != null) {
+      // o acorde anterior terminou numa aproximação cromática: a frase começa exatamente na nota que ela preparou
+      note.midi = ctx.arrival;
+      note.role = targetSet.has(mod12(note.midi)) ? "alvo" : "";
+      note.fixed = true;
+      cursor = note.midi;
+      return;
+    }
     const echo = note.echo && note.echo.index > 0 ? note.echo : null;
     const from = echo?.statement[echo.index - 1]?.midi;
     const to = echo?.statement[echo.index]?.midi;
@@ -567,6 +601,11 @@ export function composePhrase(ctx) {
       // eco do motivo: o mesmo desenho (em graus da escala) a partir de outra nota
       const index = indexIn(cursor) + (indexIn(to) - indexIn(from));
       note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
+      if (onBeat && !targetSet.has(mod12(note.midi))) {
+        // no tempo, o eco se ajusta ao acorde novo: a nota do acorde mais perto (até um tom), como numa sequência
+        const fit = nearest(targetPool, note.midi);
+        if (Math.abs(fit - note.midi) <= 2 && fit !== (i > 0 ? sounding[i - 1].midi : null)) note.midi = fit;
+      }
       if (onBeat && targetSet.has(mod12(note.midi))) note.role = "alvo";
       cursor = note.midi;
       return;
@@ -577,6 +616,7 @@ export function composePhrase(ctx) {
       let index = indexIn(cursor) + runDirection;
       if (index < 0 || index >= linePool.length) { runDirection = -runDirection; index = indexIn(cursor) + runDirection; }
       note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
+      if (onBeat) note.midi = onChord(note.midi, i, runDirection);
       cursor = note.midi;
       return;
     }
@@ -598,6 +638,7 @@ export function composePhrase(ctx) {
       let index = at + direction * step;
       if (index < 0 || index >= linePool.length) { direction = -direction; index = at + direction * step; }
       note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
+      if (onBeat) note.midi = onChord(note.midi, i, direction);
     }
     const original = note.echo?.index === 0 ? note.echo.statement[0]?.midi : null;
     if (original != null && note.midi === original) {
@@ -611,7 +652,7 @@ export function composePhrase(ctx) {
     else if (rng.chance(0.3)) direction = -direction;
   });
 
-  const free = (note) => note && !note.role && note.ticks <= SHORT;
+  const free = (note) => note && !note.role && !note.fixed && note.ticks <= SHORT;
   const inRange = (p) => p >= LOW - 2 && p <= HIGH + 2;
 
   // 2) aproximação cromática (ou envolvente) antes de um alvo
@@ -644,12 +685,15 @@ export function composePhrase(ctx) {
   }
 
   // 4) aproximação para o acorde seguinte, na última nota
+  // (só se a frase seguinte começa soando no tempo 1: senão a aproximação ficaria solta, sem resolver)
   const last = sounding.at(-1);
-  if (nextPcs?.size && free(last) && sounding.length > 1 && rng.chance(chromatic)) {
+  let goal = null;
+  if (nextPcs?.size && ctx.nextStarts !== false && free(last) && sounding.length > 1 && rng.chance(chromatic)) {
     const goals = [];
-    for (let p = last.midi - 6; p <= last.midi + 6; p++) if (nextPcs.has(mod12(p))) goals.push(p);
+    for (let p = last.midi - 6; p <= last.midi + 6; p++) if (nextPcs.has(mod12(p)) && p >= LOW && p <= HIGH) goals.push(p);
     if (goals.length) {
-      last.midi = nearest(goals, last.midi) - 1;
+      goal = nearest(goals, last.midi);
+      last.midi = goal - 1;
       last.role = "aprox";
     }
   }
@@ -707,8 +751,25 @@ export function composePhrase(ctx) {
     }
   }
   noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue });
-  const cursorOut = sounding.at(-1).midi;
-  return { notes: sustainRests(notes, length), cursor: cursorOut, cells };
+  const out = sustainRests(notes, length);
+  // notas evitadas não ficam expostas (no tempo ou longas): vão para a nota boa mais perto, sem repetir as vizinhas
+  const secondsPerTick = 60 / (ctx.tempo || 100) / TICKS_PER_BEAT;
+  const heard = out.filter((n) => !n.rest);
+  heard.forEach((note, i) => {
+    if (note.locked || note.fixed || ["aprox", "outside", "blue"].includes(note.role) || !avoid.has(mod12(note.midi))) return;
+    if (note.start % TICKS_PER_BEAT !== 0 && note.ticks * secondsPerTick < 0.3) return;
+    const neighbours = [heard[i - 1]?.midi, heard[i + 1]?.midi];
+    const options = [];
+    for (let p = note.midi - 3; p <= note.midi + 3; p++) {
+      if (!neighbours.includes(p) && (lineSet.has(mod12(p)) || targetSet.has(mod12(p))) && !avoid.has(mod12(p)) && scalePcs.has(mod12(p))) options.push(p);
+    }
+    if (!options.length) return;
+    note.midi = nearest(options, note.midi);
+    if (note.start % TICKS_PER_BEAT === 0 && targetSet.has(mod12(note.midi))) note.role = "alvo";
+  });
+  const lastHeard = heard.at(-1);
+  const lead = goal !== null && lastHeard?.role === "aprox" && Math.abs(goal - lastHeard.midi) <= 2 ? goal : null;
+  return { notes: out, cursor: lastHeard.midi, cells, lead };
 }
 
 /**
@@ -745,7 +806,7 @@ function sustainRests(notes, length) {
  * nota que dá para tocar assim: tríades a partir de TRIAD_MIN_SECONDS, oitavas e sextas a partir de DUET_MIN_SECONDS.
  * Devolve um mapa nota -> [alturas abaixo dela].
  */
-function extraVoices(notes, { scalePcs, chordPcs, tempo }) {
+function extraVoices(notes, { scalePcs, chordPcs, tempo, avoid = new Set() }) {
   const out = new Map();
   const seconds = (note) => (note.ticks * 60) / (tempo || 100) / TICKS_PER_BEAT;
   const stepsDown = (pitch, steps) => {
@@ -760,7 +821,11 @@ function extraVoices(notes, { scalePcs, chordPcs, tempo }) {
     const pc = mod12(note.midi);
     let below = null;
     if (texture === "octave") below = [note.midi - 12];
-    else if (texture === "sixth" && scalePcs.has(pc)) below = [stepsDown(note.midi, 5)];
+    else if (texture === "sixth" && scalePcs.has(pc)) {
+      // a sexta não pode cair numa nota evitada (aí a voz de baixo vai em oitava)
+      const sixth = stepsDown(note.midi, 5);
+      below = [avoid.has(mod12(sixth)) ? note.midi - 12 : sixth];
+    }
     else if (texture === "triad" && (chordPcs.has(pc) || scalePcs.has(pc))) {
       // em terças e quartas (nada de cluster): cada voz de 3 a 5 semitons abaixo da de cima; notas do acorde, ou da escala
       const stack = (pcs) => {
@@ -769,9 +834,14 @@ function extraVoices(notes, { scalePcs, chordPcs, tempo }) {
         const second = first !== null ? third(first) : null;
         return second !== null ? [first, second] : null;
       };
-      below = stack(chordPcs.has(pc) ? chordPcs : scalePcs) ?? (scalePcs.has(pc) ? [stepsDown(note.midi, 5)] : null);
+      const safeScale = new Set([...scalePcs].filter((x) => !avoid.has(x) || x === pc));
+      below = stack(chordPcs.has(pc) ? chordPcs : safeScale) ?? (scalePcs.has(pc) ? [stepsDown(note.midi, 5)] : null);
+      if (below?.some((b) => avoid.has(mod12(b)))) below = [note.midi - 12];
     } else if (previous) below = previous.map((gap) => note.midi - gap);
-    if (below && below.length > allowed) below = allowed === 1 && scalePcs.has(pc) ? [stepsDown(note.midi, 5)] : below.slice(0, allowed);
+    if (below && below.length > allowed) {
+      const sixth = stepsDown(note.midi, 5);
+      below = allowed === 1 && scalePcs.has(pc) ? [avoid.has(mod12(sixth)) ? note.midi - 12 : sixth] : below.slice(0, allowed);
+    }
     if (!below) { previous = null; continue; }
     out.set(note, below);
     previous = below.map((b) => note.midi - b);
@@ -820,28 +890,42 @@ export function generateGroove(data, {
       style, cellTexts, rng: makeRng(`${style.id}|${variation}|plano|${intensity}`), level: intensity, tempo: project.tempo,
       totalTicks: Math.round(totalBeats(project) * TICKS_PER_BEAT), barTicks: Math.round(beatsPerBar(project) * TICKS_PER_BEAT),
     });
+    // 1º o ritmo de todos os acordes (para cada frase saber se a seguinte começa soando), depois as notas
+    const colorOf = (chord) => {
+      const own = chord.phrase_color.toLowerCase();
+      return ["dentro", "cromatico", "outside"].includes(own) ? own : ["dentro", "cromatico", "outside"].includes(globalColor) ? globalColor : "";
+    };
+    const plans = project.chords.map((chord) => {
+      const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
+      if (!sounding(chord).length) { planner.skip(length); return { silent: true }; }
+      if (colorOf(chord) === "outside" && length >= 2 * TICKS_PER_BEAT) { planner.skip(length); return { slots: null }; }
+      return { slots: planner.take(length) };
+    });
+    // a frase do acorde começa soando no tempo 1? (o motivo outside sempre começa com nota)
+    const startsSounding = (plan) => plan && !plan.silent && (!plan.slots || !plan.slots[0]?.rest);
+    let arrival = null;
     project.chords.forEach((chord, i) => {
       const voices = sounding(chord);
-      const chordTicks = Math.round(chord.duration_beats * TICKS_PER_BEAT);
-      if (!voices.length) { out[i].phrase = ""; previousCells = null; planner.skip(chordTicks); return; }
+      const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
+      if (!voices.length) { out[i].phrase = ""; previousCells = null; arrival = null; return; }
       const chordPcs = new Set(voices.map((v) => pitchClass(v.note)));
       const hasScale = chord.phrase_pcs.length > 0;
       if (!hasScale) withoutScale += 1;
       const scalePcs = hasScale ? new Set(chord.phrase_pcs.map((s) => s.pc)) : chordPcs;
       const following = project.chords[i + 1];
       const nextPcs = following ? new Set(sounding(following).map((v) => pitchClass(v.note))) : null;
-      const own = chord.phrase_color.toLowerCase();
-      const color = ["dentro", "cromatico", "outside"].includes(own) ? own : ["dentro", "cromatico", "outside"].includes(globalColor) ? globalColor : "";
+      const color = colorOf(chord);
       const rng = makeRng(`${style.id}|${variation}|${i}|${chord.symbol}|${voices.map((v) => v.note.midi).join(",")}`);
-      const length = chordTicks;
-      const outsideMotif = color === "outside" && length >= 2 * TICKS_PER_BEAT;
-      const slots = outsideMotif ? null : planner.take(length);
-      if (outsideMotif) planner.skip(length);
-      const result = composePhrase({ style, color, chordPcs, scalePcs, root: rootPc(chord), length, nextPcs, rng, cursor, previousCells, cellTexts, scales, slots });
+      const root = rootPc(chord);
+      const result = composePhrase({
+        style, color, chordPcs, scalePcs, root, length, nextPcs, rng, cursor, previousCells, cellTexts, scales,
+        slots: plans[i].slots, tempo: project.tempo, arrival, nextStarts: startsSounding(plans[i + 1]),
+      });
       cursor = result.cursor;
       previousCells = result.cells;
+      arrival = result.lead;
       const spell = speller(chord, project.middle_c);
-      const below = extraVoices(result.notes, { scalePcs, chordPcs, tempo: project.tempo });
+      const below = extraVoices(result.notes, { scalePcs, chordPcs, tempo: project.tempo, avoid: avoidSetOf(chordPcs, scalePcs, root) });
       out[i].phrase = result.notes.map((n) => {
         if (n.rest) return `r/${n.dur}`;
         const name = [n.midi, ...(below.get(n) ?? [])].map(spell).join("&");
