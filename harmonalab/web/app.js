@@ -7,7 +7,7 @@ import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
-import { beatOptions, compOptions, generateGroove } from "./engine/groove.js";
+import { SOURCE_SCALES, beatOptions, compOptions, generateGroove } from "./engine/groove.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
@@ -24,7 +24,8 @@ const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8",
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
 const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale", "comp"];
-const PHRASE_MODES = ["both", "line", "chords"]; // acorde + frase · mão esquerda + frase · só acorde
+const PHRASE_MODES = ["both", "line", "chords"];
+const COLORS = [["", "Estilo"], ["dentro", "Dentro"], ["cromatico", "Cromático"], ["outside", "Outside"]]; // acorde + frase · mão esquerda + frase · só acorde
 const STRUM_LABEL = { up: "grave → agudo", down: "agudo → grave" };
 const DEFAULT_STRUM_DELAY_MS = 20;
 
@@ -138,6 +139,16 @@ function blankChord(extra = {}) {
   };
 }
 
+/** As escolhas do painel de ritmo guardadas no projeto (levada, bateria, tags e cor das frases). */
+function grooveSettings(raw) {
+  const g = raw && typeof raw === "object" ? raw : {};
+  const list = (v) => (Array.isArray(v) ? v.map(String) : []);
+  return {
+    comp: String(g.comp || ""), drums: String(g.drums || ""),
+    phraseStyles: list(g.phraseStyles), scales: list(g.scales), color: ["dentro", "cromatico", "outside"].includes(g.color) ? g.color : "",
+  };
+}
+
 /** JSON do projeto → modelo editável (listas de notas viram texto). */
 function toEditable(data) {
   const text = (v) => (Array.isArray(v) ? v.join(" ") : v == null ? "" : String(v));
@@ -173,7 +184,7 @@ function toEditable(data) {
     comment: data.comment ?? "",
     key: typeof data.key === "string" ? data.key : "",
     style: typeof data.style === "string" ? data.style : "",
-    groove: data.groove && typeof data.groove === "object" ? { comp: String(data.groove.comp || ""), drums: String(data.groove.drums || "") } : { comp: "", drums: "" },
+    groove: grooveSettings(data.groove),
     drums: Array.isArray(data.drums) ? data.drums.join(" | ") : typeof data.drums === "string" ? data.drums : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     chords,
@@ -376,6 +387,15 @@ function chordCard(chord, index, total) {
   r.fn = h("span", { class: "chord-fn" });
   r.note = h("p", { class: "chord-note" }); // a frase de função do acorde: o que ele faz ali
   r.phraseLine = h("p", { class: "chord-phrase", hidden: true });
+  r.colorSelect = h("select", {
+    "aria-label": `Cor da frase do acorde ${n}`,
+    onchange: (e) => {
+      const value = e.target.value;
+      applyGroove({ phrases: true, before: () => { chord.phrase_color = value; } }, `Cor da frase do acorde ${n}: ${e.target.selectedOptions[0].textContent}.`);
+    },
+  }, ...COLORS.map(([value, label]) => h("option", { value }, value ? label : "A geral")));
+  r.colorSelect.value = chord.phrase_color || "";
+  r.colorRow = h("label", { class: "phrase-color", hidden: true }, "Cor da frase", r.colorSelect);
   r.badge = h("span", { class: "ponta-badge", title: "Ponta: a nota mais aguda" });
   const head = h("div", { class: "chord-head" },
     h("span", { class: "chord-index", "aria-hidden": "true" }, n),
@@ -491,7 +511,6 @@ function chordCard(chord, index, total) {
       textField("Escala ou modo", "scale", "ex.: menor melódica a partir de B"),
       phraseField("Frase (nota/duração, * para o papel)", "phrase", "ex.: G5/8 F5/8 Eb5/4*alvo", true),
       phraseField("Notas da escala (sem oitava)", "phrase_scale", "ex.: B C D Eb F G A", true),
-      phraseField("Cor da frase (dentro, cromatico ou outside)", "phrase_color", "vazio = costume do estilo"),
       phraseField("Levada (ritmo do acorde)", "comp", "ex.: E/4 D/8 D/8 E/4 D/4", true),
       h("label", { class: "field wide", for: `f-${chord.id}-strum` }, h("span", { class: "label" }, "Strum deste acorde"), r.strum, r.msgs.strum),
       noteField(chord, r, "bass", "ex.: E1 (soa junto)"),
@@ -510,7 +529,7 @@ function chordCard(chord, index, total) {
     h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
   );
 
-  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, r.note, view, r.phraseLine, hands, voicingRow, params, r.more, r.issues, actions);
+  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, r.note, view, r.phraseLine, r.colorRow, hands, voicingRow, params, r.more, r.issues, actions);
   updateDuration(chord);
   updateLock(chord);
   updateFn(chord);
@@ -532,6 +551,7 @@ function updateFn(chord) {
 /** A frase melódica do acorde numa linha: as notas, com os alvos em destaque. */
 function renderPhraseLine(r, phrase) {
   r.phraseLine.hidden = !phrase;
+  r.colorRow.hidden = !phrase;
   if (!phrase) { r.phraseLine.replaceChildren(); return; }
   r.phraseLine.replaceChildren(
     icon("note"),
@@ -912,16 +932,38 @@ function renderGroove() {
   const phrases = anyChord("phrase");
   $("#groove-phrases").checked = phrases;
   $("#groove-again").hidden = !phrases;
+  $("#phrase-tags").hidden = !phrases;
+  const g = state.project.groove;
+  const chosenStyles = g.phraseStyles?.length ? g.phraseStyles : [style.id];
+  const chosenScales = g.scales?.length ? g.scales : ["acorde"];
+  const tag = (label, pressed, onclick) => h("button", { type: "button", class: "tag", "aria-pressed": String(pressed), onclick }, label);
+  $("#tags-styles").replaceChildren(...STYLES.map((s) => tag(s.label, chosenStyles.includes(s.id), () => toggleTag("phraseStyles", s.id, chosenStyles))));
+  $("#tags-scales").replaceChildren(...SOURCE_SCALES.map((s) => tag(s.label, chosenScales.includes(s.id), () => toggleTag("scales", s.id, chosenScales))));
+  $("#tags-color").replaceChildren(...COLORS.map(([value, label]) => h("button", {
+    type: "button", "aria-pressed": String((g.color || "") === value),
+    onclick: () => applyGroove({ phrases: true, settings: { color: value } }, `Cor das frases: ${label}.`),
+  }, label)));
+}
+
+/** Liga ou desliga uma tag (sempre fica pelo menos uma) e refaz as frases. */
+function toggleTag(key, id, current) {
+  const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id];
+  if (!next.length) { toast("Deixe pelo menos uma marcada."); return; }
+  applyGroove({ phrases: true, settings: { [key]: next } }, "Frases refeitas com as tags marcadas.");
 }
 
 /** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
-function applyGroove({ comp, phrases, drums }, message) {
+function applyGroove({ comp, phrases, drums, settings, before }, message) {
   const undo = snapshot();
+  before?.();
+  if (settings) state.project.groove = { ...state.project.groove, ...settings };
   stopPlayback();
   const style = grooveStyle();
   const result = generateGroove(toPayload(), {
     style, comp: comp || null, phrases: phrases === true, variation: state.groove.variation,
     drums: drums || null, drumVariation: state.groove.drumVariation,
+    phraseStyles: (state.project.groove?.phraseStyles || []).map(findStyle).filter(Boolean),
+    scales: state.project.groove?.scales || [], color: state.project.groove?.color || "",
   });
   if (drums !== undefined) {
     state.project.drums = drums ? result.drums ?? "" : "";

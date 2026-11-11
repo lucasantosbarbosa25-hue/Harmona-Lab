@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
-import { beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
+import { SOURCE_SCALES, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
 import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../../harmonalab/web/engine/midi.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
@@ -217,4 +217,59 @@ test("a bateria gerada é válida em todos os estilos e compassos, e sai numa fa
   assert.ok(text.includes("Frase") && text.includes("Bateria"));
   const plain = midiBytes(loadProject({ chords: [{ notes: "C4 E4" }] }).project);
   assert.deepEqual([plain[9], plain[11]], [0, 1]); // só acordes: continua tipo 0, uma faixa
+});
+
+test("outside em motivo: a mesma figura, meio tom acima ou abaixo, logo depois do original, e resolve no alvo", () => {
+  let checked = 0;
+  for (let variation = 0; variation < 30; variation++) {
+    for (const chord of generateGroove(bare("outside"), { style: findStyle("fusion"), phrases: true, variation }).chords) {
+      const tokens = chord.phrase.split(" ");
+      const first = tokens.findIndex((t) => t.endsWith("*outside"));
+      if (first <= 0) continue;
+      let count = 0;
+      while (tokens[first + count]?.endsWith("*outside") || tokens[first + count]?.startsWith("r/")) count += 1;
+      while (tokens[first + count - 1].startsWith("r/")) count -= 1; // pausas depois do trecho de fora não fazem parte dele
+      const outside = tokens.slice(first, first + count);
+      const original = tokens.slice(first - count, first);
+      const durs = (list) => list.map((t) => t.split("/")[1].split("*")[0]);
+      assert.deepEqual(durs(outside), durs(original), `mesmo ritmo: ${chord.phrase}`);
+      const midi = (t) => loadProject({ chords: [{ notes: "C4", phrase: t.split("*")[0] }] }).project.chords[0].phrase_events[0]?.note.midi;
+      const shifts = new Set(outside.map((t, i) => (t.startsWith("r/") ? null : midi(t) - midi(original[i]))).filter((d) => d !== null));
+      assert.equal(shifts.size, 1, `deslocamento único: ${chord.phrase}`);
+      assert.ok([1, -1].includes([...shifts][0]), `meio tom: ${chord.phrase}`);
+      checked += 1;
+    }
+  }
+  assert.ok(checked >= 30, `${checked} frases outside em motivo`);
+});
+
+test("tags: estilos combinados, escalas de origem e cor geral (a cor do acorde manda)", () => {
+  assert.deepEqual(SOURCE_SCALES.map((s) => s.id), ["acorde", "penta", "blues", "arpejo"]);
+  const roles = (options) => {
+    const all = [];
+    for (let variation = 0; variation < 15; variation++) for (const c of generateGroove(bare(), { style: findStyle("swing"), phrases: true, variation, ...options }).chords) all.push(...c.phrase.split(" "));
+    return all;
+  };
+  assert.ok(roles({ scales: ["blues"] }).some((t) => t.endsWith("*blue")));
+  const arpeggio = generateGroove(bare(), { style: findStyle("bossa"), phrases: true, scales: ["arpejo"], color: "dentro" });
+  const data = apply(bare(), arpeggio);
+  const { project } = loadProject(data);
+  for (const chord of project.chords) {
+    const pcs = new Set(chord.left_hand.concat(chord.right_hand, chord.bass).map((n) => n.midi % 12));
+    for (const e of chord.phrase_events) assert.ok(pcs.has(e.note.midi % 12), `arpejo usa só notas do acorde (${chord.symbol})`);
+  }
+  assert.ok(roles({ color: "outside" }).some((t) => t.endsWith("*outside")));
+  const marked = bare();
+  marked.chords[2].phrase_color = "dentro";
+  for (let variation = 0; variation < 10; variation++) {
+    const made = generateGroove(marked, { style: findStyle("fusion"), phrases: true, variation, color: "outside" }).chords;
+    assert.ok(!made[2].phrase.includes("*outside"), "a cor do acorde vence a geral");
+  }
+  const mixed = new Set();
+  for (let variation = 0; variation < 10; variation++) {
+    for (const c of generateGroove(bare(), { style: findStyle("bossa"), phrases: true, variation, phraseStyles: [findStyle("bossa"), findStyle("fusion")] }).chords) {
+      if (c.phrase.includes("/16")) mixed.add(variation);
+    }
+  }
+  assert.ok(mixed.size >= 3, "com fusion marcado junto, a bossa ganha semicolcheias");
 });

@@ -145,8 +145,30 @@ function drawRhythm(style, cells, length, rng, reuse) {
  * Ritmo de uma frase: [{ dur (texto), ticks, start, rest }]. Sorteia de novo se sair vazio demais para o estilo
  * (minNotes a cada 4 tempos) e fica com a tentativa mais cheia.
  */
-function buildRhythm(style, length, rng, previousCells) {
-  const cells = style.cells.map((text) => ({ text, ticks: cellTicks(text) }));
+function buildRhythm(style, length, rng, previousCells, { cellTexts = style.cells, motif = false } = {}) {
+  const cells = [...new Set(cellTexts)].map((text) => ({ text, ticks: cellTicks(text) }));
+  if (motif) {
+    // outside em motivo: a mesma célula duas vezes seguidas (a segunda vai meio tom para fora), depois o resto
+    const sounds = (c) => c.text.split(" ").filter((t) => !t.startsWith("r")).length;
+    const options = cells.filter((c) => c.ticks * 2 <= length && sounds(c) >= 2 && !c.text.startsWith("r"));
+    if (options.length) {
+      const cell = rng.pick(options);
+      const rest = length - cell.ticks * 2;
+      const tail = rest ? drawRhythm(style, cells, rest, rng, null).cells : [];
+      const chosen = [cell, cell, ...tail];
+      const slots = [];
+      let tick = 0;
+      for (const c of chosen) {
+        for (const tok of c.text.split(" ")) {
+          const isRest = tok.startsWith("r");
+          const dur = isRest ? tok.slice(1) : tok;
+          slots.push({ dur, ticks: durationTicks(dur), start: tick, rest: isRest });
+          tick += durationTicks(dur);
+        }
+      }
+      return { slots, cells: chosen, motifSlots: cell.text.split(" ").length };
+    }
+  }
   const wanted = Math.max(1, Math.floor(((style.phrase.minNotes ?? 3) * length) / (4 * TICKS_PER_BEAT)));
   const count = (rhythm) => rhythm.slots.filter((s) => !s.rest).length;
   let best = drawRhythm(style, cells, length, rng, previousCells && rng.chance(style.phrase.motif) ? previousCells : null);
@@ -187,6 +209,39 @@ const nearest = (pool, pitch, avoid = null) => {
  * Uma frase para um acorde. ctx: { style, color, chordPcs (Set), scalePcs (Set), root, length, nextPcs (Set|null), rng, cursor, previousCells }.
  * Devolve { notes: [{dur, rest, midi, role}], cursor, cells }.
  */
+/** As escalas de origem que a frase pode usar (tags do painel). "acorde" = a escala que veio com a harmonia. */
+export const SOURCE_SCALES = [
+  { id: "acorde", label: "Escala do acorde" },
+  { id: "penta", label: "Pentatônica" },
+  { id: "blues", label: "Blues" },
+  { id: "arpejo", label: "Arpejo" },
+];
+
+/** As notas (classes de altura) da paleta escolhida; `blue` = as que ficam fora da escala do acorde (viram *blue). */
+function paletteOf(scales, { scalePcs, chordPcs, root, stylePenta }) {
+  const out = new Set();
+  const blue = new Set();
+  const chosen = scales?.length ? scales : ["acorde"];
+  for (const id of chosen) {
+    if (id === "acorde") {
+      const penta = stylePenta ? pentatonicOf(scalePcs, root) : null;
+      for (const pc of penta ? [...penta, ...[...chordPcs].filter((x) => scalePcs.has(x))] : scalePcs) out.add(pc);
+    } else if (id === "penta") {
+      for (const pc of pentatonicOf(scalePcs, root) ?? chordPcs) out.add(pc);
+    } else if (id === "arpejo") {
+      for (const pc of chordPcs) out.add(pc);
+    } else if (id === "blues") {
+      // pentatônica menor da fundamental + a quinta diminuta; o que não estiver na escala vira blue note
+      for (const step of [0, 3, 5, 6, 7, 10]) {
+        const pc = mod12(root + step);
+        out.add(pc);
+        if (!scalePcs.has(pc)) blue.add(pc);
+      }
+    }
+  }
+  return { set: out.size ? out : scalePcs, blue };
+}
+
 export function composePhrase(ctx) {
   const { style, color, chordPcs, scalePcs, root, length, nextPcs, rng } = ctx;
   const params = style.phrase;
@@ -195,14 +250,15 @@ export function composePhrase(ctx) {
   const enclosure = inside ? 0 : color === "cromatico" || color === "outside" ? Math.max(params.enclosure, 0.3) : params.enclosure;
   const blue = inside ? 0 : params.blue;
 
-  const penta = params.pentatonic ? pentatonicOf(scalePcs, root) : null;
-  const lineSet = penta ? new Set([...penta, ...[...chordPcs].filter((pc) => scalePcs.has(pc))]) : scalePcs;
+  const palette = paletteOf(ctx.scales, { scalePcs, chordPcs, root, stylePenta: params.pentatonic });
+  const lineSet = palette.set;
   const range = (set) => { const out = []; for (let p = LOW; p <= HIGH; p++) if (set.has(mod12(p))) out.push(p); return out; };
   const linePool = range(lineSet);
   const targetSet = new Set([...chordPcs].filter((pc) => scalePcs.has(pc)));
   const targetPool = range(targetSet.size ? targetSet : chordPcs);
 
-  const { slots, cells } = buildRhythm(style, length, rng, ctx.previousCells);
+  const motif = color === "outside" && length >= 2 * TICKS_PER_BEAT;
+  const { slots, cells, motifSlots } = buildRhythm(style, length, rng, motif ? null : ctx.previousCells, { cellTexts: ctx.cellTexts ?? style.cells, motif });
   const notes = slots.map((s) => ({ ...s, midi: null, role: "" }));
   const sounding = notes.filter((n) => !n.rest);
   if (!sounding.length || !linePool.length || !targetPool.length) return { notes: [], cursor: ctx.cursor, cells };
@@ -276,18 +332,45 @@ export function composePhrase(ctx) {
     }
   }
 
-  // 5) outside: um trecho inteiro sobe meio tom (side-slipping) e resolve no alvo seguinte
+  // 5) blue notes da paleta (escala blues fora da escala do acorde) ficam marcadas
+  for (const note of sounding) if (!note.role && palette.blue.has(mod12(note.midi))) note.role = "blue";
+
+  // 6) outside em motivo: a mesma figura (ritmo e desenho) logo em seguida, meio tom acima ou abaixo, e resolve no alvo
   if (color === "outside") {
-    const resolveAt = [];
-    sounding.forEach((note, i) => { if (note.role === "alvo" && i >= 2) resolveAt.push(i); });
-    if (resolveAt.length) {
-      const end = rng.pick(resolveAt);
-      let start = Math.max(0, end - (2 + Math.floor(rng.next() * 3)));
-      while (start > 0 && sounding[start - 1].role === "aprox") start -= 1; // não deixa uma aproximação sem resolver
+    if (motifSlots) {
       const shift = rng.chance(0.5) ? 1 : -1;
-      for (let i = start; i < end; i++) {
-        sounding[i].midi = Math.max(LOW - 2, Math.min(HIGH + 2, sounding[i].midi + shift));
-        sounding[i].role = "outside";
+      // o motivo original fica dentro da escala: aproximações dele resolveriam numa nota que agora está fora
+      for (let i = 0; i < motifSlots; i++) {
+        if (notes[i].rest || notes[i].role !== "aprox") continue;
+        notes[i].midi = nearest(linePool, notes[i].midi);
+        notes[i].role = palette.blue.has(mod12(notes[i].midi)) ? "blue" : "";
+      }
+      for (let i = 0; i < motifSlots; i++) {
+        const source = notes[i];
+        const copy = notes[motifSlots + i];
+        if (source.rest) continue;
+        copy.midi = Math.max(LOW - 2, Math.min(HIGH + 2, source.midi + shift));
+        copy.role = "outside";
+      }
+      // a nota seguinte resolve dentro: um alvo do acorde perto da última nota de fora
+      const after = notes.slice(2 * motifSlots).find((n) => !n.rest);
+      if (after) {
+        after.midi = nearest(targetPool, notes.slice(0, 2 * motifSlots).filter((n) => !n.rest).at(-1).midi);
+        after.role = after.start % TICKS_PER_BEAT === 0 ? "alvo" : "";
+      }
+    } else {
+      // acorde curto (menos de dois tempos): um trecho desloca meio tom e resolve no alvo seguinte
+      const resolveAt = [];
+      sounding.forEach((note, i) => { if (note.role === "alvo" && i >= 2) resolveAt.push(i); });
+      if (resolveAt.length) {
+        const end = rng.pick(resolveAt);
+        let start = Math.max(0, end - 2);
+        while (start > 0 && sounding[start - 1].role === "aprox") start -= 1;
+        const shift = rng.chance(0.5) ? 1 : -1;
+        for (let i = start; i < end; i++) {
+          sounding[i].midi = Math.max(LOW - 2, Math.min(HIGH + 2, sounding[i].midi + shift));
+          sounding[i].role = "outside";
+        }
       }
     }
   }
@@ -313,7 +396,10 @@ function speller(chord, middleC) {
  * drums (id do beat ou null), drumVariation (número: sorteia as viradas) }.
  * Devolve { chords: [{ comp, phrase, phrase_scale }] (só os campos pedidos), drums (texto, se pedido), notes: [avisos em português] }.
  */
-export function generateGroove(data, { style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0 } = {}) {
+export function generateGroove(data, {
+  style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
+  phraseStyles = null, scales = null, color: globalColor = "",
+} = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
   const warnings = [];
@@ -336,10 +422,12 @@ export function generateGroove(data, { style, comp = null, phrases = false, vari
       const scalePcs = hasScale ? new Set(chord.phrase_pcs.map((s) => s.pc)) : chordPcs;
       const following = project.chords[i + 1];
       const nextPcs = following ? new Set(sounding(following).map((v) => pitchClass(v.note))) : null;
-      const color = ["dentro", "cromatico", "outside"].includes(chord.phrase_color.toLowerCase()) ? chord.phrase_color.toLowerCase() : "";
+      const own = chord.phrase_color.toLowerCase();
+      const color = ["dentro", "cromatico", "outside"].includes(own) ? own : ["dentro", "cromatico", "outside"].includes(globalColor) ? globalColor : "";
       const rng = makeRng(`${style.id}|${variation}|${i}|${chord.symbol}|${voices.map((v) => v.note.midi).join(",")}`);
       const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
-      const result = composePhrase({ style, color, chordPcs, scalePcs, root: rootPc(chord), length, nextPcs, rng, cursor, previousCells });
+      const cellTexts = phraseStyles?.length ? phraseStyles.flatMap((x) => x.cells) : style.cells;
+      const result = composePhrase({ style, color, chordPcs, scalePcs, root: rootPc(chord), length, nextPcs, rng, cursor, previousCells, cellTexts, scales });
       cursor = result.cursor;
       previousCells = result.cells;
       const spell = speller(chord, project.middle_c);

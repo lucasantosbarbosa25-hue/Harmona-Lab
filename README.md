@@ -140,6 +140,10 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
   conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
+- **Tags das frases:** estilos combinados (as células rítmicas de todos os marcados), escalas de origem (escala do acorde,
+  pentatônica, blues, arpejo; mais de uma ao mesmo tempo) e a **cor geral** (estilo, dentro, cromático ou outside). Cada
+  acorde tem o seu submenu de cor, que vale mais que a geral. No outside, a frase toca uma figura e logo em seguida a mesma
+  figura meio tom acima ou abaixo, e resolve no alvo.
 - **Cor pedida no prompt:** se o pedido falar em frases cromáticas ou *outside* (até "só nos dominantes"), a IA marca esses
   acordes (`phrase_color`) e o app obedece: `dentro` fica na escala, `cromatico` reforça as aproximações, `outside` desloca um
   trecho meio tom e resolve no alvo.

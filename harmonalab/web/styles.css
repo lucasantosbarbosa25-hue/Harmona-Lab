@@ -494,3 +494,14 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 /* Ouvir: repetir e andamento de estudo */
 .listen-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; margin: 0 0 10px; }
 .listen-rate { flex: 1; min-width: 170px; max-width: 240px; margin: 0; }
+
+/* Tags das frases e cor por acorde */
+.phrase-tags { display: grid; gap: 8px; }
+.phrase-tags[hidden] { display: none; }
+.phrase-tags .label small { font-weight: 400; color: var(--muted); }
+.tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: .86rem; cursor: pointer; min-height: 34px; }
+.tag[aria-pressed="true"] { background: var(--rh-soft); border-color: var(--rh); color: var(--rh); font-weight: 700; }
+.phrase-color { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; font-size: .85rem; color: var(--muted); }
+.phrase-color[hidden] { display: none; }
+.phrase-color select { width: auto; min-height: 34px; padding: 4px 28px 4px 10px; font-size: .85rem; }
