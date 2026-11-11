@@ -6,7 +6,7 @@ const CACHE = "harmona-lab-v13";
 // O tocador de banco de sons (vendor/) fica fora da lista: só baixa quando alguém usa um .sf2, e aí fica guardado
 // pela estratégia abaixo (toda resposta boa vai para o cache), funcionando também sem internet.
 const SHELL = [
-  "./", "./index.html", "./styles.css", "./app.js", "./audio.js", "./keyboard.js", "./sound.js",
+  "./", "./index.html", "./styles.css", "./app.js", "./audio.js", "./diagram.js", "./keyboard.js", "./sound.js",
   "./engine/analysis.js", "./engine/midi.js", "./engine/model.js", "./engine/groove.js", "./engine/numbers.js", "./engine/phrase.js", "./engine/pitch.js", "./engine/voicing.js",
   "./ai/chat.js", "./ai/check.js", "./ai/link.js", "./ai/prompt.js", "./ai/speech.js", "./ai/ui.js", "./kb/estilos.js", "./kb/sons.js",
   "./example.json", "./manifest.webmanifest", "./icon.svg",

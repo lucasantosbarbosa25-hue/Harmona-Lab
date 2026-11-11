@@ -5,6 +5,7 @@
 import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
+import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { beatOptions, compOptions, generateGroove } from "./engine/groove.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
@@ -385,9 +386,8 @@ function chordCard(chord, index, total) {
 
   // O que vai para o MIDI: teclado + notas do grave ao agudo
   r.kb = h("div", { class: "kb", role: "img", "aria-label": "Teclas do voicing" });
-  r.chips = h("div", { class: "chips" });
   r.spacing = h("p", { class: "spacing" });
-  const view = h("div", { class: "voicing-view" }, r.kb, r.chips, r.spacing);
+  const view = h("div", { class: "voicing-view" }, r.kb, r.spacing);
 
   const hands = h("div", { class: "hands" },
     noteField(chord, r, "right_hand", "ex.: D4 Eb4 G4 C5"),
@@ -628,18 +628,11 @@ function renderAnalysis() {
 
     // Fichas
     if (!info) {
-      r.chips.replaceChildren();
       r.spacing.textContent = "";
     } else if (info.is_rest) {
-      r.chips.replaceChildren(h("span", { class: "rest-note" }, `Pausa · silêncio de ${barsText(info.duration_beats) || `${fmt(info.duration_beats)} tempos`}`));
-      r.spacing.textContent = "";
+      r.spacing.textContent = `Pausa · silêncio de ${barsText(info.duration_beats) || `${fmt(info.duration_beats)} tempos`}`;
     } else {
-      const topMidi = info.top?.midi;
-      r.chips.replaceChildren(...info.notes.map((note) => h("span", {
-        class: `chip ${PART_CLASS[note.part]}${note.midi === topMidi ? " top" : ""}`,
-        title: `${PART_LABEL[note.part]} · MIDI ${note.midi}`,
-      }, h("b", null, note.name), h("small", null, note.midi === topMidi ? `${note.midi} · topo` : note.midi))));
-      const parts = ["grave → agudo"];
+      const parts = [info.notes.map((n) => n.name).join(" ")]; // as notas, do grave ao agudo, numa linha só
       if (info.strum && info.strum !== "off") parts.push(`strum ${STRUM_LABEL[info.strum]}, ${fmt(report.strum_delay_ms)} ms`);
       if (info.comp) parts.push("com levada");
       if (info.spacing.length) parts.push(`intervalos entre vozes: ${info.spacing.join(" · ")} semitons`);
@@ -1235,6 +1228,36 @@ async function exportMidi() {
   }
 }
 
+/** Imagem (PNG) com o desenho do teclado de cada acorde, a função, a escala e a frase de função. */
+async function exportDiagrams() {
+  validateNow();
+  const report = state.report;
+  const all = [];
+  for (const c of report?.chords || []) for (const n of c.notes) all.push(n.midi);
+  if (!all.length) { toast("A progressão ainda não tem notas para desenhar.", { error: true }); return; }
+  const [low, high] = keyboardRange(all);
+  const p = state.project;
+  const canvas = drawDiagrams({
+    title: p.title,
+    subtitle: [p.key && `Tom: ${p.key}`, toNumber(p.tempo) > 0 && `${fmt(toNumber(p.tempo))} BPM`, p.time_signature, p.style].filter(Boolean).join(" · "),
+    low, high,
+    chords: p.chords.map((chord) => {
+      const info = state.byId.get(chord.id)?.chord;
+      return {
+        symbol: chord.symbol,
+        fn: [chord.function, chord.scale].map((t) => String(t || "").trim()).filter(Boolean).join(" · "),
+        note: String(chord.comment || "").trim(),
+        notes: info?.notes || [],
+        top: info?.top?.midi ?? null,
+      };
+    }),
+  });
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  const filename = `${slugify(p.title)}-diagramas.png`;
+  const saved = await saveFile(blob, filename, "Imagem PNG", "image/png", ".png");
+  if (saved) toast(`${saved.name} salvo.`);
+}
+
 async function saveProject() {
   validateNow();
   const data = state.report?.ok ? state.report.project : toPayload();
@@ -1334,6 +1357,7 @@ function bindUi() {
     if (action === "open") $("#file-input").click();
     else if (action === "paste") openPaste();
     else if (action === "share") copyShareLink();
+    else if (action === "diagrams") exportDiagrams();
     else if (action === "save") saveProject();
     else if (action === "example") loadExample();
     else if (action === "new") newProject();
