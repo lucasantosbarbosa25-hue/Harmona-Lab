@@ -201,12 +201,14 @@
         <div class="more-body">
           <label class="field wide" for="sound-chords"><span class="label">Som dos acordes</span><select id="sound-chords"></select></label>
           <label class="field wide" for="sound-phrase" id="sound-phrase-field" hidden><span class="label">Som da frase</span><select id="sound-phrase"></select></label>
+          <label class="field wide" for="sound-drums" id="sound-drums-field" hidden><span class="label">Som da bateria</span><select id="sound-drums"></select></label>
+          <p class="ai-help wide" id="sound-simple-hint">No timbre simples, a bateria toca com um kit sintético. Escolha um som do app (Rhodes, piano) para ouvir com a bateria acústica.</p>
           <div class="sound-actions wide">
             <button type="button" class="btn secondary small" id="sound-load">Carregar banco de sons (.sf2)</button>
             <button type="button" class="btn ghost small danger" id="sound-remove" hidden>Remover banco</button>
             <input type="file" id="sound-file" accept=".sf2,.sf3,.dls" hidden>
           </div>
-          <p class="ai-help wide" id="sound-info">Com um banco de sons (.sf2) o app toca exatamente o MIDI que você exporta, com o instrumento escolhido (um Rhodes, um piano…). O arquivo fica só neste aparelho. Bancos de até algumas dezenas de MB vão bem no celular.</p>
+          <p class="ai-help wide" id="sound-info">Com um banco de sons (.sf2) o app toca exatamente o MIDI que você exporta, com o instrumento escolhido. Os bancos do app baixam só na primeira vez que você os escolhe. Um banco seu, carregado do aparelho, fica só neste aparelho.</p>
         </div>
       </details>
       <details class="more voicing-tools" id="voicing-tools">

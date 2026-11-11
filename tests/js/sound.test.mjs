@@ -3,15 +3,17 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { SAME, SIMPLE, formatSize, parsePatchValue, patchValue, soundBankProblem, suggestedPreset } from "../../harmonalab/web/sound.js";
+import { NO_DRUMS, SAME, SIMPLE, builtinValue, formatSize, parsePatchValue, patchValue, soundBankProblem, suggestedPreset } from "../../harmonalab/web/sound.js";
+import { BUILTIN_BANKS } from "../../harmonalab/web/kb/sons.js";
 import { buildSf2 } from "./sf2_fixture.mjs";
 
 test("instrumento escolhido vira texto e volta", () => {
   const patch = { name: "Rhodes", program: 4, bankMSB: 0, bankLSB: 0 };
   assert.equal(patchValue(patch), "sf:0:0:4");
-  assert.deepEqual(parsePatchValue("sf:0:0:4"), { bankMSB: 0, bankLSB: 0, program: 4 });
-  assert.deepEqual(parsePatchValue("sf:8:1:127"), { bankMSB: 8, bankLSB: 1, program: 127 });
-  for (const other of [SIMPLE, SAME, "", null, "sf:x:0:1", "sf:0:0"]) assert.equal(parsePatchValue(other), null, String(other));
+  assert.deepEqual(parsePatchValue("sf:0:0:4"), { bank: "aparelho", bankMSB: 0, bankLSB: 0, program: 4 });
+  assert.deepEqual(parsePatchValue("sf:8:1:127"), { bank: "aparelho", bankMSB: 8, bankLSB: 1, program: 127 });
+  assert.deepEqual(parsePatchValue(builtinValue("sonor3007")), { bank: "sonor3007", program: 0, bankMSB: 0, bankLSB: 0 });
+  for (const other of [SIMPLE, SAME, NO_DRUMS, "", null, "sf:x:0:1", "sf:0:0", "kb:nao-existe"]) assert.equal(parsePatchValue(other), null, String(other));
 });
 
 test("ao carregar um banco, sugere um piano elétrico se houver", () => {
@@ -51,4 +53,15 @@ test("arquivo estragado é recusado antes de chegar ao tocador (que travaria esp
   new DataView(dls.buffer).setUint32(4, 4, true);
   dls.set([...Buffer.from("DLS ")], 8);
   assert.equal(soundBankProblem(dls.buffer), ""); // DLS: só o cabeçalho é conferido
+});
+
+test("os bancos que vêm com o app existem na pasta sons/, cabem no limite e têm crédito e licença anotados", async () => {
+  const { statSync } = await import("node:fs");
+  assert.ok(BUILTIN_BANKS.some((b) => b.kind === "teclado") && BUILTIN_BANKS.some((b) => b.kind === "bateria"));
+  for (const bank of BUILTIN_BANKS) {
+    const size = statSync(new URL(`../../harmonalab/web/sons/${bank.file}`, import.meta.url)).size;
+    assert.equal(size, bank.size, bank.file);
+    assert.ok(size <= 25 * 1024 * 1024, `${bank.file}: até 25 MB`);
+    assert.ok(bank.credit && bank.license && ["teclado", "bateria"].includes(bank.kind), bank.id);
+  }
 });

@@ -1,13 +1,22 @@
-// Pré-escuta com banco de sons (.sf2): o SpessaSynth toca exatamente o arquivo MIDI que o app exporta.
-// O banco é escolhido pela pessoa, fica guardado só neste aparelho (IndexedDB) e nada é enviado a lugar nenhum.
+// Pré-escuta com bancos de sons (.sf2): o SpessaSynth toca exatamente o arquivo MIDI que o app exporta.
+// Há dois tipos de banco: os que vêm com o app (kb/sons.js, baixados de sons/ só quando escolhidos) e um carregado do
+// aparelho pela pessoa, que fica guardado só nele (IndexedDB). Cada canal (acordes, frase, bateria) pode usar um banco.
 // A biblioteca (vendor/spessasynth, Apache-2.0) só é carregada quando alguém usa um banco: quem não usa não paga nada.
 
+import { BUILTIN_BANKS, findBuiltin } from "./kb/sons.js";
+
 const VENDOR = new URL("./vendor/spessasynth/", import.meta.url);
+const SOUNDS = new URL("./sons/", import.meta.url);
+const DEVICE = "aparelho"; // o id do banco carregado do aparelho
+const DRUM_CHANNEL = 9;
+/** Cada banco embutido de teclado ganha um deslocamento de banco próprio, para não colidir com os outros (todos usam o programa 0). */
+const builtinOffset = (id) => 64 + BUILTIN_BANKS.findIndex((b) => b.id === id);
 const DB_NAME = "harmonalab";
 const STORE = "sons";
 const KEY = "banco";
 export const SIMPLE = "simple"; // o timbre simples do app (osciladores)
 export const SAME = "same"; // a frase usa o mesmo som dos acordes
+export const NO_DRUMS = "none"; // bateria muda na escuta (no MIDI ela continua)
 const CHORD_CHANNEL = 0;
 const PHRASE_CHANNEL = 1;
 /** Acima disso o banco pode pesar demais no celular (avisamos antes de carregar). */
@@ -15,11 +24,19 @@ export const LARGE_BANK_BYTES = 200 * 1024 * 1024;
 
 // ---------------------------------------------------------------- escolhas (texto ↔ preset)
 
-/** "sf:MSB:LSB:programa" ↔ o preset do banco. */
+/**
+ * Escolha de som em texto: "sf:MSB:LSB:programa" = instrumento do banco do aparelho; "kb:id" = banco embutido (kb/sons.js).
+ * parsePatchValue devolve { bank: "aparelho" | id, bankMSB, bankLSB, program } ou null.
+ */
 export const patchValue = (p) => `sf:${p.bankMSB}:${p.bankLSB}:${p.program}`;
+export const builtinValue = (id) => `kb:${id}`;
 export function parsePatchValue(value) {
-  const m = /^sf:(\d+):(\d+):(\d+)$/.exec(String(value || ""));
-  return m ? { bankMSB: Number(m[1]), bankLSB: Number(m[2]), program: Number(m[3]) } : null;
+  const text = String(value || "");
+  const m = /^sf:(\d+):(\d+):(\d+)$/.exec(text);
+  if (m) return { bank: DEVICE, bankMSB: Number(m[1]), bankLSB: Number(m[2]), program: Number(m[3]) };
+  const k = /^kb:([\w-]+)$/.exec(text);
+  const builtin = k ? findBuiltin(k[1]) : null;
+  return builtin ? { bank: builtin.id, ...builtin.preset } : null;
 }
 
 /** Instrumento sugerido ao carregar um banco: um piano elétrico, se houver; senão o primeiro. */
@@ -107,8 +124,9 @@ export class SoundFontPlayer {
     this.ctx = null;
     this.synth = null;
     this.seq = null;
-    this.bank = null; // { name, size, presets } do banco guardado
-    this.loadedInSynth = false;
+    this.bank = null; // { name, size, presets } do banco guardado no aparelho
+    this.loadedInSynth = false; // o banco do aparelho já está no tocador
+    this.builtinLoaded = new Set(); // bancos embutidos já no tocador
     this.stats = { noteOns: 0, songs: 0 }; // para conferência (testes)
     this.onEnd = null;
   }
@@ -157,7 +175,7 @@ export class SoundFontPlayer {
     });
     try {
       // mesmo id: o banco novo substitui o anterior só se for lido sem erro
-      await withTimeout(this.synth.soundBankManager.addSoundBank(buffer, "main"), 60000, "o arquivo demorou demais para abrir");
+      await withTimeout(this.synth.soundBankManager.addSoundBank(buffer, DEVICE), 60000, "o arquivo demorou demais para abrir");
     } catch (err) {
       this.synth.eventHandler.removeEvent("presetListChange", "harmona-load");
       throw new Error(`Não consegui ler este arquivo como banco de sons: ${err?.message || err}`);
@@ -186,7 +204,7 @@ export class SoundFontPlayer {
 
   async removeBank() {
     this.stop();
-    if (this.loadedInSynth) await this.synth.soundBankManager.deleteSoundBank("main").catch(() => {});
+    if (this.loadedInSynth) await this.synth.soundBankManager.deleteSoundBank(DEVICE).catch(() => {});
     this.loadedInSynth = false;
     this.bank = null;
     await deleteSavedBank();
@@ -200,10 +218,39 @@ export class SoundFontPlayer {
     this.bank = { name: saved.name, size: saved.size, presets: await this.#addToSynth(await saved.blob.arrayBuffer()) };
   }
 
+  /** Baixa (do próprio site; depois, do cache do aparelho) e coloca no tocador um banco embutido. */
+  async #ensureBuiltin(id) {
+    if (this.builtinLoaded.has(id)) return;
+    const builtin = findBuiltin(id);
+    const response = await fetch(new URL(encodeURIComponent(builtin.file), SOUNDS));
+    if (!response.ok) throw new Error(`Não consegui baixar ${builtin.label} (${response.status}). Confira a internet e tente de novo.`);
+    const buffer = await response.arrayBuffer();
+    const problem = soundBankProblem(buffer);
+    if (problem) throw new Error(`${builtin.label}: ${problem}`);
+    await this.#ensureSynth();
+    const offset = builtin.kind === "bateria" ? 0 : builtinOffset(id);
+    await withTimeout(this.synth.soundBankManager.addSoundBank(buffer, `kb-${id}`, offset), 60000, `${builtin.label} demorou demais para abrir`);
+    this.builtinLoaded.add(id);
+  }
+
+  /** Garante no tocador o banco de uma escolha ("sf:..." ou "kb:id") e devolve o instrumento com o banco já deslocado. */
+  async #resolve(value) {
+    const patch = parsePatchValue(value);
+    if (!patch) return null;
+    if (patch.bank === DEVICE) {
+      await this.#ensureBank();
+      return patch;
+    }
+    await this.#ensureBuiltin(patch.bank);
+    const builtin = findBuiltin(patch.bank);
+    return builtin.kind === "bateria" ? patch : { ...patch, bankMSB: patch.bankMSB + builtinOffset(patch.bank) };
+  }
+
   /** Trava o instrumento de um canal (o tocador reinicia os canais a cada música; travado, o escolhido fica). */
   #setPatch(channel, patch) {
     const midi = this.synth.midiChannels[channel];
     midi.setSystemParameter("presetLock", false);
+    if (channel === DRUM_CHANNEL) midi.setDrums(true);
     this.synth.controllerChange(channel, 0, patch.bankMSB);
     this.synth.controllerChange(channel, 32, patch.bankLSB);
     this.synth.programChange(channel, patch.program);
@@ -214,15 +261,25 @@ export class SoundFontPlayer {
    * Toca os bytes de um .mid com os instrumentos escolhidos: { chords, phrase } no formato "sf:MSB:LSB:programa"
    * (phrase pode ser SAME). Resolve quando começa a tocar; `onEnd` é chamado quando o arquivo termina.
    */
-  async play(bytes, { chords, phrase = SAME, onEnd } = {}) {
+  async play(bytes, { chords, phrase = SAME, drums = NO_DRUMS, onEnd } = {}) {
     this.unlock();
     await this.#ensureSynth();
-    await this.#ensureBank();
-    const chordPatch = parsePatchValue(chords);
+    const chordPatch = await this.#resolve(chords);
     if (!chordPatch) throw new Error("Escolha um instrumento do banco de sons.");
+    const phrasePatch = phrase === SAME ? chordPatch : (await this.#resolve(phrase)) ?? chordPatch;
+    const drumPatch = drums === NO_DRUMS ? null : await this.#resolve(drums);
     this.stop();
     this.#setPatch(CHORD_CHANNEL, chordPatch);
-    this.#setPatch(PHRASE_CHANNEL, parsePatchValue(phrase) ?? chordPatch);
+    this.#setPatch(PHRASE_CHANNEL, phrasePatch);
+    if (drumPatch) {
+      // o banco da bateria escolhida fica na frente, para o canal 10 pegar o kit dele
+      const bank = parsePatchValue(drums).bank;
+      const first = bank === DEVICE ? DEVICE : `kb-${bank}`;
+      const order = this.synth.soundBankManager.priorityOrder;
+      this.synth.soundBankManager.priorityOrder = [first, ...order.filter((id) => id !== first)];
+      this.#setPatch(DRUM_CHANNEL, drumPatch);
+    }
+    this.synth.midiChannels[DRUM_CHANNEL].setSystemParameter("isMuted", !drumPatch);
     this.onEnd = onEnd ?? null;
     this.stats.songs += 1;
     this.seq.loadNewSongList([{ binary: bytes.slice().buffer, fileName: "harmona-lab.mid" }]);

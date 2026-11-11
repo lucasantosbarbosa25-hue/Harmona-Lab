@@ -12,7 +12,8 @@ import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 import { VOICINGS, revoiceChord } from "./engine/voicing.js";
-import { LARGE_BANK_BYTES, SAME, SIMPLE, SoundFontPlayer, formatSize, parsePatchValue, patchValue, suggestedPreset } from "./sound.js";
+import { BUILTIN_BANKS } from "./kb/sons.js";
+import { LARGE_BANK_BYTES, NO_DRUMS, SAME, SIMPLE, SoundFontPlayer, builtinValue, formatSize, parsePatchValue, patchValue, suggestedPreset } from "./sound.js";
 
 const DRAFT_KEY = "harmonalab:draft:v1";
 const SOUND_KEY = "harmonalab:sound";
@@ -96,7 +97,7 @@ const state = {
   byId: new Map(), // id do acorde → { chord, issues }
   playing: false,
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
-  sound: { chords: SIMPLE, phrase: SAME }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
+  sound: { chords: SIMPLE, phrase: SAME, drums: builtinValue("sonor3007") }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
   groove: { style: STYLES[0].id, variation: 0, drumVariation: 0 }, // estilo do ritmo e das frases, e as variações das frases e das viradas
   listen: { loop: false, rate: 1 }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
 };
@@ -104,7 +105,6 @@ const refs = new WeakMap(); // acorde → elementos do cartão
 const player = new Player();
 const soundFont = new SoundFontPlayer(); // banco de sons (.sf2): só carrega a biblioteca quando alguém usa
 let soundTimers = [];
-let warnedNoKit = false;
 let soundRestored = false; // o banco guardado já foi lido (antes disso, não descartamos a escolha salva)
 let nextId = 1;
 
@@ -1003,7 +1003,7 @@ function bindGroove() {
 }
 
 // ---------------------------------------------------------------- banco de sons (.sf2)
-const usingSoundFont = () => Boolean(soundFont.bank) && parsePatchValue(state.sound.chords) !== null;
+const usingSoundFont = () => parsePatchValue(state.sound.chords) !== null && (parsePatchValue(state.sound.chords).bank !== "aparelho" || Boolean(soundFont.bank));
 
 /**
  * Toca com o banco de sons o mesmo MIDI que "Gerar MIDI" exporta (no modo de frase escolhido).
@@ -1015,16 +1015,13 @@ async function playWithSoundFont(only = null, onEnd = null) {
     return false;
   }
   const { project, index } = previewProject(only);
-  const kit = soundFont.bank?.presets?.some((p) => p.isDrum);
-  if (project.drum_bars.length && !kit && !warnedNoKit) {
-    warnedNoKit = true;
-    toast("Este banco de sons não tem kit de bateria: a bateria fica muda com ele (no timbre simples ela toca).");
-  }
-  const bytes = midiBytes(project, { phraseMode: state.phraseMode, drums: Boolean(kit) });
-  const slow = setTimeout(() => toast("Carregando o banco de sons…"), 500);
+  const bytes = midiBytes(project, { phraseMode: state.phraseMode });
+  const fresh = [state.sound.chords, state.sound.phrase, project.drum_bars.length ? state.sound.drums : ""]
+    .map(parsePatchValue).filter((patch) => patch && patch.bank !== "aparelho");
+  const slow = setTimeout(() => toast(fresh.length ? "Baixando o banco de sons (só na primeira vez)…" : "Carregando o banco de sons…"), 500);
   try {
     await soundFont.play(bytes, {
-      chords: state.sound.chords, phrase: state.sound.phrase,
+      chords: state.sound.chords, phrase: state.sound.phrase, drums: project.drum_bars.length ? state.sound.drums : NO_DRUMS,
       onEnd: onEnd ?? (() => (only ? setPlaying(-1) : stopPlayback())),
     });
   } catch (err) {
@@ -1051,40 +1048,66 @@ function saveSoundChoice() {
 function loadSoundChoice() {
   try {
     const saved = JSON.parse(localStorage.getItem(SOUND_KEY) || "null");
-    if (saved && typeof saved.chords === "string") state.sound = { chords: saved.chords, phrase: typeof saved.phrase === "string" ? saved.phrase : SAME };
+    if (saved && typeof saved.chords === "string") {
+      state.sound = {
+        chords: saved.chords, phrase: typeof saved.phrase === "string" ? saved.phrase : SAME,
+        drums: typeof saved.drums === "string" ? saved.drums : builtinValue("sonor3007"),
+      };
+    }
   } catch { /* fica o padrão */ }
 }
 
-/** Os dois menus de som, o resumo e os botões, a partir do banco guardado. */
+/** Os menus de som (acordes, frase, bateria), o resumo e os botões: bancos do app e o banco do aparelho. */
 function renderSound() {
   const bank = soundFont.bank;
   const presets = bank?.presets ?? [];
-  const valid = new Set(presets.map(patchValue));
+  const keys = BUILTIN_BANKS.filter((b) => b.kind === "teclado");
+  const kits = BUILTIN_BANKS.filter((b) => b.kind === "bateria");
+  const melodic = new Set([...keys.map((b) => builtinValue(b.id)), ...presets.filter((p) => !p.isDrum).map(patchValue)]);
+  const drums = new Set([...kits.map((b) => builtinValue(b.id)), ...presets.filter((p) => p.isDrum).map(patchValue)]);
   if (soundRestored) {
-    if (!valid.has(state.sound.chords)) state.sound.chords = SIMPLE;
-    if (state.sound.phrase !== SAME && !valid.has(state.sound.phrase)) state.sound.phrase = SAME;
+    if (state.sound.chords !== SIMPLE && !melodic.has(state.sound.chords)) state.sound.chords = SIMPLE;
+    if (state.sound.phrase !== SAME && !melodic.has(state.sound.phrase)) state.sound.phrase = SAME;
+    if (state.sound.drums !== NO_DRUMS && !drums.has(state.sound.drums)) state.sound.drums = kits[0] ? builtinValue(kits[0].id) : NO_DRUMS;
   }
-  const presetOptions = () => presets.map((p) => h("option", { value: patchValue(p) }, `${p.name}${p.isDrum ? " (bateria)" : ""}`));
+  const builtinOptions = (list) => list.map((b) => h("option", { value: builtinValue(b.id) }, `${b.label} · ${formatSize(b.size)}`));
+  const deviceGroup = (drum) => {
+    const list = presets.filter((p) => Boolean(p.isDrum) === drum);
+    return list.length ? [h("optgroup", { label: `Do aparelho: ${bank.name}` }, ...list.map((p) => h("option", { value: patchValue(p) }, p.name)))] : [];
+  };
+  const melodicOptions = () => [h("optgroup", { label: "Do app" }, ...builtinOptions(keys)), ...deviceGroup(false)];
   const chords = $("#sound-chords");
-  chords.replaceChildren(
-    h("option", { value: SIMPLE }, "Timbre simples do app"),
-    ...(presets.length ? [h("optgroup", { label: `${bank.name} · ${formatSize(bank.size)}` }, ...presetOptions())] : []),
-  );
+  chords.replaceChildren(h("option", { value: SIMPLE }, "Timbre simples do app"), ...melodicOptions());
   chords.value = state.sound.chords;
   const phrase = $("#sound-phrase");
-  phrase.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...presetOptions());
+  phrase.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...melodicOptions());
   phrase.value = state.sound.phrase;
+  const drumSelect = $("#sound-drums");
+  drumSelect.replaceChildren(
+    h("option", { value: NO_DRUMS }, "Sem bateria na escuta"),
+    ...(kits.length ? [h("optgroup", { label: "Do app" }, ...builtinOptions(kits))] : []),
+    ...deviceGroup(true),
+  );
+  drumSelect.value = state.sound.drums;
   updateSoundPhraseField();
   $("#sound-remove").hidden = !bank;
-  $("#sound-load").textContent = bank ? "Trocar o banco de sons" : "Carregar banco de sons (.sf2)";
-  const current = presets.find((p) => patchValue(p) === state.sound.chords);
-  $("#sound-summary").textContent = current ? current.name : "timbre simples";
+  $("#sound-load").textContent = bank ? "Trocar o banco do aparelho" : "Carregar banco do aparelho (.sf2)";
+  const label = (value) => {
+    const patch = parsePatchValue(value);
+    if (!patch) return "";
+    if (patch.bank !== "aparelho") return BUILTIN_BANKS.find((b) => b.id === patch.bank)?.label ?? "";
+    return presets.find((p) => patchValue(p) === value)?.name ?? "";
+  };
+  $("#sound-summary").textContent = state.sound.chords === SIMPLE ? "timbre simples" : label(state.sound.chords);
 }
 
-/** "Som da frase" só aparece com banco carregado, instrumento escolhido e alguma frase na progressão. */
+/** "Som da frase" só aparece com alguma frase na progressão; "Som da bateria", com bateria ligada. Os dois só fora do timbre simples. */
 function updateSoundPhraseField() {
+  const banks = state.sound.chords !== SIMPLE;
   const anyPhrase = (state.report?.chords || []).some((c) => c.phrase);
-  $("#sound-phrase-field").hidden = !soundFont.bank?.presets?.length || !anyPhrase || state.sound.chords === SIMPLE;
+  $("#sound-phrase-field").hidden = !banks || !anyPhrase;
+  $("#sound-drums-field").hidden = !banks || !String(state.project?.drums || "").trim();
+  $("#sound-simple-hint").hidden = banks;
 }
 
 async function chooseSoundFile(file) {
@@ -1098,7 +1121,8 @@ async function chooseSoundFile(file) {
     clearTimeout(slow);
     soundRestored = true;
     const preset = suggestedPreset(bank.presets);
-    state.sound = { chords: preset ? patchValue(preset) : SIMPLE, phrase: SAME };
+    const kit = bank.presets.find((p) => p.isDrum);
+    state.sound = { chords: preset ? patchValue(preset) : SIMPLE, phrase: SAME, drums: kit ? patchValue(kit) : state.sound.drums };
     saveSoundChoice();
     renderSound();
     toast(saved
@@ -1123,6 +1147,11 @@ function bindSound() {
     if (state.playing) stopPlayback();
     saveSoundChoice();
   });
+  $("#sound-drums").addEventListener("change", (e) => {
+    state.sound.drums = e.target.value;
+    if (state.playing) stopPlayback();
+    saveSoundChoice();
+  });
   $("#sound-load").addEventListener("click", () => $("#sound-file").click());
   $("#sound-file").addEventListener("change", (e) => {
     const [file] = e.target.files;
@@ -1132,7 +1161,7 @@ function bindSound() {
   $("#sound-remove").addEventListener("click", async () => {
     if (!window.confirm(`Remover ${soundFont.bank?.name ?? "o banco de sons"} deste aparelho?`)) return;
     await soundFont.removeBank();
-    state.sound = { chords: SIMPLE, phrase: SAME };
+    state.sound = { ...state.sound, chords: parsePatchValue(state.sound.chords)?.bank === "aparelho" ? SIMPLE : state.sound.chords, phrase: SAME };
     saveSoundChoice();
     renderSound();
     toast("Banco de sons removido. A pré-escuta voltou ao timbre simples.");

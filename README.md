@@ -151,8 +151,9 @@ acorde, a aproximação resolve por semitom, as notas são da escala. Em **ouvir
 *mão esquerda + frase* ou *só acorde*; no `.mid`, os acordes (com a levada) ficam no canal 1 e a frase no **canal 2**.
 Frases e levadas também podem ser escritas ou editadas à mão em *Mais*.
 
-**Banco de sons (.sf2).** Em *Som da pré-escuta* (acima dos acordes), carregue um SoundFont do aparelho e escolha o
-instrumento dos acordes e, se houver frases, o da frase (por exemplo, Rhodes nos acordes e piano na frase). O app toca
+**Banco de sons (.sf2).** Em *Som da pré-escuta* (acima dos acordes), escolha um dos bancos que vêm com o app (lista em
+[`kb/sons.js`](harmonalab/web/kb/sons.js), arquivos em `web/sons/`, baixados só na primeira vez que alguém os escolhe) ou
+carregue um SoundFont do aparelho. Escolha o instrumento dos acordes, o da frase e o kit da **bateria** (por exemplo, Rhodes nos acordes e piano na frase). O app toca
 **exatamente o arquivo MIDI que exporta** (no modo de frase escolhido), só com o instrumento travado em cada canal. O tocador é
 o [SpessaSynth](https://github.com/spessasus/spessasynth_lib) (Apache-2.0), incluído em `web/vendor/spessasynth/` e carregado
 só quando alguém usa um banco. O banco fica guardado só no aparelho (IndexedDB); arquivos cortados ou que não são bancos de
