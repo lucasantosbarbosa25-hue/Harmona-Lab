@@ -384,6 +384,7 @@ test("vozes na frase: oitavas, sextas da escala ou tríades do acorde, só em no
         const seconds = (ticks) => (ticks * 60) / tempo / 480;
         for (const chord of project.chords) {
           const chordPcs = new Set(sounding(chord).map((v) => ((v.note.midi % 12) + 12) % 12));
+          const scale = new Set(chord.phrase_pcs.map((x) => x.pc));
           for (const group of groups(chord)) {
             if (group.length === 1) continue;
             seen[group.length - 1] += 1;
@@ -393,8 +394,10 @@ test("vozes na frase: oitavas, sextas da escala ou tríades do acorde, só em no
             assert.ok(seconds(top.length) >= (group.length === 3 ? 0.36 : 0.25) - 1e-9, `${style.id} ${tempo}: nota rápida demais para ${group.length} vozes: ${chord.phrase}`);
             if (group.length === 3) {
               const [a, b, c] = group.map((e) => e.note.midi).sort((x, y) => y - x);
-              assert.ok(a - b >= 3 && b - c >= 3, `tríade em terças, sem cluster: ${chord.phrase}`);
-              if (top.role === "alvo") assert.ok(group.every((e) => chordPcs.has(((e.note.midi % 12) + 12) % 12)), `tríade do acorde: ${chord.phrase}`);
+              const quartal = a - b === 5 && b - c === 5;
+              assert.ok(quartal || (a - b >= 3 && b - c >= 3), `tríade quartal ou em terças, sem cluster: ${chord.phrase}`);
+              if (!quartal && top.role === "alvo") assert.ok(group.every((e) => chordPcs.has(((e.note.midi % 12) + 12) % 12)), `tríade do acorde: ${chord.phrase}`);
+              if (quartal) assert.ok(group.every((e) => scale.has(((e.note.midi % 12) + 12) % 12)), `quartal com notas da escala: ${chord.phrase}`);
             }
           }
         }
@@ -503,10 +506,11 @@ const VARIED = {
   ],
 };
 
-test("melodia com sentido: aproximação resolve no acorde seguinte, sem nota evitada exposta, nota do acorde no tempo", () => {
+test("melodia com sentido: aproximação resolve no acorde seguinte, sem nota evitada exposta, nota do acorde ou tensão no tempo", () => {
   const mod = (n) => ((n % 12) + 12) % 12;
   const avoidOf = { Cmaj9: [5], E7b9: [9], G13: [0], Bm7b5: [0], Fmaj7: [] }; // 4ª sobre terça maior; b9 fora dos dominantes
   let beats = 0, onChord = 0, crossings = 0;
+  const scaleOf = (chord) => new Set(chord.phrase_pcs.map((x) => x.pc));
   for (const style of STYLES) {
     for (let variation = 0; variation < 6; variation++) {
       const data = apply(structuredClone(VARIED), generateGroove(structuredClone(VARIED), { style, phrases: true, variation }));
@@ -515,7 +519,8 @@ test("melodia com sentido: aproximação resolve no acorde seguinte, sem nota ev
       project.chords.forEach((chord, ci) => {
         const tones = new Set(sounding(chord).map((v) => mod(v.note.midi)));
         for (const e of chord.phrase_events) {
-          if (e.start % 480 === 0) { beats += 1; if (tones.has(mod(e.note.midi))) onChord += 1; }
+          // no tempo: nota do acorde ou tensão da escala (9ª, 11ª, 13ª...), nunca nota evitada nem cromática
+          if (e.start % 480 === 0) { beats += 1; if (tones.has(mod(e.note.midi)) || (scaleOf(chord).has(mod(e.note.midi)) && !(avoidOf[chord.symbol] ?? []).includes(mod(e.note.midi)))) onChord += 1; }
           const exposed = e.start % 480 === 0 || e.length >= 240;
           if (exposed && e.role === "" && e.length >= 480) {
             assert.ok(!(avoidOf[chord.symbol] ?? []).includes(mod(e.note.midi)), `${style.id}: nota evitada longa em ${chord.symbol}: ${chord.phrase}`);
@@ -530,6 +535,69 @@ test("melodia com sentido: aproximação resolve no acorde seguinte, sem nota ev
       });
     }
   }
-  assert.ok(onChord / beats >= 0.93, `nota do acorde no tempo: ${((100 * onChord) / beats).toFixed(0)}%`);
+  assert.ok(onChord / beats >= 0.98, `nota do acorde ou tensão no tempo: ${((100 * onChord) / beats).toFixed(0)}%`);
   assert.ok(crossings > 20, `${crossings} aproximações entre acordes`);
+});
+
+test("chegadas pelo tipo de acorde: nos menores, 9ª e 11ª (e 3ª e 5ª no tempo 1); cromatismo menor em acorde sem tensão", () => {
+  const mod = (n) => ((n % 12) + 12) % 12;
+  const roots = { Dm9: 2, Am9: 9, Cmaj9: 0, Fmaj7: 5, G13: 7, A7alt: 9, E7b9: 4 };
+  const minorDegrees = {};
+  const minorDownbeats = {};
+  const chromatic = { calm: 0, calmNotes: 0, tense: 0, tenseNotes: 0 };
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 6; variation++) {
+      const data = apply(structuredClone(VARIED), generateGroove(structuredClone(VARIED), { style, phrases: true, variation }));
+      for (const chord of loadProject(data).project.chords) {
+        const root = roots[chord.symbol.replace("#11", "")];
+        const scale = new Set(chord.phrase_pcs.map((x) => x.pc));
+        const kind = /^[A-G][b#]?m9/.test(chord.symbol) ? "menor" : /maj/.test(chord.symbol) ? "calmo" : /7|13/.test(chord.symbol) && !/m7b5/.test(chord.symbol) ? "tenso" : "";
+        for (const e of chord.phrase_events) {
+          const degree = mod(e.note.midi - root);
+          if (kind === "menor" && e.start % 960 === 0) {
+            const bucket = e.start === 0 ? minorDownbeats : minorDegrees;
+            bucket[degree] = (bucket[degree] ?? 0) + 1;
+          }
+          const out = !scale.has(mod(e.note.midi));
+          if (kind === "calmo" || kind === "menor") { chromatic.calmNotes += 1; if (out) chromatic.calm += 1; }
+          if (kind === "tenso") { chromatic.tenseNotes += 1; if (out) chromatic.tense += 1; }
+        }
+      }
+    }
+  }
+  const share = (bucket, degrees) => degrees.reduce((n, d) => n + (bucket[d] ?? 0), 0) / Object.values(bucket).reduce((n, v) => n + v, 0);
+  assert.ok(share(minorDegrees, [2, 5]) >= 0.3, `9ª e 11ª no meio do compasso dos menores: ${JSON.stringify(minorDegrees)}`);
+  assert.ok(share(minorDownbeats, [3, 7]) >= 0.25, `3ª e 5ª no tempo 1 dos menores: ${JSON.stringify(minorDownbeats)}`);
+  assert.ok(chromatic.calm / chromatic.calmNotes < chromatic.tense / chromatic.tenseNotes, `menos cromatismo sem tensão: ${JSON.stringify(chromatic)}`);
+});
+
+test("outside: a tensão sempre volta no tempo, perto da última nota de fora; o ritmo usa só figuras do estilo", () => {
+  let episodes = 0;
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 6; variation++) {
+      const data = apply(structuredClone(VARIED), generateGroove(structuredClone(VARIED), { style, phrases: true, variation, color: "outside" }));
+      assert.deepEqual(problems(data), [], style.id);
+      const { project } = loadProject(data);
+      const line = project.chords.flatMap((c, ci) => c.phrase_events.map((e) => ({ e, ci, abs: ci * 1920 + e.start })));
+      line.forEach(({ e }, k) => {
+        const next = line[k + 1];
+        if (e.role !== "outside" || next?.e.role === "outside") return;
+        episodes += 1;
+        assert.ok(next, `${style.id}: o outside não termina a música`);
+        assert.equal(next.abs % 480, 0, `${style.id}: a resolução do outside cai no tempo`);
+        assert.ok(Math.abs(next.e.note.midi - e.note.midi) <= 3, `${style.id}: resolve perto (${e.token} -> ${next.e.token})`);
+      });
+    }
+  }
+  assert.ok(episodes > 100, `${episodes} trechos outside`);
+  // ritmo: só figuras do estilo (bossa, samba e salsa nunca em fusas)
+  for (const id of ["bossa", "samba", "salsa"]) {
+    for (const intensity of ["contido", "equilibrado", "virtuoso"]) {
+      for (let variation = 0; variation < 6; variation++) {
+        for (const chord of generateGroove(structuredClone(VARIED), { style: findStyle(id), phrases: true, variation, intensity }).chords) {
+          assert.ok(!/\/32/.test(chord.phrase), `${id}/${intensity}: sem fusas: ${chord.phrase}`);
+        }
+      }
+    }
+  }
 });

@@ -206,85 +206,17 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
   return { notes: out, last: out.filter((n) => !n.rest).at(-1)?.midi ?? root, root };
 }
 
-// ---------------------------------------------------------------- frases
-
-const cellTicks = (cell) => cell.split(" ").reduce((sum, tok) => sum + durationTicks(tok.replace(/^r/, "")), 0);
-
-/** Uma tentativa de ritmo: células do estilo (ou as do acorde anterior), até encher o acorde. */
-function drawRhythm(style, cells, length, rng, reuse) {
-  const chosen = [];
-  let at = 0;
-  for (let i = 0; at < length; i++) {
-    const fits = cells.filter((c) => c.ticks <= length - at);
-    if (!fits.length) break;
-    let cell = reuse?.[i] && reuse[i].ticks <= length - at ? reuse[i] : rng.pick(fits);
-    if (!reuse && at > 0 && TICKS_PER_BEAT <= length - at && rng.chance(style.phrase.rest)) cell = { text: "r4", ticks: TICKS_PER_BEAT };
-    chosen.push(cell);
-    at += cell.ticks;
-  }
-  const slots = [];
-  let tick = 0;
-  for (const cell of chosen) {
-    for (const tok of cell.text.split(" ")) {
-      const rest = tok.startsWith("r");
-      const dur = rest ? tok.slice(1) : tok;
-      const ticks = durationTicks(dur);
-      slots.push({ dur, ticks, start: tick, rest });
-      tick += ticks;
-    }
-  }
-  return { slots, cells: chosen };
-}
-
-/**
- * Ritmo de uma frase: [{ dur (texto), ticks, start, rest }]. Sorteia de novo se sair vazio demais para o estilo
- * (minNotes a cada 4 tempos) e fica com a tentativa mais cheia.
- */
-function buildRhythm(style, length, rng, previousCells, { cellTexts = style.cells, motif = false } = {}) {
-  const cells = [...new Set(cellTexts)].map((text) => ({ text, ticks: cellTicks(text) }));
-  if (motif) {
-    // outside em motivo: a mesma célula duas vezes seguidas (a segunda vai meio tom para fora), depois o resto
-    const sounds = (c) => c.text.split(" ").filter((t) => !t.startsWith("r")).length;
-    const options = cells.filter((c) => c.ticks * 2 <= length && sounds(c) >= 2 && !c.text.startsWith("r"));
-    if (options.length) {
-      const cell = rng.pick(options);
-      const rest = length - cell.ticks * 2;
-      const tail = rest ? drawRhythm(style, cells, rest, rng, null).cells : [];
-      const chosen = [cell, cell, ...tail];
-      const slots = [];
-      let tick = 0;
-      for (const c of chosen) {
-        for (const tok of c.text.split(" ")) {
-          const isRest = tok.startsWith("r");
-          const dur = isRest ? tok.slice(1) : tok;
-          slots.push({ dur, ticks: durationTicks(dur), start: tick, rest: isRest });
-          tick += durationTicks(dur);
-        }
-      }
-      return { slots, cells: chosen, motifSlots: cell.text.split(" ").length };
-    }
-  }
-  const wanted = Math.max(1, Math.floor(((style.phrase.minNotes ?? 3) * length) / (4 * TICKS_PER_BEAT)));
-  const count = (rhythm) => rhythm.slots.filter((s) => !s.rest).length;
-  let best = drawRhythm(style, cells, length, rng, previousCells && rng.chance(style.phrase.motif) ? previousCells : null);
-  for (let attempt = 0; attempt < 12 && count(best) < wanted; attempt++) {
-    const next = drawRhythm(style, cells, length, rng, null);
-    if (count(next) > count(best)) best = next;
-  }
-  return best;
-}
+// ---------------------------------------------------------------- frases: o ritmo
+//
+// O ritmo da frase vem das células do próprio estilo, sem acelerar nem desacelerar figura nenhuma: é o que dá a cara do
+// estilo. O solo é planejado em trechos de 1 a 4 compassos, que atravessam os acordes:
+//   motivo (uma célula) -> o mesmo ritmo de novo, com outras notas -> às vezes só o começo dele -> resposta -> chegada
+//   (nota longa) -> respiração.
+// Cada trecho tem uma intensidade (0 calmo a 3 virtuoso), num arco: começa espaçado, cresce até o clímax (por volta de 70%
+// do solo) e resolve. A intensidade escolhe, entre as células do estilo (e as figuras rápidas dele, "fast", nos trechos
+// intensos), as de densidade mais perto do pedido em notas por segundo: o andamento entra na conta.
 
 const mod12 = (n) => ((n % 12) + 12) % 12;
-
-// ---------------------------------------------------------------- plano do solo: motivos e arco de intensidade
-//
-// O solo é planejado de trecho em trecho (1 a 4 compassos), atravessando os acordes:
-//   motivo (uma célula do estilo) -> o mesmo ritmo de novo, com outras notas (seguindo o desenho do original) ->
-//   uma variação (o motivo em diminuição ou só o começo dele) -> resposta -> uma nota longa de chegada -> respiração.
-// Cada trecho tem uma intensidade (0 calmo a 3 virtuoso), que segue um arco: começa espaçado, cresce até o clímax
-// (por volta de 70% do solo) e resolve. A intensidade vira notas por segundo, então o andamento entra na conta: a 80 BPM
-// o app usa mais semicolcheias e fusas; a 160 BPM, menos. Trechos calmos podem sair em oitavas, sextas ou tríades;
-// trechos rápidos, sempre numa voz só (tem de ser tocável).
 
 /** Os níveis do controle "Intensidade do solo". */
 export const INTENSITIES = [
@@ -292,24 +224,10 @@ export const INTENSITIES = [
   { id: "equilibrado", label: "Equilibrado" },
   { id: "virtuoso", label: "Virtuoso" },
 ];
-const INTENSITY_NPS = [2.4, 3.8, 5.5, 7]; // notas por segundo de cada intensidade (0 calmo ... 3 virtuoso)
+const INTENSITY_NPS = [2.2, 3.4, 5, 6.5]; // notas por segundo de cada intensidade (0 calmo ... 3 virtuoso)
 const LEVEL_CURVE = { contido: [-0.6, 1.7], equilibrado: [0.1, 2.3], virtuoso: [1.0, 2.2] }; // [base, altura do arco]
-const DUET_MIN_SECONDS = 0.25; // nota mais curta que dá para tocar em oitavas ou sextas
-const TRIAD_MIN_SECONDS = 0.36; // e em tríades
-
-/** Uma figura aumentada (factor 2) ou diminuída (0.5, 0.25): "8" -> "4" ou "16". null se não existir. */
-function scaleToken(token, factor) {
-  const rest = token.startsWith("r");
-  const parts = (rest ? token.slice(1) : token).split("+").map((part) => {
-    const m = /^(\d+)(.*)$/.exec(part);
-    if (!m) return null;
-    const n = Number(m[1]) / factor;
-    return Number.isInteger(n) && n >= 1 && n <= 32 ? `${n}${m[2]}` : null;
-  });
-  if (parts.includes(null)) return null;
-  try { durationTicks(parts.join("+")); } catch { return null; }
-  return `${rest ? "r" : ""}${parts.join("+")}`;
-}
+const DUET_MIN_SECONDS = 0.35; // nota mais curta que ganha oitava ou sexta (vozes só em notas longas)
+const TRIAD_MIN_SECONDS = 0.45; // e tríade
 
 function makeCell(text) {
   const tokens = text.split(" ").map((tok) => {
@@ -321,61 +239,46 @@ function makeCell(text) {
 }
 
 /** O planejador: devolve, acorde por acorde, o ritmo da frase ({dur, ticks, start, rest} e as marcas do plano). */
-function makePlanner({ style, cellTexts, rng, level, tempo, totalTicks, barTicks }) {
+function makePlanner({ style, cellTexts, fastTexts = [], rng, level, tempo, totalTicks, barTicks }) {
   const [base, height] = LEVEL_CURVE[level] ?? LEVEL_CURVE.equilibrado;
   const secondsPerTick = 60 / (tempo || 100) / TICKS_PER_BEAT;
   const nps = (cell) => cell.sounds / (cell.ticks * secondsPerTick);
-  const cells = [...new Set(cellTexts)].map(makeCell).filter((c) => c.ticks > 0);
-  const variants = [];
-  for (const cell of cells) {
-    for (const factor of [2, 1, 0.5, 0.25]) {
-      const tokens = cell.text.split(" ").map((t) => scaleToken(t, factor));
-      if (!tokens.includes(null) && cell.sounds) variants.push({ ...makeCell(tokens.join(" ")), cost: Math.abs(Math.log2(factor)) * 0.2 });
-    }
-  }
-  const triplets = cells.flatMap((c) => c.tokens).filter((t) => /t/.test(t.dur)).length > 0.4 * cells.flatMap((c) => c.tokens).length;
-  const runFigures = triplets ? ["16t", "32t"] : ["16", "32"];
+  const cells = [...new Set(cellTexts)].map(makeCell).filter((c) => c.ticks > 0 && c.sounds);
+  const fast = [...new Set(fastTexts)].map(makeCell).filter((c) => c.ticks > 0 && c.sounds);
+  const allTokens = cells.flatMap((c) => c.tokens);
+  const triplets = allTokens.filter((t) => /t/.test(t.dur)).length > 0.4 * allTokens.length;
   const vocabulary = (intensity) => {
+    const pool = intensity >= 2 && fast.length ? [...cells, ...fast] : cells;
     const target = INTENSITY_NPS[intensity];
-    const scored = variants.map((v) => ({ v, score: Math.abs(Math.log(nps(v) / target)) + v.cost })).sort((a, b) => a.score - b.score);
-    return scored.filter((x) => x.score <= scored[0].score + 0.35).slice(0, 6).map((x) => x.v);
-  };
-  const runCell = (intensity) => {
-    const target = INTENSITY_NPS[intensity] * 1.5; // rajada: bem mais rápida que o resto do trecho
-    const figure = runFigures.map(makeCell).sort((a, b) => Math.abs(Math.log(nps(a) / target)) - Math.abs(Math.log(nps(b) / target)))[0];
-    const count = Math.round(TICKS_PER_BEAT / figure.ticks);
-    return makeCell(Array(count).fill(figure.text).join(" "));
+    const scored = pool.map((c) => ({ c, score: Math.abs(Math.log(nps(c) / target)) })).sort((x, y) => x.score - y.score);
+    return scored.filter((x) => x.score <= scored[0].score + 0.4).slice(0, 6).map((x) => x.c);
   };
   const duet = style.phrase.duet ?? {};
 
   let at = 0;
   let queue = [];
+  let current = null;
+  let arriveNext = false; // o acorde anterior terminou em tensão (outside): este começa com a chegada
   const newSegment = () => {
     const p = totalTicks ? Math.min(1, at / totalTicks) : 0;
     const curve = p < 0.7 ? p / 0.7 : 1 - ((p - 0.7) / 0.3) * 0.55;
     let intensity = Math.max(0, Math.min(3, Math.round(base + height * curve + (rng.next() - 0.5) * 0.9)));
-    let texture = null;
-    if (intensity <= 1) {
-      const r = rng.next();
-      const o = duet.octave ?? 0;
-      const x = o + (duet.sixth ?? 0);
-      const t = x + (duet.triad ?? 0);
-      texture = r < o ? "octave" : r < x ? "sixth" : r < t ? "triad" : null;
-      if (texture === "triad") intensity = 0; // em tríades, mais devagar ainda
-    }
+    // vozes do trecho (oitava, sexta, tríade): só as notas longas ganham; com tríades, o trecho fica mais calmo
+    const r = rng.next();
+    const o = duet.octave ?? 0;
+    const x = o + (duet.sixth ?? 0);
+    const t = x + (duet.triad ?? 0);
+    const texture = r < o ? "octave" : r < x ? "sixth" : r < t ? "triad" : null;
+    if (texture === "triad") intensity = Math.max(0, intensity - 1); // com tríades, um pouco mais calmo
     const vocab = vocabulary(intensity);
     const motifs = vocab.filter((c) => c.sounds >= 2 && !c.tokens[0].rest);
     const motif = rng.pick(motifs.length ? motifs : vocab);
-    const segment = { statement: null, texture, intensity, vocab };
+    current = { texture, intensity, vocab };
     const length = rng.pick([1, 2, 2, 2, 4]) * barTicks;
     const items = [{ cell: motif, kind: "motivo" }];
     const repeats = rng.chance(style.phrase.motif ?? 0.5) ? 2 : 1;
     for (let i = 0; i < repeats; i++) items.push({ cell: motif, kind: "eco" });
-    const smaller = motif.text.split(" ").map((t) => scaleToken(t, 0.5));
-    if (!smaller.includes(null) && rng.chance(intensity >= 1 ? 0.6 : 0.3)) {
-      const dim = makeCell(smaller.join(" "));
-      items.push({ cell: dim, kind: "eco" }, { cell: dim, kind: "eco" }); // diminuição: o motivo duas vezes mais rápido
-    } else if (motif.tokens.length >= 3) {
+    if (motif.tokens.length >= 3 && rng.chance(0.4)) {
       // fragmento: só o começo do motivo, completado com pausa até a grade de colcheias
       const head = makeCell(motif.text.split(" ").slice(0, Math.ceil(motif.tokens.length / 2)).join(" "));
       const pad = (SHORT - (head.ticks % SHORT)) % SHORT;
@@ -383,31 +286,36 @@ function makePlanner({ style, cellTexts, rng, level, tempo, totalTicks, barTicks
       if (!pad || padText) items.push({ cell: makeCell(pad ? `${head.text} r${padText}` : head.text), kind: "eco" });
     }
     let used = items.reduce((n, it) => n + it.cell.ticks, 0);
-    const burst = [0, 0.05, 0.15, 0.3][intensity];
     while (used < length - TICKS_PER_BEAT) {
-      // rajada (corrida rápida de um tempo): nunca duas seguidas, para a velocidade vir em momentos
-      const run = !texture && items.at(-1).kind !== "corrida" && rng.chance(burst);
-      const cell = run ? runCell(intensity) : rng.pick(vocab);
-      items.push({ cell, kind: run ? "corrida" : "resposta" });
+      const cell = rng.pick(vocab);
+      items.push({ cell, kind: "resposta" });
       used += cell.ticks;
     }
-    // chegada: uma nota longa (que vira alvo), às vezes uma respiração
+    // chegada: uma nota longa; às vezes uma respiração
     items.push({ cell: makeCell(intensity >= 2 ? "4" : rng.pick(["4", "2"])), kind: "chegada" });
     if (rng.chance(Math.min(0.8, (style.phrase.rest ?? 0.2) * 2.5))) items.push({ cell: makeCell(intensity >= 2 ? "r8" : "r4"), kind: "pausa" });
-    queue = items.map((it) => ({ ...it, segment, tokens: [...it.cell.tokens] }));
+    queue = items.map((it) => ({ ...it, segment: current, tokens: [...it.cell.tokens] }));
   };
 
   /** Tira do plano `length` ticks de ritmo (um acorde). */
   const take = (length) => {
     const slots = [];
     let tick = 0;
+    if (arriveNext) {
+      // a resolução do outside: uma nota longa no tempo 1
+      const ticks = Math.min(length, 2 * TICKS_PER_BEAT);
+      slots.push({ dur: ticksText(ticks), ticks, start: 0, rest: false, end: true, texture: current?.texture ?? null });
+      tick = ticks;
+      at += ticks;
+      arriveNext = false;
+    }
     while (tick < length) {
       if (!queue.length) newSegment();
       const room = length - tick;
       let item = queue[0];
       if (item.cell.ticks > room) {
-        // a célula não cabe no que sobra do acorde: ela fica para o próximo (sem cortar figura no meio, para as quiálteras
-        // não saírem da grade) e o resto do acorde leva uma célula menor do trecho, ou uma pausa
+        // a célula não cabe no que sobra do acorde: fica para o próximo (sem cortar figura no meio) e o resto do acorde
+        // leva uma célula menor do trecho, ou uma pausa
         if (tick === 0) { queue.shift(); continue; } // nem num acorde inteiro ela cabe: sai do plano
         const fits = item.segment.vocab.filter((c) => c.ticks <= room);
         if (fits.length) item = { cell: rng.pick(fits), kind: "resposta", segment: item.segment, tokens: null };
@@ -415,14 +323,8 @@ function makePlanner({ style, cellTexts, rng, level, tempo, totalTicks, barTicks
         item.tokens = [...item.cell.tokens];
       } else queue.shift();
       for (const token of item.tokens) {
-        const slot = { dur: token.dur, ticks: token.ticks, start: tick, rest: token.rest, texture: item.segment.texture, intensity: item.segment.intensity };
-        if (item.kind === "corrida") slot.run = true;
+        const slot = { dur: token.dur, ticks: token.ticks, start: tick, rest: token.rest, texture: item.segment.texture };
         if (item.kind === "chegada") slot.end = true;
-        if (!token.rest && item.kind === "motivo") (item.segment.statement ??= []).push(slot);
-        if (!token.rest && item.kind === "eco" && item.segment.statement) {
-          item.echo = (item.echo ?? -1) + 1;
-          slot.echo = { statement: item.segment.statement, index: item.echo };
-        }
         slots.push(slot);
         tick += token.ticks;
         at += token.ticks;
@@ -430,7 +332,40 @@ function makePlanner({ style, cellTexts, rng, level, tempo, totalTicks, barTicks
     }
     return slots;
   };
-  return { take, skip: (ticks) => { at += ticks; } };
+
+  /**
+   * Outside em motivo (acordes de 3 tempos ou mais): [o que o plano trouxer] [motivo de um tempo, dentro] [o mesmo motivo,
+   * meio tom fora] [chegada num tempo forte]. A tensão vem logo antes da chegada e resolve nela. null se não couber.
+   */
+  const takeOutside = (length, { toNext = false } = {}) => {
+    // toNext: a tensão fica nos dois últimos tempos e resolve no tempo 1 do acorde seguinte
+    const arrivalAt = toNext ? length : length >= 4 * TICKS_PER_BEAT ? length - 2 * TICKS_PER_BEAT : length - TICKS_PER_BEAT;
+    const lead = arrivalAt - 2 * TICKS_PER_BEAT;
+    // motivos de um tempo: o primeiro tempo das células do estilo (só notas, pelo menos duas)
+    const one = [];
+    for (const c of [...(current?.vocab ?? []), ...cells]) {
+      let sum = 0;
+      const head = [];
+      for (const tk of c.tokens) { if (sum >= TICKS_PER_BEAT) break; head.push(tk); sum += tk.ticks; }
+      if (sum === TICKS_PER_BEAT && head.length >= 2 && head.every((tk) => !tk.rest)) one.push({ tokens: head });
+    }
+    if (!one.length) one.push(makeCell(triplets ? "8t 8t 8t" : "8 8"));
+    if (lead < 0) return null;
+    const slots = lead ? take(lead) : [];
+    const cell = rng.pick(one);
+    for (const [part, offset] of [["dentro", lead], ["fora", lead + TICKS_PER_BEAT]]) {
+      let pos = offset;
+      cell.tokens.forEach((tk, k) => {
+        slots.push({ dur: tk.dur, ticks: tk.ticks, start: pos, rest: false, texture: null, outside: part, motifIndex: k });
+        pos += tk.ticks;
+      });
+    }
+    if (toNext) arriveNext = true;
+    else slots.push({ dur: ticksText(length - arrivalAt), ticks: length - arrivalAt, start: arrivalAt, rest: false, end: true, texture: current?.texture ?? null });
+    at += length - lead;
+    return slots;
+  };
+  return { take, takeOutside, skip: (ticks) => { at += ticks; arriveNext = false; } };
 }
 
 /** Fundamental para blue notes e pentatônica: a letra da cifra, ou a nota mais grave se a cifra não ajudar. */
@@ -457,45 +392,6 @@ const nearest = (pool, pitch, avoid = null) => {
   return best ?? pool[0];
 };
 
-/**
- * Regra do fraseado: dentro da frase, nunca a mesma nota duas vezes seguidas. Uma pausa de até um tempo no meio não conta
- * como fim de frase; entre frases (de um acorde para o outro) a repetição continua permitida. A nota trocada vai para a
- * vizinha mais perto (um alvo continua alvo, uma aproximação passa para o outro lado do alvo); numa cópia outside, quem muda
- * é a nota de antes, para o motivo continuar igual.
- */
-function noRepeatedNotes(notes, { linePool, targetPool, blue }) {
-  const sounding = notes.filter((n) => !n.rest);
-  const near = (pool, pitch, avoid) => {
-    let best = null;
-    for (const p of pool) if (!avoid.includes(p) && (best === null || Math.abs(p - pitch) < Math.abs(best - pitch))) best = p;
-    return best;
-  };
-  for (let i = 1; i < sounding.length; i++) {
-    const before = sounding[i - 1];
-    const note = sounding[i];
-    if (note.midi !== before.midi || note.start - (before.start + before.ticks) > TICKS_PER_BEAT) continue;
-    const after = sounding[i + 1];
-    if (note.locked && before.locked) continue; // dentro do motivo outside não se mexe (a emenda já foi evitada)
-    const fixPrevious = !before.fixed && (note.locked || (note.role === "outside" && before.role !== "outside" && before.role !== "alvo" && before.role !== "aprox"));
-    const target = fixPrevious ? before : note;
-    const neighbours = [fixPrevious ? sounding[i - 2] : before, fixPrevious ? note : after].filter(Boolean).map((n) => n.midi);
-    if (target.role === "aprox" && after) {
-      target.midi = 2 * after.midi - target.midi === target.midi ? target.midi : 2 * after.midi - target.midi; // do outro lado do alvo
-      if (!neighbours.includes(target.midi)) continue;
-    }
-    const pool = target.role === "alvo" ? targetPool : linePool;
-    const replacement = near(pool, target.midi, neighbours) ?? near(linePool, target.midi, neighbours);
-    if (replacement !== null) {
-      target.midi = replacement;
-      if (target.role !== "alvo") target.role = blue.has(mod12(replacement)) ? "blue" : "";
-    }
-  }
-}
-
-/**
- * Uma frase para um acorde. ctx: { style, color, chordPcs (Set), scalePcs (Set), root, length, nextPcs (Set|null), rng, cursor, previousCells }.
- * Devolve { notes: [{dur, rest, midi, role}], cursor, cells }.
- */
 /** As escalas de origem que a frase pode usar (tags do painel). "acorde" = a escala que veio com a harmonia. */
 export const SOURCE_SCALES = [
   { id: "acorde", label: "Escala do acorde" },
@@ -545,306 +441,368 @@ function avoidSetOf(chordPcs, scalePcs, root) {
   return out;
 }
 
-export function composePhrase(ctx) {
-  const { style, color, chordPcs, scalePcs, root, length, nextPcs, rng } = ctx;
-  const params = style.phrase;
-  const inside = color === "dentro";
-  const chromatic = inside ? 0 : color === "cromatico" || color === "outside" ? Math.max(params.chromatic, 0.6) : params.chromatic;
-  const enclosure = inside ? 0 : color === "cromatico" || color === "outside" ? Math.max(params.enclosure, 0.3) : params.enclosure;
-  const blue = inside ? 0 : params.blue;
+// ---------------------------------------------------------------- frases: as notas, a partir da chegada
+//
+// Como um improvisador pensa: primeiro os pontos de chegada (o tempo 1 de cada acorde, o meio do compasso, as notas longas,
+// a primeira nota depois de respirar e a última antes), cada um numa nota boa para o acorde; depois o caminho até cada
+// chegada, de trás para a frente: grau a grau pela escala, com curvas, e às vezes uma aproximação cromática ou uma
+// envolvente logo antes da chegada, que sempre resolve no tempo. O cromatismo é dosado pelo acorde: acordes tensos
+// (dominantes, meio-diminutos) aceitam mais; acordes diatônicos sem tensão, pouco. O outside é tensão antes de uma chegada:
+// um motivo dentro, o mesmo motivo meio tom fora, e a resolução no tempo forte.
 
-  const palette = paletteOf(ctx.scales, { scalePcs, chordPcs, root, stylePenta: params.pentatonic });
-  const lineSet = palette.set;
-  const range = (set) => { const out = []; for (let p = LOW; p <= HIGH; p++) if (set.has(mod12(p))) out.push(p); return out; };
-  const linePool = range(lineSet);
-  const targetSet = new Set([...chordPcs].filter((pc) => scalePcs.has(pc)));
-  const targetPool = range(targetSet.size ? targetSet : chordPcs);
+/**
+ * Pesos das chegadas, por grau (semitons acima da fundamental). "strong" = o tempo 1 do acorde. Nos menores, 9ª e 11ª
+ * são as chegadas preferidas, e 3ª e 5ª entram nos tempos fortes; a 6ª (dórica) aparece de vez em quando.
+ */
+function degreeWeights(quality, strong) {
+  switch (quality) {
+    case "menor": return strong ? { 3: 3, 7: 2.6, 2: 2.4, 5: 2.4, 10: 1.4, 9: 0.9, 0: 0.5 } : { 2: 3, 5: 3, 3: 1.6, 7: 1.5, 10: 1.8, 9: 1.1, 0: 0.4 };
+    case "dominante": return strong ? { 4: 3, 10: 2.8, 2: 1.4, 9: 1.4, 1: 1.1, 3: 1.1, 8: 1.1, 6: 1, 7: 0.9, 0: 0.4 } : { 4: 2.2, 10: 2.2, 2: 1.6, 9: 1.6, 1: 1.3, 3: 1.3, 8: 1.3, 6: 1.1, 7: 1, 0: 0.5 };
+    case "meio-diminuto": return { 3: 2.2, 6: 2, 10: 2, 5: 2, 2: 1.4, 8: 1, 0: 0.5 };
+    case "maior": return strong ? { 4: 3, 11: 2.5, 7: 2, 2: 2, 9: 1.4, 6: 1.4, 0: 0.6 } : { 4: 2, 11: 2, 2: 2.2, 7: 1.6, 9: 1.6, 6: 1.4, 0: 0.6 };
+    default: return null;
+  }
+}
+
+/** Tudo o que a frase precisa saber de um acorde. */
+function chordContext(chord, { style, color, scales }) {
+  const voices = sounding(chord);
+  const chordPcs = new Set(voices.map((v) => pitchClass(v.note)));
+  const hasScale = chord.phrase_pcs.length > 0;
+  const scalePcs = hasScale ? new Set(chord.phrase_pcs.map((x) => x.pc)) : chordPcs;
+  const root = rootPc(chord);
+  const has = (i) => chordPcs.has(mod12(root + i));
+  const major3 = has(4);
+  const minor3 = has(3) && !major3;
+  const quality = major3 && has(10) ? "dominante" : minor3 && has(6) && !has(7) ? "meio-diminuto" : minor3 ? "menor" : major3 ? "maior" : "outro";
+  const tense = quality === "dominante" || quality === "meio-diminuto" || (minor3 && has(6));
   const avoid = avoidSetOf(chordPcs, scalePcs, root);
-
-  const motif = color === "outside" && length >= 2 * TICKS_PER_BEAT;
-  const planned = !motif && ctx.slots;
-  const { slots, cells, motifSlots } = planned ? { slots: ctx.slots, cells: null, motifSlots: 0 }
-    : buildRhythm(style, length, rng, motif ? null : ctx.previousCells, { cellTexts: ctx.cellTexts ?? style.cells, motif });
-  const notes = planned ? slots.map((s) => Object.assign(s, { midi: null, role: "" })) : slots.map((s) => ({ ...s, midi: null, role: "" }));
-  const sounding = notes.filter((n) => !n.rest);
-  if (!sounding.length || !linePool.length || !targetPool.length) return { notes: [], cursor: ctx.cursor, cells };
-
-  // 1) notas: alvos (notas do acorde) nos tempos, o resto andando pela escala
-  let cursor = nearest(targetPool, ctx.cursor ?? 72);
-  let direction = rng.chance(0.5) ? 1 : -1;
-  const indexIn = (pitch) => linePool.indexOf(nearest(linePool, pitch));
-  // regra do bebop: no tempo, nota do acorde. Uma nota rápida que cai no tempo encosta na nota do acorde mais perto
-  // (até um tom, de preferência no sentido em que a linha anda), sem repetir a anterior
-  const onChord = (pitch, i, dir) => {
-    if (targetSet.has(mod12(pitch))) return pitch;
-    const before = i > 0 ? sounding[i - 1].midi : null;
-    const options = targetPool.filter((p) => Math.abs(p - pitch) <= 2 && p !== before);
-    if (!options.length) return pitch;
-    return options.sort((a, b) => Math.abs(a - pitch) - Math.abs(b - pitch) || (Math.sign(b - pitch) === dir) - (Math.sign(a - pitch) === dir))[0];
+  const palette = paletteOf(scales, { scalePcs, chordPcs, root, stylePenta: style.phrase.pentatonic });
+  const range = (set, low, high) => { const out = []; for (let p = low; p <= high; p++) if (set.has(mod12(p))) out.push(p); return out; };
+  // notas boas para chegar: da paleta (ou do acorde), da escala, sem as evitadas
+  const arrivalPcs = new Set([...palette.set, ...chordPcs].filter((pc) => scalePcs.has(pc) && !avoid.has(pc)));
+  const weightOf = (strong) => {
+    const table = degreeWeights(quality, strong);
+    const map = new Map();
+    for (const pc of arrivalPcs) {
+      const w = table ? table[mod12(pc - root)] ?? (chordPcs.has(pc) ? 1 : 0) : chordPcs.has(pc) ? 2 : 1;
+      if (w > 0) map.set(pc, w);
+    }
+    if (!map.size) for (const pc of chordPcs) map.set(pc, 1);
+    return map;
   };
-  let runDirection = null;
-  sounding.forEach((note, i) => {
-    const onBeat = note.start % TICKS_PER_BEAT === 0;
-    if (i === 0 && note.start === 0 && ctx.arrival != null) {
-      // o acorde anterior terminou numa aproximação cromática: a frase começa exatamente na nota que ela preparou
-      note.midi = ctx.arrival;
-      note.role = targetSet.has(mod12(note.midi)) ? "alvo" : "";
-      note.fixed = true;
-      cursor = note.midi;
-      return;
-    }
-    const echo = note.echo && note.echo.index > 0 ? note.echo : null;
-    const from = echo?.statement[echo.index - 1]?.midi;
-    const to = echo?.statement[echo.index]?.midi;
-    if (!note.run) runDirection = null;
-    if (echo && i > 0 && from != null && to != null) {
-      // eco do motivo: o mesmo desenho (em graus da escala) a partir de outra nota
-      const index = indexIn(cursor) + (indexIn(to) - indexIn(from));
-      note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
-      if (onBeat && !targetSet.has(mod12(note.midi))) {
-        // no tempo, o eco se ajusta ao acorde novo: a nota do acorde mais perto (até um tom), como numa sequência
-        const fit = nearest(targetPool, note.midi);
-        if (Math.abs(fit - note.midi) <= 2 && fit !== (i > 0 ? sounding[i - 1].midi : null)) note.midi = fit;
-      }
-      if (onBeat && targetSet.has(mod12(note.midi))) note.role = "alvo";
-      cursor = note.midi;
-      return;
-    }
-    if (note.run) {
-      // corrida: grau a grau, sempre na mesma direção, até a nota de chegada
-      runDirection ??= cursor >= HIGH - 7 ? -1 : cursor <= LOW + 7 ? 1 : direction;
-      let index = indexIn(cursor) + runDirection;
-      if (index < 0 || index >= linePool.length) { runDirection = -runDirection; index = indexIn(cursor) + runDirection; }
-      note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
-      if (onBeat) note.midi = onChord(note.midi, i, runDirection);
-      cursor = note.midi;
-      return;
-    }
-    if (note.end && !onBeat) {
-      // chegada fora do tempo (antecipação): uma nota do acorde, sem o papel de alvo
-      note.midi = nearest(targetPool, cursor + direction * 2, i > 0 ? sounding[i - 1].midi : null);
-      cursor = note.midi;
-      return;
-    }
-    const isTarget = (note.end && onBeat) || (onBeat && (note.ticks >= SHORT || i === 0 || i === sounding.length - 1));
-    if (isTarget) {
-      const aim = cursor + direction * (rng.chance(params.leap) ? 5 : 2);
-      const previous = i > 0 ? sounding[i - 1].midi : null;
-      note.midi = nearest(targetPool, aim, previous);
-      note.role = "alvo";
-    } else {
-      const at = linePool.indexOf(nearest(linePool, cursor));
-      const step = rng.chance(params.leap) ? 2 : 1;
-      let index = at + direction * step;
-      if (index < 0 || index >= linePool.length) { direction = -direction; index = at + direction * step; }
-      note.midi = linePool[Math.max(0, Math.min(linePool.length - 1, index))];
-      if (onBeat) note.midi = onChord(note.midi, i, direction);
-    }
-    const original = note.echo?.index === 0 ? note.echo.statement[0]?.midi : null;
-    if (original != null && note.midi === original) {
-      // o eco repete o ritmo, não as notas: começa em outra nota (do acorde, se for alvo)
-      const pool = note.role === "alvo" ? targetPool : linePool;
-      note.midi = nearest(pool.filter((p) => p !== original && p !== (i > 0 ? sounding[i - 1].midi : null)), original + direction * 3) ?? note.midi;
-    }
-    cursor = note.midi;
-    if (cursor >= HIGH - 4) direction = -1;
-    else if (cursor <= LOW + 4) direction = 1;
-    else if (rng.chance(0.3)) direction = -direction;
-  });
-
-  const free = (note) => note && !note.role && !note.fixed && note.ticks <= SHORT;
-  const inRange = (p) => p >= LOW - 2 && p <= HIGH + 2;
-
-  // 2) aproximação cromática (ou envolvente) antes de um alvo
-  sounding.forEach((note, i) => {
-    if (note.role !== "alvo" || i === 0 || !free(sounding[i - 1]) || !rng.chance(chromatic)) return;
-    const below = note.midi - 1;
-    const before = sounding[i - 1];
-    if (i >= 2 && free(sounding[i - 2]) && rng.chance(enclosure) && inRange(note.midi + 1)) {
-      sounding[i - 2].midi = note.midi + 1;
-      sounding[i - 2].role = "aprox";
-      before.midi = below;
-    } else {
-      before.midi = rng.chance(0.75) ? below : note.midi + 1;
-    }
-    before.role = "aprox";
-  });
-
-  // 3) blue notes: a terça menor antes da maior e a quinta diminuta antes da justa
-  if (blue > 0) {
-    sounding.forEach((note, i) => {
-      const next = sounding[i + 1];
-      if (!next || !free(note) || !rng.chance(blue)) return;
-      for (const [blueStep, goal] of [[3, 4], [6, 7]]) {
-        if (mod12(next.midi - root) === goal && !scalePcs.has(mod12(root + blueStep)) && inRange(next.midi - 1)) {
-          note.midi = next.midi - 1;
-          note.role = "blue";
-        }
-      }
-    });
-  }
-
-  // 4) aproximação para o acorde seguinte, na última nota
-  // (só se a frase seguinte começa soando no tempo 1: senão a aproximação ficaria solta, sem resolver)
-  const last = sounding.at(-1);
-  let goal = null;
-  if (nextPcs?.size && ctx.nextStarts !== false && free(last) && sounding.length > 1 && rng.chance(chromatic)) {
-    const goals = [];
-    for (let p = last.midi - 6; p <= last.midi + 6; p++) if (nextPcs.has(mod12(p)) && p >= LOW && p <= HIGH) goals.push(p);
-    if (goals.length) {
-      goal = nearest(goals, last.midi);
-      last.midi = goal - 1;
-      last.role = "aprox";
-    }
-  }
-
-  // 5) blue notes da paleta (escala blues fora da escala do acorde) ficam marcadas
-  for (const note of sounding) if (!note.role && palette.blue.has(mod12(note.midi))) note.role = "blue";
-
-  // a regra de não repetir vale antes de copiar o motivo, para a cópia sair igual ao original
-  noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue });
-
-  // 6) outside em motivo: a mesma figura (ritmo e desenho) logo em seguida, meio tom acima ou abaixo, e resolve no alvo
-  if (color === "outside") {
-    if (motifSlots) {
-      let shift = rng.chance(0.5) ? 1 : -1;
-      // o motivo original fica dentro da escala: aproximações dele resolveriam numa nota que agora está fora
-      for (let i = 0; i < motifSlots; i++) {
-        if (notes[i].rest || notes[i].role !== "aprox") continue;
-        notes[i].midi = nearest(linePool, notes[i].midi);
-        notes[i].role = palette.blue.has(mod12(notes[i].midi)) ? "blue" : "";
-      }
-      noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue }); // o motivo já sai sem notas repetidas
-      // a emenda: a primeira nota da cópia não pode ser igual à última do original (aí a cópia vai para o outro lado)
-      const lastOriginal = notes.slice(0, motifSlots).filter((n) => !n.rest).at(-1);
-      const firstSounding = notes.slice(0, motifSlots).find((n) => !n.rest);
-      if (lastOriginal && firstSounding && firstSounding.midi + shift === lastOriginal.midi) shift = -shift;
-      for (let i = 0; i < motifSlots; i++) {
-        const source = notes[i];
-        const copy = notes[motifSlots + i];
-        if (source.rest) continue;
-        copy.midi = source.midi + shift;
-        copy.role = "outside";
-        source.locked = true;
-        copy.locked = true;
-      }
-      // a nota seguinte resolve dentro: um alvo do acorde perto da última nota de fora
-      const after = notes.slice(2 * motifSlots).find((n) => !n.rest);
-      if (after) {
-        after.midi = nearest(targetPool, notes.slice(0, 2 * motifSlots).filter((n) => !n.rest).at(-1).midi);
-        after.role = after.start % TICKS_PER_BEAT === 0 ? "alvo" : "";
-      }
-    } else {
-      // acorde curto (menos de dois tempos): um trecho desloca meio tom e resolve no alvo seguinte
-      const resolveAt = [];
-      sounding.forEach((note, i) => { if (note.role === "alvo" && i >= 2) resolveAt.push(i); });
-      if (resolveAt.length) {
-        const end = rng.pick(resolveAt);
-        let start = Math.max(0, end - 2);
-        while (start > 0 && sounding[start - 1].role === "aprox") start -= 1;
-        const shift = rng.chance(0.5) ? 1 : -1;
-        for (let i = start; i < end; i++) {
-          sounding[i].midi = Math.max(LOW - 2, Math.min(HIGH + 2, sounding[i].midi + shift));
-          sounding[i].role = "outside";
-        }
-      }
-    }
-  }
-  noRepeatedNotes(notes, { linePool, targetPool, blue: palette.blue });
-  const out = sustainRests(notes, length);
-  // notas evitadas não ficam expostas (no tempo ou longas): vão para a nota boa mais perto, sem repetir as vizinhas
-  const secondsPerTick = 60 / (ctx.tempo || 100) / TICKS_PER_BEAT;
-  const heard = out.filter((n) => !n.rest);
-  heard.forEach((note, i) => {
-    if (note.locked || note.fixed || ["aprox", "outside", "blue"].includes(note.role) || !avoid.has(mod12(note.midi))) return;
-    if (note.start % TICKS_PER_BEAT !== 0 && note.ticks * secondsPerTick < 0.3) return;
-    const neighbours = [heard[i - 1]?.midi, heard[i + 1]?.midi];
-    const options = [];
-    for (let p = note.midi - 3; p <= note.midi + 3; p++) {
-      if (!neighbours.includes(p) && (lineSet.has(mod12(p)) || targetSet.has(mod12(p))) && !avoid.has(mod12(p)) && scalePcs.has(mod12(p))) options.push(p);
-    }
-    if (!options.length) return;
-    note.midi = nearest(options, note.midi);
-    if (note.start % TICKS_PER_BEAT === 0 && targetSet.has(mod12(note.midi))) note.role = "alvo";
-  });
-  const lastHeard = heard.at(-1);
-  const lead = goal !== null && lastHeard?.role === "aprox" && Math.abs(goal - lastHeard.midi) <= 2 ? goal : null;
-  return { notes: out, cursor: lastHeard.midi, cells, lead };
+  const params = style.phrase;
+  const loud = color === "cromatico" || color === "outside";
+  const factor = tense ? 1 : 0.35; // pouco cromatismo em acorde diatônico sem tensão
+  return {
+    chord, chordPcs, scalePcs, root, quality, tense, avoid, palette, color,
+    linePool: range(palette.set, LOW - 5, HIGH + 5),
+    strongWeights: weightOf(true), weakWeights: weightOf(false),
+    chromatic: color === "dentro" ? 0 : loud ? (tense ? 0.75 : 0.4) : params.chromatic * factor,
+    enclosure: color === "dentro" ? 0 : loud ? (tense ? 0.4 : 0.2) : params.enclosure * factor,
+    blue: color === "dentro" ? 0 : params.blue,
+  };
 }
 
 /**
- * Notas de repouso (alvos e a última nota da frase) duram até a próxima nota: as pausas logo depois delas viram ligadura.
- * As notas do motivo outside não mudam (a cópia tem de sair igual ao original).
+ * O caminho de `a` até `b` em `count` notas, grau a grau na lista `pool` (alturas em ordem): direto, em arco (passa e
+ * volta) ou com um mergulho antes (vai para o outro lado e volta). Nunca repete nota seguida.
+ */
+function stepPath(pool, a, b, count, rng) {
+  const ia = pool.indexOf(nearest(pool, a));
+  const ib = pool.indexOf(nearest(pool, b));
+  const moves = count + 1;
+  let d = ib - ia;
+  if (d === 0) d = pool[ia] === b ? 0 : b > pool[ia] ? 1 : -1;
+  const sign = d > 0 ? 1 : d < 0 ? -1 : rng.chance(0.5) ? 1 : -1;
+  const list = [];
+  if (Math.abs(d) >= moves) {
+    // distância grande: passos de terça (arpejo) até caber
+    let left = Math.abs(d);
+    for (let i = 0; i < moves; i++) {
+      const step = Math.min(Math.max(1, Math.ceil(left / (moves - i))), 3);
+      list.push(sign * step);
+      left -= step;
+    }
+  } else {
+    // sobram movimentos: um passo de terça e volta acerta a paridade; o resto vira curva (arco, mergulho ou bordadura)
+    let spare = moves - Math.abs(d);
+    const direct = Array(Math.abs(d)).fill(sign);
+    if (spare % 2) {
+      if (direct.length) { direct[0] = 2 * sign; direct.push(-sign); spare -= 1; }
+      else if (spare >= 3) { direct.push(2 * sign, -sign, -sign); spare -= 3; }
+      else { direct.push(sign); spare -= 1; }
+    }
+    const extra = spare / 2;
+    const shape = rng.pick(["arco", "mergulho", "volta"]);
+    if (shape === "arco") list.push(...Array(extra).fill(sign), ...direct, ...Array(extra).fill(-sign));
+    else if (shape === "mergulho") list.push(...Array(extra).fill(-sign), ...Array(extra).fill(sign), ...direct);
+    else { for (let i = 0; i < extra; i++) list.push(sign, -sign); list.push(...direct); }
+  }
+  const path = [];
+  let index = ia;
+  for (let i = 0; i < count; i++) {
+    index = Math.max(0, Math.min(pool.length - 1, index + (list[i] || sign)));
+    path.push(pool[index]);
+  }
+  return path;
+}
+
+/**
+ * Compõe as frases de todos os acordes de uma vez (a linha atravessa os acordes). items: [{ ctx, slots }] por acorde
+ * (slots null = acorde sem frase). Escreve midi e role em cada slot.
+ */
+function composeSolo(items, { rng, tempo, barTicks }) {
+  const secondsPerTick = 60 / (tempo || 100) / TICKS_PER_BEAT;
+  const halfBar = barTicks % (2 * TICKS_PER_BEAT) === 0 && barTicks >= 4 * TICKS_PER_BEAT ? barTicks / 2 : barTicks;
+  const line = [];
+  for (const { ctx, slots } of items) {
+    if (!slots) { line.push({ rest: true, ticks: 0, gap: true }); continue; }
+    for (const slot of slots) { slot.ctx = ctx; line.push(slot); }
+  }
+  const notes = line.filter((n) => !n.rest);
+  if (!notes.length) return;
+  // pausa antes / depois (fim de frase): qualquer pausa ou acorde sem frase entre duas notas
+  for (let i = 0, prevNote = null, restBefore = 0; i < line.length; i++) {
+    const n = line[i];
+    if (n.rest) { restBefore += n.gap ? 99999 : n.ticks; continue; }
+    n.after = restBefore; // pausa logo antes (0 = sem pausa)
+    if (prevNote) prevNote.restAfter = restBefore;
+    n.prev = prevNote;
+    if (prevNote) prevNote.next = n;
+    prevNote = n;
+    restBefore = 0;
+  }
+
+  // 1) onde estão as chegadas
+  for (const n of notes) {
+    const onBeat = n.start % TICKS_PER_BEAT === 0;
+    n.strong = n.start === 0;
+    if (n.outside) n.arrival = n.outside === "dentro" && n.motifIndex === 0;
+    else n.arrival = n.start === 0 || (onBeat && n.start % halfBar === 0) || n.end || (onBeat && n.ticks >= TICKS_PER_BEAT)
+      || n.ticks * secondsPerTick >= 0.5 || !n.prev || n.after > 0 || !n.next || n.restAfter > 0;
+  }
+
+  // 2) a nota de cada chegada: boa para o acorde, perto da anterior, no sentido em que a linha vai
+  const arrivals = notes.filter((n) => n.arrival);
+  let cursor = 67 + Math.floor(rng.next() * 6);
+  let direction = rng.chance(0.5) ? 1 : -1;
+  let previous = null;
+  for (const n of arrivals) {
+    const between = previous ? notes.indexOf(n) - notes.indexOf(previous) - 1 : 0;
+    const linked = previous && n.after === 0 && !notes.slice(notes.indexOf(previous) + 1, notes.indexOf(n)).some((x) => x.after > 0);
+    const ideal = linked ? Math.min(9, 1.6 * (between + 1)) : 3;
+    const spread = 2 + between * 0.6;
+    const weights = n.strong ? n.ctx.strongWeights : n.ctx.weakWeights;
+    const options = [];
+    for (let p = LOW; p <= HIGH; p++) {
+      const w = weights.get(mod12(p));
+      if (!w) continue;
+      if (p === cursor && (between === 0 || n.after <= TICKS_PER_BEAT)) continue; // sem repetir a nota
+      const distance = Math.abs(p - cursor);
+      let score = w * Math.exp(-((distance - ideal) ** 2) / (2 * spread * spread));
+      if (Math.sign(p - cursor) === direction) score *= 1.3;
+      if (p < 62 || p > 84) score *= 0.5;
+      // na troca de acorde, condução de vozes: 3ª ou 7ª do acorde novo perto da nota anterior
+      if (n.strong && previous && distance <= 2 && [3, 4, 10, 11].includes(mod12(p - n.ctx.root))) score *= 1.6;
+      options.push({ p, score });
+    }
+    options.sort((x, y) => y.score - x.score);
+    const top = options.slice(0, 3);
+    const total = top.reduce((sum, o) => sum + o.score, 0);
+    let roll = rng.next() * total;
+    const chosen = top.find((o) => (roll -= o.score) <= 0) ?? top[0];
+    n.midi = chosen ? chosen.p : cursor;
+    n.role = n.ctx.chordPcs.has(mod12(n.midi)) && n.start % TICKS_PER_BEAT === 0 ? "alvo" : "";
+    if (n.midi > 80) direction = -1;
+    else if (n.midi < 64) direction = 1;
+    else if (rng.chance(0.3)) direction = -direction;
+    cursor = n.midi;
+    previous = n;
+  }
+
+  // 3) outside em motivo: o motivo dentro (grau a grau), a cópia meio tom fora, e a chegada a meio tom da cópia
+  for (let i = 0; i < notes.length; i++) {
+    const head = notes[i];
+    if (head.outside !== "dentro" || head.motifIndex !== 0) continue;
+    const inside = [];
+    for (let k = i; k < notes.length && notes[k].outside === "dentro"; k++) inside.push(notes[k]);
+    const copy = notes.slice(i + inside.length, i + 2 * inside.length);
+    const resolve = notes[i + 2 * inside.length];
+    const pool = head.ctx.linePool;
+    if (head.prev && head.prev.midi === head.midi && head.after <= TICKS_PER_BEAT) {
+      // a resolução do outside anterior caiu na mesma nota: o motivo começa na nota boa vizinha
+      const weights = head.strong ? head.ctx.strongWeights : head.ctx.weakWeights;
+      const options = pool.filter((p) => weights.has(mod12(p)) && p !== head.midi);
+      if (options.length) head.midi = nearest(options, head.midi);
+      head.role = head.ctx.chordPcs.has(mod12(head.midi)) && head.start % TICKS_PER_BEAT === 0 ? "alvo" : "";
+    }
+    let at = pool.indexOf(nearest(pool, head.midi));
+    let way = head.midi > 76 ? -1 : head.midi < 66 ? 1 : rng.chance(0.6) ? -1 : 1;
+    for (const n of inside.slice(1)) {
+      if (pool[at] > 82) way = -1;
+      else if (pool[at] < 62) way = 1;
+      else if (rng.chance(0.3)) way = -way;
+      at = Math.max(1, Math.min(pool.length - 2, at + way * (rng.chance(0.25) ? 2 : 1)));
+      if (pool[at] === n.prev.midi) at += way;
+      n.midi = pool[at];
+      n.role = head.ctx.palette.blue.has(mod12(n.midi)) ? "blue" : "";
+    }
+    const lastIn = inside.at(-1).midi;
+    const candidates = [];
+    for (let p = LOW - 6; p <= HIGH + 6; p++) if (resolve && (resolve.ctx.strongWeights.has(mod12(p)) || resolve.ctx.weakWeights.has(mod12(p)))) candidates.push(p);
+    let best = null;
+    for (const shift of [1, -1]) {
+      if (inside[0].midi + shift === lastIn) continue; // a emenda não repete nota
+      const lastOut = lastIn + shift;
+      const goal = candidates.filter((p) => p !== lastOut).sort((x, y) => Math.abs(x - lastOut) - Math.abs(y - lastOut))[0];
+      // melhor: resolver a meio tom, e a cópia de fato fora da escala
+      const score = (goal == null ? 9 : Math.abs(goal - lastOut)) + (head.ctx.scalePcs.has(mod12(lastOut)) ? 1.5 : 0);
+      if (!best || score < best.score) best = { shift, goal, score };
+    }
+    const shift = best?.shift ?? 1;
+    copy.forEach((n, k) => { n.midi = inside[k].midi + shift; n.role = "outside"; n.locked = true; });
+    inside.forEach((n) => { n.locked = true; });
+    if (resolve && best?.goal != null) {
+      resolve.midi = best.goal;
+      resolve.role = resolve.ctx.chordPcs.has(mod12(resolve.midi)) && resolve.start % TICKS_PER_BEAT === 0 ? "alvo" : "";
+      resolve.fixed = true;
+    }
+  }
+
+  // 4) o caminho entre chegadas, e o cromatismo só logo antes de uma chegada (resolve sempre no tempo)
+  for (let i = 0; i < arrivals.length - 1; i++) {
+    const a = arrivals[i];
+    const b = arrivals[i + 1];
+    const group = notes.slice(notes.indexOf(a) + 1, notes.indexOf(b));
+    if (!group.length || group.some((n) => n.outside)) continue;
+    const ctx = group[0].ctx;
+    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng);
+    group.forEach((n, k) => {
+      n.midi = path[k];
+      n.role = ctx.palette.blue.has(mod12(n.midi)) ? "blue" : "";
+    });
+    // nada de nota repetida nas pontas do caminho
+    if (group[0].midi === a.midi) group[0].midi = nearest(ctx.linePool.filter((p) => p !== a.midi && p !== group[1]?.midi), a.midi);
+    const last = group.at(-1);
+    if (last.midi === b.midi) last.midi = nearest(ctx.linePool.filter((p) => p !== b.midi && p !== group.at(-2)?.midi), b.midi);
+    const onBeatB = b.start % TICKS_PER_BEAT === 0;
+    const crossing = last.ctx !== b.ctx;
+    // a aproximação que atravessa para o acorde seguinte só vai para nota do acorde (resolve "no acorde")
+    const canApproach = onBeatB && last.ticks <= SHORT && !last.locked && b.after === 0 && (!crossing || b.ctx.chordPcs.has(mod12(b.midi)));
+    if (canApproach && rng.chance(ctx.chromatic)) {
+      const before = group.at(-2)?.midi ?? a.midi;
+      const enclose = group.length >= 2 && rng.chance(ctx.enclosure);
+      const above = ctx.linePool.find((p) => p > b.midi);
+      if (enclose && above != null && above !== group.at(-3)?.midi && above !== b.midi - 1) {
+        group.at(-2).midi = above;
+        group.at(-2).role = ctx.palette.blue.has(mod12(above)) ? "blue" : "";
+        last.midi = b.midi - 1;
+        last.role = "aprox";
+      } else {
+        const side = rng.chance(0.75) ? -1 : 1;
+        const pitch = b.midi + side !== before ? b.midi + side : b.midi - side;
+        if (pitch !== before) {
+          last.midi = pitch;
+          // b3 antes da 3ª maior, no estilo que tem blue notes: é blue note
+          const blueThird = ctx.blue > 0 && mod12(b.midi - b.ctx.root) === 4 && pitch === b.midi - 1 && b.ctx.chordPcs.has(mod12(b.ctx.root + 4));
+          last.role = blueThird && rng.chance(ctx.blue) ? "blue" : "aprox";
+        }
+      }
+    }
+  }
+
+  // 5) acabamento: nota evitada no tempo (ou que dura o bastante para soar) vira a vizinha boa; nunca a mesma nota duas
+  //    vezes seguidas na frase
+  const good = (n, p) => n.ctx.linePool.includes(p) && !n.ctx.avoid.has(mod12(p));
+  for (const n of notes) {
+    if (n.locked || n.arrival || n.role) continue;
+    if ((n.start % TICKS_PER_BEAT === 0 || n.ticks * secondsPerTick >= 0.3) && n.ctx.avoid.has(mod12(n.midi))) {
+      const options = n.ctx.linePool.filter((p) => good(n, p) && p !== n.prev?.midi && p !== n.next?.midi);
+      if (options.length) n.midi = nearest(options, n.midi);
+    }
+  }
+  for (const n of notes) {
+    const before = n.prev;
+    if (!before || before.midi !== n.midi || n.after > TICKS_PER_BEAT) continue;
+    const movable = [n, before].find((x) => !x.locked && !x.fixed && x.role !== "aprox" && !x.arrival) ?? (!n.locked && !n.fixed && n.role !== "aprox" ? n : null);
+    if (!movable) continue;
+    const pool = movable.arrival ? [...(movable.strong ? movable.ctx.strongWeights : movable.ctx.weakWeights).keys()].flatMap((pc) => {
+      const out = []; for (let p = LOW; p <= HIGH; p++) if (mod12(p) === pc) out.push(p); return out;
+    }) : movable.ctx.linePool.filter((p) => good(movable, p));
+    const options = pool.filter((p) => p !== movable.prev?.midi && p !== movable.next?.midi && p !== movable.midi);
+    if (!options.length) continue;
+    movable.midi = nearest(options, movable.midi);
+    if (movable.role === "alvo" && !movable.ctx.chordPcs.has(mod12(movable.midi))) movable.role = "";
+    if (movable.role === "blue" && !movable.ctx.palette.blue.has(mod12(movable.midi))) movable.role = "";
+  }
+  // papéis no fim: nota fora da escala sem papel é blue note (da paleta blues) ou nota de passagem
+  for (const n of notes) {
+    if (n.role || n.ctx.scalePcs.has(mod12(n.midi))) continue;
+    n.role = n.ctx.palette.blue.has(mod12(n.midi)) ? "blue" : "passagem";
+  }
+}
+
+/**
+ * Notas de repouso (as chegadas: notas boas do acorde) duram até a próxima nota: as pausas logo depois delas viram
+ * ligadura. Aproximações, notas de passagem e o motivo outside não seguram.
  */
 function sustainRests(notes, length) {
   const out = [];
-  const sounding = notes.filter((n) => !n.rest);
-  const last = sounding.at(-1);
   for (const note of notes) {
     const holder = out.at(-1);
-    if (note.rest && holder && !holder.rest && !holder.locked && (holder.role === "alvo" || holder === last)) {
+    if (note.rest && holder && !holder.rest && holder.arrival && !holder.locked && !["aprox", "outside", "blue"].includes(holder.role)) {
       holder.ticks += note.ticks;
       holder.dur = ticksText(holder.ticks) || `${holder.dur}+${note.dur}`; // uma figura só quando dá; senão, ligadura
       continue;
     }
     out.push(note);
   }
-  // se o ritmo não encheu o acorde, a última nota segura até o fim dele
   const end = out.reduce((sum, n) => sum + n.ticks, 0);
   const tail = out.at(-1);
-  if (end < length && tail && !tail.rest && !tail.locked) {
+  if (end < length && tail && !tail.rest) {
     tail.dur = ticksText(tail.ticks + length - end) || `${tail.dur}+${ticksText(length - end)}`;
     tail.ticks += length - end;
-  }
+  } else if (end < length) out.push({ rest: true, dur: ticksText(length - end), ticks: length - end });
   return out;
 }
 
 /**
- * As vozes de baixo de cada nota da frase, conforme a textura do trecho: oitava, sexta da escala ou tríade (a melodia em
- * cima e duas notas do acorde logo abaixo; numa nota da escala que não é do acorde, a tríade da escala). Notas fora da
- * escala (aproximações, outside, blue notes) andam paralelas, com os mesmos intervalos da nota anterior. Só ganha vozes a
- * nota que dá para tocar assim: tríades a partir de TRIAD_MIN_SECONDS, oitavas e sextas a partir de DUET_MIN_SECONDS.
+ * Vozes abaixo da melodia nas notas longas (as que dá para tocar assim), conforme a textura do trecho: oitava, sexta da
+ * escala ou tríade quartal (duas quartas justas para baixo, com notas da escala); sem quartas na escala, a tríade sai em
+ * terças com notas do acorde. Nada cai em nota evitada. Notas curtas, aproximações e outside ficam numa voz só.
  * Devolve um mapa nota -> [alturas abaixo dela].
  */
 function extraVoices(notes, { scalePcs, chordPcs, tempo, avoid = new Set() }) {
   const out = new Map();
   const seconds = (note) => (note.ticks * 60) / (tempo || 100) / TICKS_PER_BEAT;
+  const ok = (p) => scalePcs.has(mod12(p)) && !avoid.has(mod12(p));
   const stepsDown = (pitch, steps) => {
-    for (let s = 0; s < steps; s++) { pitch -= 1; while (!scalePcs.has(mod12(pitch))) pitch -= 1; }
+    for (let k = 0; k < steps; k++) { pitch -= 1; while (!scalePcs.has(mod12(pitch))) pitch -= 1; }
     return pitch;
   };
-  let previous = null; // intervalos da última nota com vozes
   for (const note of notes) {
-    const allowed = note.rest || !note.texture ? 0 : seconds(note) >= TRIAD_MIN_SECONDS - 1e-9 ? 2 : seconds(note) >= DUET_MIN_SECONDS - 1e-9 ? 1 : 0;
-    if (!allowed) { previous = null; continue; }
-    const texture = note.texture === "triad" && allowed < 2 ? "sixth" : note.texture;
-    const pc = mod12(note.midi);
+    if (note.rest || !note.texture || ["aprox", "outside", "blue"].includes(note.role) || note.locked) continue;
+    if (!scalePcs.has(mod12(note.midi))) continue;
+    const time = seconds(note);
+    if (time < DUET_MIN_SECONDS - 1e-9) continue;
+    const texture = note.texture === "triad" && time < TRIAD_MIN_SECONDS - 1e-9 ? "sixth" : note.texture;
+    const sixth = stepsDown(note.midi, 5);
+    const duet = ok(sixth) ? [sixth] : [note.midi - 12];
     let below = null;
     if (texture === "octave") below = [note.midi - 12];
-    else if (texture === "sixth" && scalePcs.has(pc)) {
-      // a sexta não pode cair numa nota evitada (aí a voz de baixo vai em oitava)
-      const sixth = stepsDown(note.midi, 5);
-      below = [avoid.has(mod12(sixth)) ? note.midi - 12 : sixth];
-    }
-    else if (texture === "triad" && (chordPcs.has(pc) || scalePcs.has(pc))) {
-      // em terças e quartas (nada de cluster): cada voz de 3 a 5 semitons abaixo da de cima; notas do acorde, ou da escala
-      const stack = (pcs) => {
-        const third = (top) => { for (let p = top - 3; p >= top - 5; p--) if (pcs.has(mod12(p)) && mod12(p) !== pc) return p; return null; };
+    else if (texture === "sixth") below = duet;
+    else if (texture === "triad") {
+      const fourths = [note.midi - 5, note.midi - 10];
+      const thirds = (() => {
+        const third = (top) => { for (let p = top - 3; p >= top - 5; p--) if (chordPcs.has(mod12(p)) && ok(p)) return p; return null; };
         const first = third(note.midi);
         const second = first !== null ? third(first) : null;
         return second !== null ? [first, second] : null;
-      };
-      const safeScale = new Set([...scalePcs].filter((x) => !avoid.has(x) || x === pc));
-      below = stack(chordPcs.has(pc) ? chordPcs : safeScale) ?? (scalePcs.has(pc) ? [stepsDown(note.midi, 5)] : null);
-      if (below?.some((b) => avoid.has(mod12(b)))) below = [note.midi - 12];
-    } else if (previous) below = previous.map((gap) => note.midi - gap);
-    if (below && below.length > allowed) {
-      const sixth = stepsDown(note.midi, 5);
-      below = allowed === 1 && scalePcs.has(pc) ? [avoid.has(mod12(sixth)) ? note.midi - 12 : sixth] : below.slice(0, allowed);
+      })();
+      below = fourths.every(ok) ? fourths : thirds ?? duet;
     }
-    if (!below) { previous = null; continue; }
-    out.set(note, below);
-    previous = below.map((b) => note.midi - b);
+    if (below) out.set(note, below);
   }
   return out;
 }
@@ -882,56 +840,48 @@ export function generateGroove(data, {
   }
 
   if (phrases) {
-    let cursor = null;
-    let previousCells = null;
     let withoutScale = 0;
-    const cellTexts = phraseStyles?.length ? phraseStyles.flatMap((x) => x.cells) : style.cells;
+    const chosenStyles = phraseStyles?.length ? phraseStyles : [style];
+    const cellTexts = chosenStyles.flatMap((x) => x.cells);
+    const fastTexts = chosenStyles.flatMap((x) => x.fast ?? []);
+    const barTicks = Math.round(beatsPerBar(project) * TICKS_PER_BEAT);
     const planner = makePlanner({
-      style, cellTexts, rng: makeRng(`${style.id}|${variation}|plano|${intensity}`), level: intensity, tempo: project.tempo,
-      totalTicks: Math.round(totalBeats(project) * TICKS_PER_BEAT), barTicks: Math.round(beatsPerBar(project) * TICKS_PER_BEAT),
+      style, cellTexts, fastTexts, rng: makeRng(`${style.id}|${variation}|plano|${intensity}`), level: intensity, tempo: project.tempo,
+      totalTicks: Math.round(totalBeats(project) * TICKS_PER_BEAT), barTicks,
     });
-    // 1º o ritmo de todos os acordes (para cada frase saber se a seguinte começa soando), depois as notas
     const colorOf = (chord) => {
       const own = chord.phrase_color.toLowerCase();
       return ["dentro", "cromatico", "outside"].includes(own) ? own : ["dentro", "cromatico", "outside"].includes(globalColor) ? globalColor : "";
     };
-    const plans = project.chords.map((chord) => {
+    // 1º o ritmo de todos os acordes, depois as notas de todos de uma vez (a linha atravessa os acordes)
+    const rng = makeRng(`${style.id}|${variation}|outside`);
+    const items = project.chords.map((chord, i) => {
       const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
-      if (!sounding(chord).length) { planner.skip(length); return { silent: true }; }
-      if (colorOf(chord) === "outside" && length >= 2 * TICKS_PER_BEAT) { planner.skip(length); return { slots: null }; }
-      return { slots: planner.take(length) };
-    });
-    // a frase do acorde começa soando no tempo 1? (o motivo outside sempre começa com nota)
-    const startsSounding = (plan) => plan && !plan.silent && (!plan.slots || !plan.slots[0]?.rest);
-    let arrival = null;
-    project.chords.forEach((chord, i) => {
-      const voices = sounding(chord);
-      const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
-      if (!voices.length) { out[i].phrase = ""; previousCells = null; arrival = null; return; }
-      const chordPcs = new Set(voices.map((v) => pitchClass(v.note)));
-      const hasScale = chord.phrase_pcs.length > 0;
-      if (!hasScale) withoutScale += 1;
-      const scalePcs = hasScale ? new Set(chord.phrase_pcs.map((s) => s.pc)) : chordPcs;
-      const following = project.chords[i + 1];
-      const nextPcs = following ? new Set(sounding(following).map((v) => pitchClass(v.note))) : null;
+      if (!sounding(chord).length) { planner.skip(length); return { ctx: null, slots: null, length }; }
+      if (!chord.phrase_pcs.length) withoutScale += 1;
       const color = colorOf(chord);
-      const rng = makeRng(`${style.id}|${variation}|${i}|${chord.symbol}|${voices.map((v) => v.note.midi).join(",")}`);
-      const root = rootPc(chord);
-      const result = composePhrase({
-        style, color, chordPcs, scalePcs, root, length, nextPcs, rng, cursor, previousCells, cellTexts, scales,
-        slots: plans[i].slots, tempo: project.tempo, arrival, nextStarts: startsSounding(plans[i + 1]),
-      });
-      cursor = result.cursor;
-      previousCells = result.cells;
-      arrival = result.lead;
+      const ctx = chordContext(chord, { style, color: color === "outside" ? "outside" : color, scales });
+      const nextHasPhrase = Boolean(project.chords[i + 1] && sounding(project.chords[i + 1]).length);
+      const toNext = nextHasPhrase && length >= 4 * TICKS_PER_BEAT && rng.chance(0.5);
+      const slots = (color === "outside" && length >= 3 * TICKS_PER_BEAT ? planner.takeOutside(length, { toNext }) : null) ?? planner.take(length);
+      return { ctx, slots, length };
+    });
+    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks });
+    project.chords.forEach((chord, i) => {
+      const { ctx, slots, length } = items[i];
+      if (!ctx) { out[i].phrase = ""; return; }
+      const notes = sustainRests(slots, length);
       const spell = speller(chord, project.middle_c);
-      const below = extraVoices(result.notes, { scalePcs, chordPcs, tempo: project.tempo, avoid: avoidSetOf(chordPcs, scalePcs, root) });
-      out[i].phrase = result.notes.map((n) => {
+      const below = extraVoices(notes, { scalePcs: ctx.scalePcs, chordPcs: ctx.chordPcs, tempo: project.tempo, avoid: ctx.avoid });
+      out[i].phrase = notes.map((n) => {
         if (n.rest) return `r/${n.dur}`;
         const name = [n.midi, ...(below.get(n) ?? [])].map(spell).join("&");
         return `${name}/${n.dur}${n.role ? `*${n.role}` : ""}`;
       }).join(" ");
-      if (!hasScale) out[i].phrase_scale = [...new Map(voices.map((v) => [pitchClass(v.note), pitchClassName(v.note)])).values()].join(" ");
+      if (!chord.phrase_pcs.length) {
+        const voices = sounding(chord);
+        out[i].phrase_scale = [...new Map(voices.map((v) => [pitchClass(v.note), pitchClassName(v.note)])).values()].join(" ");
+      }
     });
     if (withoutScale) {
       warnings.push(`${withoutScale} acorde(s) sem escala declarada: as frases deles usam só as notas do acorde. Peça à sua IA as notas da escala (ou escreva em “Mais”).`);

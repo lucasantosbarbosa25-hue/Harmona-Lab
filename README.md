@@ -145,25 +145,32 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   próximo por semitom. No MIDI, faixa própria (canal 3). Com banco de sons, toca com o som dos acordes.
 - **Diagramas:** no menu, "Exportar diagramas dos acordes" gera uma imagem com o desenho do teclado de cada acorde.
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
-- **Frases melódicas** (interruptor): uma frase por acorde, com o ritmo do estilo, alvos nas notas do acorde, notas da escala e,
-  conforme o estilo, aproximações cromáticas, envolventes e blue notes. **Outra variação** sorteia frases novas.
-- **Notas de repouso** (alvos e a última nota da frase) duram até a próxima nota, sem buracos.
+- **Frases melódicas** (interruptor): o app escreve o solo como um improvisador pensa, **a partir da chegada**. Primeiro
+  escolhe os pontos de chegada (o tempo 1 de cada acorde, o meio do compasso, as notas longas, o começo e o fim de cada
+  frase) e uma nota boa para cada um, conforme o tipo de acorde: nos menores, 9ª e 11ª (com 3ª e 5ª no tempo 1, e a 6ª
+  dórica de vez em quando); nos maiores, 3ª, 7ª, 9ª; nos dominantes, 3ª e 7ª, e as tensões que a escala tiver. Notas
+  evitadas (a 4ª sobre terça maior, a b9 fora dos dominantes) nunca ficam no tempo nem sustentadas. Depois liga as
+  chegadas grau a grau pela escala, com curvas. **Outra variação** sorteia frases novas.
+- **Cromatismo dosado:** aproximações cromáticas e envolventes só logo antes de uma chegada, e sempre resolvem no tempo.
+  Acordes tensos (dominantes, meio-diminutos) aceitam mais; acordes diatônicos sem tensão, pouco.
+- **Ritmo do estilo:** as frases usam só as células do próprio estilo e as figuras rápidas dele (tercinas no swing, fusas
+  no gospel, semicolcheias e quiálteras no fusion…), sem acelerar nem desacelerar figura nenhuma.
 - **Motivos:** o solo é planejado em trechos de 1 a 4 compassos que atravessam os acordes. Cada trecho apresenta um motivo
-  rítmico, repete o mesmo ritmo com outras notas (seguindo o desenho do original), varia (o motivo duas vezes mais rápido,
-  ou só o começo dele), responde e chega numa nota longa.
-- **Intensidade do solo** (Contido, Equilibrado ou Virtuoso): em todos os níveis há partes calmas e rápidas, num arco que
-  cresce até o clímax (perto de 70% do solo) e resolve; o nível muda a proporção. A velocidade é medida em notas por
-  segundo, então o andamento entra na conta: a 80 BPM vêm mais semicolcheias e rajadas curtas de fusas (sempre chegando
-  num alvo no tempo); a 160 BPM, menos.
-- **Vozes na frase:** nos trechos calmos, a melodia pode ganhar oitavas (frequente na salsa), sextas da escala ou tríades
-  (notas do acorde em terças e quartas logo abaixo), com o peso de cada estilo. Trechos rápidos ficam numa voz só, e só
-  ganha vozes a nota que dá para tocar assim (oitavas e sextas a partir de 0,25 s; tríades a partir de 0,36 s).
+  rítmico, repete o mesmo ritmo com outras notas, às vezes toca só o começo dele, responde e chega numa nota longa.
+- **Intensidade do solo** (Contido, Equilibrado ou Virtuoso): em todos os níveis há partes calmas e mais rápidas, num arco
+  que cresce até o clímax (perto de 70% do solo) e resolve; o nível escolhe células mais vazias ou mais cheias do estilo,
+  pelo número de notas por segundo (o andamento entra na conta).
+- **Notas de repouso** (as chegadas) duram até a próxima nota, sem buracos.
+- **Vozes nas notas longas:** oitavas (frequentes na salsa), sextas da escala ou tríades quartais (duas quartas justas
+  abaixo, com notas da escala; sem elas, tríade do acorde em terças), com o peso de cada estilo. Só nas notas longas
+  (oitavas e sextas a partir de 0,35 s; tríades a partir de 0,45 s); passagens e cromatismos ficam numa voz só.
 - **Sem nota repetida:** nas frases que o app escreve, nunca a mesma nota duas vezes seguidas (uma pausa de até um tempo
   no meio não conta como fim de frase). De um acorde para o outro, pode. Baixo e levadas não seguem essa regra.
 - **Tags das frases:** estilos combinados (as células rítmicas de todos os marcados), escalas de origem (escala do acorde,
   pentatônica, blues, arpejo; mais de uma ao mesmo tempo) e a **cor geral** (estilo, dentro, cromático ou outside). Cada
-  acorde tem o seu submenu de cor, que vale mais que a geral. No outside, a frase toca uma figura e logo em seguida a mesma
-  figura meio tom acima ou abaixo, e resolve no alvo.
+  acorde tem o seu submenu de cor, que vale mais que a geral. O **outside** é tensão antes de uma chegada: um motivo de um
+  tempo dentro, o mesmo motivo meio tom acima ou abaixo, e a resolução por semitom (ou perto) num tempo forte: no tempo 3
+  do mesmo acorde ou no tempo 1 do acorde seguinte.
 - **Cor pedida no prompt:** se o pedido falar em frases cromáticas ou *outside* (até "só nos dominantes"), a IA marca esses
   acordes (`phrase_color`) e o app obedece: `dentro` fica na escala, `cromatico` reforça as aproximações, `outside` desloca um
   trecho meio tom e resolve no alvo.
