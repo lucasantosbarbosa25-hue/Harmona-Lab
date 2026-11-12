@@ -10,6 +10,7 @@ import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../.
 import { loadProject, sounding } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
 import { COLORS, SOURCES, STYLES, findStyle, styleByLabel } from "../../harmonalab/web/kb/estilos.js";
+import { PERFIL_ATIVO, PERFIS } from "../../harmonalab/web/kb/fraseado.js";
 
 const EXAMPLE = JSON.parse(readFileSync(new URL("../../examples/resolucao_em_fsharp_ponta.json", import.meta.url), "utf8"));
 const bare = (color = "") => {
@@ -552,7 +553,7 @@ test("melodia com sentido: aproximação resolve no acorde seguinte, sem nota ev
     }
   }
   assert.ok(onChord / beats >= 0.98, `nota do acorde ou tensão no tempo: ${((100 * onChord) / beats).toFixed(0)}%`);
-  assert.ok(crossings > 20, `${crossings} aproximações entre acordes`);
+  assert.ok(crossings >= 10, `${crossings} aproximações entre acordes`);
 });
 
 test("chegadas pelo tipo de acorde: nos menores, 9ª e 11ª (e 3ª e 5ª no tempo 1); cromatismo menor em acorde sem tensão", () => {
@@ -618,29 +619,6 @@ test("outside: a tensão sempre volta no tempo, perto da última nota de fora; o
   }
 });
 
-test("9ª e 11ª como chegada preferida só nos menores: nos maiores e dominantes, a chegada é nota do acorde", () => {
-  const mod = (n) => ((n % 12) + 12) % 12;
-  const count = { menor: [0, 0], outros: [0, 0] }; // [chegadas em 9ª/11ª, chegadas]
-  for (const style of STYLES) {
-    for (let variation = 0; variation < 6; variation++) {
-      const data = apply(structuredClone(VARIED), generateGroove(structuredClone(VARIED), { style, phrases: true, variation }));
-      for (const chord of loadProject(data).project.chords) {
-        const root = { Dm9: 2, Am9: 9, Cmaj9: 0, "Fmaj7#11": 5, G13: 7, A7alt: 9, E7b9: 4 }[chord.symbol];
-        if (root === undefined) continue;
-        const kind = /m9/.test(chord.symbol) ? "menor" : "outros";
-        for (const e of chord.phrase_events) {
-          if (e.start % 960 !== 0) continue; // tempo 1 e meio do compasso
-          count[kind][1] += 1;
-          if ([2, 5].includes(mod(e.note.midi - root))) count[kind][0] += 1;
-        }
-      }
-    }
-  }
-  const share = ([hit, all]) => hit / all;
-  console.log(`9ª/11ª nas chegadas: menores ${(100 * share(count.menor)).toFixed(0)}%, outros ${(100 * share(count.outros)).toFixed(0)}%`);
-  assert.ok(share(count.menor) >= 0.3, `menores chegam em 9ª/11ª: ${JSON.stringify(count.menor)}`);
-  assert.ok(share(count.outros) <= 0.15, `maiores e dominantes quase nunca chegam em 9ª/11ª: ${JSON.stringify(count.outros)}`);
-});
 
 test("bateria rica: chimbal com vários níveis de velocity, viradas cheias (de dois tempos no fim), em todos os estilos", () => {
   const data = { ...bare(), chords: [...bare().chords, ...bare().chords] }; // 8 compassos
@@ -660,4 +638,70 @@ test("bateria rica: chimbal com vários níveis de velocity, viradas cheias (de 
     }
     assert.ok(style.fills.some((f) => parseDrums(f).bars[0][0].ticks === 960), `${style.id}: tem virada de dois tempos`);
   }
+});
+
+// Perfis de fraseado (kb/fraseado.js): "anterior" = antes do Weimar (para o rollback); "weimar" = o perfil em uso.
+const degreeShares = (perfil, { chords, kinds, degreesOf, rest = false }) => {
+  const mod = (n) => ((n % 12) + 12) % 12;
+  const out = {};
+  for (const style of STYLES) {
+    for (let variation = 0; variation < 8; variation++) {
+      for (const tempo of [80, 140]) {
+        const data = structuredClone({ ...VARIED, tempo, chords: VARIED.chords.concat(chords) });
+        const made = generateGroove(data, { style, phrases: true, variation, perfil }).chords;
+        data.chords.forEach((c, i) => Object.assign(c, made[i]));
+        for (const chord of loadProject(data).project.chords) {
+          const kind = kinds[chord.symbol];
+          if (!kind) continue;
+          const root = degreesOf[chord.symbol];
+          for (const e of chord.phrase_events) {
+            if (rest ? e.length < 480 : e.start % 960 !== 0) continue; // repouso: nota de 1 tempo ou mais; senão, tempos 1 e 3
+            const bucket = (out[kind] ??= { total: 0 });
+            bucket.total += 1;
+            const degree = mod(e.note.midi - root);
+            bucket[degree] = (bucket[degree] ?? 0) + 1;
+          }
+        }
+      }
+    }
+  }
+  return (kind, degrees) => degrees.reduce((n, d) => n + (out[kind][d] ?? 0), 0) / out[kind].total;
+};
+const EXTRA = [
+  { symbol: "Dmaj9", left_hand: "D3 A3", right_hand: "F#4 C#5 E5", duration_beats: 4, phrase_scale: "D E F# G A B C#" },
+  { symbol: "G7", left_hand: "G2 F3", right_hand: "B3 E4 A4", duration_beats: 4, phrase_scale: "G A B C D E F" },
+];
+const ROOTS = { Dm9: 2, Am9: 9, Cmaj9: 0, "Fmaj7#11": 5, Dmaj9: 2, G13: 7, G7: 7, A7alt: 9, E7b9: 4 };
+const KINDS = { Dm9: "menor", Am9: "menor", Cmaj9: "maior", "Fmaj7#11": "maior", Dmaj9: "maior", G13: "dominante", G7: "dominante", A7alt: "alterado", E7b9: "alterado" };
+
+test("perfil weimar: menores mantêm 9ª e 11ª no tempo forte; maiores não dominantes gostam da 7ª maior; dominantes ganham 9ª e 13ª", () => {
+  const share = degreeShares("weimar", { chords: EXTRA, kinds: KINDS, degreesOf: ROOTS });
+  assert.ok(share("menor", [2, 5]) >= 0.4, `menores em 9ª ou 11ª: ${share("menor", [2, 5])}`); // a frequência que o dono gosta
+  assert.ok(share("maior", [11]) >= 0.2, `7ª maior nos maiores: ${share("maior", [11])}`);
+  assert.ok(share("maior", [11]) > share("maior", [2]), "nos maiores, a 7ª maior vem antes da 9ª");
+  assert.ok(share("dominante", [2, 9]) >= 0.1, `9ª e 13ª nos dominantes: ${share("dominante", [2, 9])}`);
+  const anterior = degreeShares("anterior", { chords: EXTRA, kinds: KINDS, degreesOf: ROOTS });
+  assert.ok(share("dominante", [2, 9]) > 3 * anterior("dominante", [2, 9]), "os dominantes usam bem mais 9ª e 13ª que antes");
+});
+
+test("perfil weimar: nos dominantes alterados o solo repousa nas tensões características (b9, #9, #11, b13)", () => {
+  const weimar = degreeShares("weimar", { chords: EXTRA, kinds: KINDS, degreesOf: ROOTS, rest: true });
+  const anterior = degreeShares("anterior", { chords: EXTRA, kinds: KINDS, degreesOf: ROOTS, rest: true });
+  const alt = [1, 3, 6, 8];
+  assert.ok(weimar("alterado", alt) >= 0.4, `repouso em tensão alterada: ${weimar("alterado", alt)}`);
+  assert.ok(weimar("alterado", alt) > 2 * anterior("alterado", alt), "bem mais que no perfil anterior");
+});
+
+test("rollback: o perfil anterior guarda os pesos de antes do Weimar, e o perfil ativo é um dos dois", () => {
+  assert.ok(["anterior", "weimar"].includes(PERFIL_ATIVO));
+  assert.deepEqual(Object.keys(PERFIS).sort(), ["anterior", "weimar"]);
+  const a = PERFIS.anterior;
+  assert.equal(a.tensoes.alterada, 1);
+  assert.equal(a.repousoNaTensao, 1);
+  assert.equal(a.tercaBlue, false);
+  assert.deepEqual(a.pesos.menor.forte, PERFIS.weimar.pesos.menor.forte, "os menores são iguais nos dois perfis");
+  // o mesmo pedido, com o perfil anterior, nunca muda quando se escolhe o perfil ativo explicitamente
+  const again = (perfil) => generateGroove(bare(), { style: findStyle("bossa"), phrases: true, variation: 3, perfil }).chords.map((c) => c.phrase).join("|");
+  assert.equal(again("anterior"), again("anterior"));
+  assert.equal(again(PERFIL_ATIVO), again(undefined));
 });

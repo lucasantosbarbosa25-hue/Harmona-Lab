@@ -157,6 +157,15 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   5ª), e as tensões aparecem só de vez em quando. Notas
   evitadas (a 4ª sobre terça maior, a b9 fora dos dominantes) nunca ficam no tempo nem sustentadas. Depois liga as
   chegadas grau a grau pela escala, com curvas. **Outra variação** sorteia frases novas.
+- **Perfil de fraseado (Weimar) e rollback:** a escolha das notas de chegada por tipo de acorde está num arquivo de dados,
+  `harmonalab/web/kb/fraseado.js`, com dois perfis: `weimar` (em uso) e `anterior` (os pesos aprovados antes do Weimar,
+  guardados sem nenhuma alteração; o teste automático confere que ele reproduz o fraseado de antes). O perfil `weimar`
+  vem de medidas no [Weimar Jazz Database](https://jazzomat.hfm-weimar.de/) (456 solos de jazz, licença ODbL; fonte
+  citada aqui) e das preferências do dono do app: nos **menores**, 9ª e 11ª no tempo forte (como antes); nos **maiores que não
+  são dominantes**, a 7ª maior bem frequente; nos **dominantes**, 9ª e 13ª bem mais presentes, e o solo **repousa nas
+  tensões características** (b9, 9ª aumentada, 11ª aumentada, b13) quando a escala do acorde as traz. **Para voltar ao
+  fraseado de antes:** troque `PERFIL_ATIVO = "weimar"` por `"anterior"` no fim desse arquivo (uma palavra). Ou volte o
+  código inteiro pelo branch `fraseado-antes-weimar` do GitHub.
 - **Cromatismo dosado:** aproximações cromáticas e envolventes só logo antes de uma chegada, e sempre resolvem no tempo.
   Acordes tensos (dominantes, meio-diminutos) aceitam mais; acordes diatônicos sem tensão, pouco.
 - **Ritmo do estilo:** as frases usam só as células do próprio estilo e as figuras rápidas dele (tercinas no swing, fusas

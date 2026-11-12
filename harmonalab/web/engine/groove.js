@@ -9,6 +9,7 @@
 import { beatsPerBar, loadProject, sounding, totalBeats } from "./model.js";
 import { TICKS_PER_BEAT, durationTicks } from "./phrase.js";
 import { LETTER_PC, makeNote, noteName, pitchClass, pitchClassName } from "./pitch.js";
+import { PERFIL_ATIVO, perfil as perfilDe } from "../kb/fraseado.js";
 
 const LOW = 60; // tessitura da frase: C4 a E6 (com C4 = 60)
 const HIGH = 88;
@@ -543,23 +544,28 @@ function avoidSetOf(chordPcs, scalePcs, root) {
 // (dominantes, meio-diminutos) aceitam mais; acordes diatônicos sem tensão, pouco. O outside é tensão antes de uma chegada:
 // um motivo dentro, o mesmo motivo meio tom fora, e a resolução no tempo forte.
 
+// Graus das tensões de dominante: as alteradas (b9, #9, #11, b13) e as naturais (9ª e 13ª).
+const ALTERED_DEGREES = [1, 3, 6, 8];
+const NATURAL_DEGREES = [2, 9];
+
 /**
- * Pesos das chegadas, por grau (semitons acima da fundamental). "strong" = o tempo 1 do acorde. 9ª e 11ª são chegadas
- * preferidas só nos acordes menores (com 3ª e 5ª nos tempos fortes, e a 6ª dórica de vez em quando). Nos maiores,
- * dominantes e meio-diminutos, a chegada é nota do acorde (3ª, 7ª, 5ª); tensões, só de vez em quando.
+ * Pesos das chegadas, por grau (semitons acima da fundamental), do perfil de fraseado em uso (kb/fraseado.js).
+ * "strong" = o tempo 1 do acorde. Nos dominantes, as tensões que a escala do acorde traz ganham o multiplicador do perfil
+ * (mais forte nas alteradas): com a escala alterada, a b13 e a 9ª aumentada viram chegadas comuns.
  */
-function degreeWeights(quality, strong) {
-  switch (quality) {
-    case "menor": return strong ? { 3: 3, 7: 2.6, 2: 2.4, 5: 2.4, 10: 1.4, 9: 0.9, 0: 0.5 } : { 2: 3, 5: 3, 3: 1.6, 7: 1.5, 10: 1.8, 9: 1.1, 0: 0.4 };
-    case "dominante": return strong ? { 4: 3, 10: 2.8, 7: 1.4, 0: 0.8, 2: 0.5, 9: 0.5, 1: 0.4, 3: 0.4, 8: 0.4, 6: 0.3 } : { 4: 2.8, 10: 2.8, 7: 1.6, 0: 0.9, 2: 0.6, 9: 0.6, 1: 0.5, 3: 0.5, 8: 0.5, 6: 0.4 };
-    case "meio-diminuto": return { 3: 2.6, 6: 2.4, 10: 2.4, 0: 1, 5: 0.6, 2: 0.4, 8: 0.3 };
-    case "maior": return strong ? { 4: 3, 11: 2.4, 7: 2.2, 0: 1, 9: 0.8, 2: 0.5, 6: 0.3 } : { 4: 2.6, 11: 2.4, 7: 2.2, 0: 1, 9: 0.9, 2: 0.6, 6: 0.4 };
-    default: return null;
+function degreeWeights(quality, strong, profile, { scalePcs, root }) {
+  const table = profile.pesos[quality]?.[strong ? "forte" : "fraco"];
+  if (!table) return null;
+  if (quality !== "dominante") return table;
+  const out = { ...table };
+  for (const [degrees, factor] of [[ALTERED_DEGREES, profile.tensoes.alterada], [NATURAL_DEGREES, profile.tensoes.natural]]) {
+    for (const d of degrees) if (out[d] != null && scalePcs.has(mod12(root + d))) out[d] *= factor;
   }
+  return out;
 }
 
 /** Tudo o que a frase precisa saber de um acorde. */
-function chordContext(chord, { style, color, scales }) {
+function chordContext(chord, { style, color, scales, profile }) {
   const voices = sounding(chord);
   const chordPcs = new Set(voices.map((v) => pitchClass(v.note)));
   const hasScale = chord.phrase_pcs.length > 0;
@@ -576,7 +582,7 @@ function chordContext(chord, { style, color, scales }) {
   // notas boas para chegar: da paleta (ou do acorde), da escala, sem as evitadas
   const arrivalPcs = new Set([...palette.set, ...chordPcs].filter((pc) => scalePcs.has(pc) && !avoid.has(pc)));
   const weightOf = (strong) => {
-    const table = degreeWeights(quality, strong);
+    const table = degreeWeights(quality, strong, profile, { scalePcs, root });
     const map = new Map();
     for (const pc of arrivalPcs) {
       const w = table ? table[mod12(pc - root)] ?? (chordPcs.has(pc) ? 1 : 0) : chordPcs.has(pc) ? 2 : 1;
@@ -590,6 +596,10 @@ function chordContext(chord, { style, color, scales }) {
   const factor = tense ? 1 : 0.35; // pouco cromatismo em acorde diatônico sem tensão
   return {
     chord, chordPcs, scalePcs, root, quality, tense, avoid, palette, color,
+    // tensões de dominante que a escala traz: nelas o solo gosta de repousar (notas longas)
+    restTension: quality === "dominante" ? profile.repousoNaTensao : 1,
+    bluesThird: profile.tercaBlue === true, // o blue note b3 -> 3 não depende do cromatismo geral
+    tensionDegrees: new Set([...ALTERED_DEGREES, ...NATURAL_DEGREES].filter((d) => scalePcs.has(mod12(root + d)))),
     linePool: range(palette.set, LOW - 5, HIGH + 5),
     strongWeights: weightOf(true), weakWeights: weightOf(false),
     chromatic: color === "dentro" ? 0 : loud ? (tense ? 0.75 : 0.4) : params.chromatic * factor,
@@ -690,8 +700,10 @@ function composeSolo(items, { rng, tempo, barTicks }) {
     const weights = n.strong ? n.ctx.strongWeights : n.ctx.weakWeights;
     const options = [];
     for (let p = LOW; p <= HIGH; p++) {
-      const w = weights.get(mod12(p));
+      let w = weights.get(mod12(p));
       if (!w) continue;
+      // repouso (nota que dura um tempo ou mais) numa tensão característica do dominante
+      if (n.ctx.restTension !== 1 && (n.end || n.ticks >= TICKS_PER_BEAT) && n.ctx.tensionDegrees.has(mod12(p - n.ctx.root))) w *= n.ctx.restTension;
       if (p === cursor && (between === 0 || n.after <= TICKS_PER_BEAT)) continue; // sem repetir a nota
       const distance = Math.abs(p - cursor);
       let score = w * Math.exp(-((distance - ideal) ** 2) / (2 * spread * spread));
@@ -784,7 +796,13 @@ function composeSolo(items, { rng, tempo, barTicks }) {
     const crossing = last.ctx !== b.ctx;
     // a aproximação que atravessa para o acorde seguinte só vai para nota do acorde (resolve "no acorde")
     const canApproach = onBeatB && last.ticks <= SHORT && !last.locked && b.after === 0 && (!crossing || b.ctx.chordPcs.has(mod12(b.midi)));
-    if (canApproach && rng.chance(ctx.chromatic)) {
+    const beforeLast = group.at(-2)?.midi ?? a.midi;
+    // estilos com blue notes: antes de uma 3ª maior de chegada, a 3ª menor (blue note) resolve nela, independente do cromatismo
+    const blueThirdArrival = ctx.bluesThird && ctx.blue > 0 && canApproach && mod12(b.midi - b.ctx.root) === 4 && b.ctx.chordPcs.has(mod12(b.ctx.root + 4)) && b.midi - 1 !== beforeLast;
+    if (blueThirdArrival && rng.chance(ctx.blue * 0.5)) {
+      last.midi = b.midi - 1;
+      last.role = "blue";
+    } else if (canApproach && rng.chance(ctx.chromatic)) {
       const before = group.at(-2)?.midi ?? a.midi;
       const enclose = group.length >= 2 && rng.chance(ctx.enclosure);
       const above = ctx.linePool.find((p) => p > b.midi);
@@ -923,6 +941,7 @@ function speller(chord, middleC) {
 export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
   phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null, intensity = "equilibrado",
+  perfil = PERFIL_ATIVO, // perfil de fraseado (kb/fraseado.js): "weimar" ou "anterior"
 } = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
@@ -954,7 +973,7 @@ export function generateGroove(data, {
       if (!sounding(chord).length) { planner.skip(length); return { ctx: null, slots: null, length }; }
       if (!chord.phrase_pcs.length) withoutScale += 1;
       const color = colorOf(chord);
-      const ctx = chordContext(chord, { style, color: color === "outside" ? "outside" : color, scales });
+      const ctx = chordContext(chord, { style, color: color === "outside" ? "outside" : color, scales, profile: perfilDe(perfil) });
       const nextHasPhrase = Boolean(project.chords[i + 1] && sounding(project.chords[i + 1]).length);
       const toNext = nextHasPhrase && length >= 4 * TICKS_PER_BEAT && rng.chance(0.5);
       const slots = (color === "outside" && length >= 3 * TICKS_PER_BEAT ? planner.takeOutside(length, { toNext }) : null) ?? planner.take(length);
