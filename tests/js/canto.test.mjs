@@ -2,13 +2,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CLICK_MIDI, estimateKey, estimateTuning, measureClicks, midiFromHz, quantize, snapPitch, transcribe, voiceText, woodblockSamples, yin } from "../../harmonalab/web/engine/canto.js";
+import { CLICK_MIDI, simplifyNotes, estimateKey, estimateTuning, measureClicks, midiFromHz, quantize, snapPitch, transcribe, voiceText, woodblockSamples, yin } from "../../harmonalab/web/engine/canto.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { MELODY, RATE, score, singMelody } from "./canto_fixture.mjs";
 
 const run = (opts = {}, transcribeOpts = {}, melody = MELODY) => {
   const take = singMelody(melody, { latency: 0.08, ...opts });
-  const result = transcribe(take.samples, RATE, { bpm: opts.bpm ?? 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, ...transcribeOpts });
+  const result = transcribe(take.samples, RATE, { bpm: opts.bpm ?? 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, fastest: "16", ...transcribeOpts });
   return { result, s: score(result.events, take.truth) };
 };
 
@@ -95,4 +95,34 @@ test("o resultado vira texto na notação de frase do app, que o motor lê sem e
   assert.equal(flats, "Bb4/4 r/4 F4/4");
   const { project } = loadProject({ chords: [{ notes: "A3 C4 E4", duration_beats: 8, phrase: result.text }] });
   assert.equal(project.chords[0].phrase_events.length, 9);
+});
+
+// Melodia lenta, sem notas rápidas, como a do primeiro teste no celular (Mi menor, 80 BPM), com o Mi repetido de propósito.
+const SLOW = [{ beat: 0, beats: 2, midi: 60 }, { beat: 2, beats: 1, midi: 59 }, { beat: 3, beats: 1, midi: 57 }, { beat: 4, beats: 2, midi: 54 }, { beat: 6, beats: 2, midi: 52 }, { beat: 8, beats: 3, midi: 52 }, { beat: 11, beats: 1, midi: 55 }];
+
+test("melodia simples (padrão: colcheia): uma nota cantada vira UMA nota, mesmo com scoop, volume oscilando, clique alto e fim de respiração", () => {
+  for (const [label, opts] of [
+    ["limpa", {}], ["chegando de baixo (scoop)", { scoop: 0.11 }], ["volume oscilando", { tremolo: 0.6 }],
+    ["clique 12 dB acima da voz", { click: 12, latency: 0.19 }], ["fim da respiração", { tail: true }],
+    ["tudo junto, como no celular", { scoop: 0.11, tremolo: 0.5, click: 12, latency: 0.19, tail: true, vibrato: 20, jitter: 0.03 }],
+  ]) {
+    const { result, s } = run({ bpm: 80, ...opts }, { fastest: "8" }, SLOW);
+    assert.equal(s.hits, s.total, `${label}: ${result.text}`);
+    assert.equal(s.extra, 0, `${label}: notas a mais (${result.text})`);
+    assert.equal(result.text, "C4/2 B3/4 A3/4 F#3/2 E3/2 E3/2+4 G3/4", label);
+  }
+});
+
+test("simplificar: o pedaço curto junta-se à nota que permanece (com o começo do primeiro); iguais repetidas de propósito ficam", () => {
+  const n = (start, end, note) => ({ start, end, note, midi: note });
+  // scoop: um Ré# curto antes do Mi longo vira o Mi, começando no Ré#
+  assert.deepEqual(simplifyNotes([n(0, 0.1, 51), n(0.1, 1, 52)], { minSeconds: 0.2 }).map((x) => [x.start, x.note]), [[0, 52]]);
+  // o mesmo Mi picado em pedaços curtos colados vira um só
+  assert.equal(simplifyNotes([n(0, 0.15, 52), n(0.16, 0.3, 52), n(0.31, 0.6, 52)], { minSeconds: 0.2 }).length, 1);
+  // repetido de propósito (duas notas longas com respiro) fica repetido
+  assert.equal(simplifyNotes([n(0, 0.7, 52), n(0.76, 1.5, 52)], { minSeconds: 0.2 }).length, 2);
+  // pedaço curto solto (longe das outras notas) sai
+  assert.deepEqual(simplifyNotes([n(0, 1, 52), n(1.4, 1.5, 47)], { minSeconds: 0.2 }).map((x) => x.note), [52]);
+  // salto grande não é scoop: o pedaço curto colado a uma nota longe sai, não muda a altura dela
+  assert.deepEqual(simplifyNotes([n(0, 0.1, 45), n(0.1, 1, 52)], { minSeconds: 0.2 }).map((x) => x.note), [52]);
 });

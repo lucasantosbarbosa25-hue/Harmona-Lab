@@ -117,7 +117,7 @@ export class CantoRecorder {
 export function setupCanto({ defaults, onUse, play, stop, toast }) {
   const $ = (s) => document.querySelector(s);
   const dialog = $("#canto-dialog");
-  const state = { mode: "fone", recorder: null, recording: false, result: null, selected: -1, taps: [] };
+  const state = { mode: "fone", fastest: "8", recorder: null, recording: false, result: null, selected: -1, taps: [] };
 
   const beatsPerBarOf = (sig) => {
     const [num, den] = String(sig).split("/").map(Number);
@@ -130,6 +130,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
   };
   const renderMode = () => {
     document.querySelectorAll("#canto-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
+    document.querySelectorAll("#canto-fastest button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fastest === state.fastest)));
     $("#canto-mode-hint").textContent = MODES[state.mode].hint;
   };
   const renderDots = (beatsPerBar, active = -1) => {
@@ -196,7 +197,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     await new Promise((resolve) => setTimeout(resolve, 30)); // deixa a tela mostrar "Analisando" antes da conta
     const result = transcribe(take.samples, take.sampleRate, {
       bpm: state.bpm, beatsPerBar: beatsPerBarOf(state.signature), clickTimes: take.clickTimes, countInBeats: take.countInBeats,
-      latencyFallback: take.latencyFallback, middleC: defaults().middleC,
+      latencyFallback: take.latencyFallback, middleC: defaults().middleC, fastest: state.fastest,
     });
     if (!result.events.length) { status(result.warnings[0] || "Não encontrei notas cantadas.", true); return; }
     state.result = { ...result, bpm: state.bpm, signature: state.signature };
@@ -274,6 +275,10 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     state.mode = b.dataset.mode;
     $("#canto-volume").value = MODES[state.mode].volume;
     state.recorder?.setVolume(MODES[state.mode].volume);
+    renderMode();
+  }));
+  document.querySelectorAll("#canto-fastest button").forEach((b) => b.addEventListener("click", () => {
+    state.fastest = b.dataset.fastest;
     renderMode();
   }));
   $("#canto-volume").addEventListener("input", (e) => state.recorder?.setVolume(Number(e.target.value)));

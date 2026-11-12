@@ -114,10 +114,11 @@ export function yin(buf, rate, { minHz = 65, maxHz = 1100, threshold = 0.15 } = 
 
 /**
  * A altura a cada 10 ms. masks: [[início, fim], ...] em segundos, instantes a ignorar. reject: { windows, midis, tolerance }:
- * nas janelas, quadros com altura perto de uma das midis viram silêncio (o clique do metrônomo e o eco dele).
- * Devolve { frames: [{ t, rms, midi, clarity, masked }], hop, frame }.
+ * nas janelas, quadros com altura perto de uma das midis viram silêncio (o clique do metrônomo e o eco dele). clickWindows:
+ * onde um clique soa (o volume desses quadros não conta para separar sílabas).
+ * Devolve { frames: [{ t, rms, level, midi, clarity, masked, click }], hop, frame }.
  */
-export function trackPitch(samples, sampleRate, { masks = [], reject = null } = {}) {
+export function trackPitch(samples, sampleRate, { masks = [], reject = null, clickWindows = [] } = {}) {
   const { samples: x, rate } = downsample(samples, sampleRate);
   const size = Math.round(FRAME_SECONDS * rate);
   const step = Math.round(HOP_SECONDS * rate);
@@ -126,8 +127,20 @@ export function trackPitch(samples, sampleRate, { masks = [], reject = null } = 
     let energy = 0;
     for (let i = start; i < start + size; i++) energy += x[i] * x[i];
     const t = (start + size / 2) / rate;
-    frames.push({ start, t, rms: Math.sqrt(energy / size), midi: null, clarity: 0, masked: masks.some(([a, b]) => t >= a && t <= b) });
+    frames.push({
+      start, t, rms: Math.sqrt(energy / size), midi: null, clarity: 0,
+      masked: masks.some(([a, b]) => t >= a && t <= b),
+      click: clickWindows.some(([a, b]) => t >= a && t <= b), // um clique está soando aqui: o volume deste quadro não é da voz
+    });
   }
+  // volume da voz, suavizado em 3 quadros, sem a energia dos cliques (quadro com clique repete o último volume da voz)
+  let lastLevel = 0;
+  frames.forEach((f, i) => {
+    if (f.click) { f.level = lastLevel; return; }
+    const around = [frames[i - 1], f, frames[i + 1]].filter((g) => g && !g.click).map((g) => g.rms);
+    f.level = around.reduce((a, b) => a + b, 0) / around.length;
+    lastLevel = f.level;
+  });
   const loud = [...frames.map((f) => f.rms)].sort((a, b) => a - b)[Math.floor(frames.length * 0.95)] ?? 0;
   const gate = Math.max(1e-4, loud * 0.08); // abaixo disso é silêncio (ou respiração)
   for (const f of frames) {
@@ -136,7 +149,10 @@ export function trackPitch(samples, sampleRate, { masks = [], reject = null } = 
     if (!found || found.hz < 65 || found.hz > 1100) continue;
     const midi = midiFromHz(found.hz);
     // o clique (ou o eco dele): na janela do clique, na altura do clique (ou uma oitava abaixo, erro comum de detecção)
-    if (reject && reject.windows.some(([a, b]) => f.t >= a && f.t <= b) && reject.midis.some((m) => Math.abs(midi - m) < reject.tolerance)) continue;
+    if (reject && reject.windows.some(([a, b]) => f.t >= a && f.t <= b) && reject.midis.some((m) => Math.abs(midi - m) < reject.tolerance)) {
+      f.click = true; // parece o clique: não é voz nem silêncio (não parte a nota que estiver soando)
+      continue;
+    }
     f.midi = midi;
     f.clarity = found.clarity;
   }
@@ -167,7 +183,8 @@ export function segmentNotes(track, { minDur = 0.08, jump = 0.8, persist = 4, ma
   let maskedSince = null; // começo da sequência de quadros mascarados logo antes deste quadro
   let lastMasked = null;
   const open = (list) => {
-    const note = { frames: list, peak: Math.max(...list.map((f) => f.rms)), dip: false, hiddenStart: null };
+    const voiced = list.filter((f) => !f.click);
+    const note = { frames: list, peak: Math.max(...(voiced.length ? voiced : list).map((f) => f.level ?? f.rms)), dip: 0, dipFrom: 0, hiddenStart: null };
     if (lastMasked != null && list[0].t - lastMasked <= hop * 1.5) note.hiddenStart = maskedSince;
     return note;
   };
@@ -177,8 +194,10 @@ export function segmentNotes(track, { minDur = 0.08, jump = 0.8, persist = 4, ma
       lastMasked = f.t;
       continue;
     }
+    if (f.click && f.midi == null) continue; // o clique (já descartado pela altura): nem voz nem silêncio
     if (f.midi == null) {
       gap += 1;
+      if (cur) { if (!cur.dip) cur.dipFrom = cur.frames.length; cur.dip += 1; } // silêncio curto dentro da nota conta como queda (nova sílaba)
       if (cur && gap * hop > maxGap) { finish(cur); cur = null; pending = []; }
       continue;
     }
@@ -191,10 +210,25 @@ export function segmentNotes(track, { minDur = 0.08, jump = 0.8, persist = 4, ma
       continue;
     }
     if (pending.length) { cur.frames.push(...pending); pending = []; }
-    if (f.rms < cur.peak * 0.35) cur.dip = true;
-    else if (cur.dip && f.rms > cur.peak * 0.7) { finish(cur); cur = open([f]); continue; }
+    // nova sílaba na mesma nota: a voz cai de verdade (por 30 ms ou mais) e volta. O clique não conta.
+    if (!f.click) {
+      if (f.level < cur.peak * 0.36) {
+        if (!cur.dip) cur.dipFrom = cur.frames.length;
+        cur.dip += 1;
+      } else if (f.level > cur.peak * 0.6) {
+        if (cur.dip >= 3) {
+          // nova sílaba: a nota antiga acaba onde a voz caiu; a nova começa onde ela voltou a subir
+          const rising = cur.frames.slice(cur.dipFrom).filter((g) => (g.level ?? g.rms) >= cur.peak * 0.36);
+          cur.frames = cur.frames.slice(0, cur.dipFrom);
+          finish(cur);
+          cur = open([...rising, f]);
+          continue;
+        }
+        cur.dip = 0; // a voz voltou sem ter caído de verdade: não era sílaba nova
+      }
+    }
     cur.frames.push(f);
-    cur.peak = Math.max(cur.peak, f.rms);
+    if (!f.click) cur.peak = Math.max(cur.peak, f.level);
   }
   finish(cur);
   return notes;
@@ -261,21 +295,66 @@ export function snapPitch(midi, offset = 0, scale = null) {
   return n;
 }
 
+/**
+ * Deixa a melodia com as notas que a pessoa quis cantar. notes: [{ start, end, note (MIDI inteiro) }] em segundos.
+ *  - pedaço mais curto que minSeconds colado a uma vizinha a até `reach` semitons (a voz chegando de baixo, um escorregão,
+ *    um tremor) junta-se a ela: fica a altura da nota que permanece (a mais longa) e o começo da primeira;
+ *  - duas notas iguais quase coladas (respiro menor que joinGap) viram uma só;
+ *  - pedaço curto solto (fim da respiração, um ruído) sai.
+ */
+export function simplifyNotes(notes, { minSeconds = 0.2, reach = 2, joinGap = 0, touchGap = 0.12 } = {}) {
+  let list = notes.map((n) => ({ ...n })).sort((a, b) => a.start - b.start);
+  const length = (n) => n.end - n.start;
+  let changed = true;
+  while (changed) {
+    changed = false;
+    // iguais quase coladas
+    for (let i = 1; i < list.length; i++) {
+      const a = list[i - 1], b = list[i];
+      if (a.note === b.note && b.start - a.end < joinGap) {
+        list.splice(i - 1, 2, { ...a, end: Math.max(a.end, b.end), midi: length(a) >= length(b) ? a.midi : b.midi });
+        changed = true;
+        break;
+      }
+    }
+    if (changed) continue;
+    // o pedaço mais curto de todos, se for curto demais
+    let shortest = -1;
+    list.forEach((n, i) => { if (length(n) < minSeconds && (shortest < 0 || length(n) < length(list[shortest]))) shortest = i; });
+    if (shortest < 0) break;
+    const n = list[shortest];
+    const neighbours = [list[shortest - 1], list[shortest + 1]].filter((m) => m
+      && (m.start >= n.end ? m.start - n.end : n.start - m.end) < touchGap
+      && Math.abs(m.note - n.note) <= reach);
+    if (neighbours.length) {
+      const keep = neighbours.sort((a, b) => length(b) - length(a))[0];
+      const merged = { ...keep, start: Math.min(keep.start, n.start), end: Math.max(keep.end, n.end) };
+      list = list.filter((m) => m !== n && m !== keep);
+      list.push(merged);
+      list.sort((a, b) => a.start - b.start);
+    } else {
+      list.splice(shortest, 1);
+    }
+    changed = true;
+  }
+  return list;
+}
+
 // ---------------------------------------------------------------- ritmo
 
 /**
- * Encaixa as notas no pulso: o início de cada nota vai para a semicolcheia (ou a tercina, se ficar bem mais perto) mais
- * próxima; a duração também; um respiro curto entre duas notas vira ligado. beatZero: o instante (s) do tempo 1 depois da
+ * Encaixa as notas no pulso: o início de cada nota vai para a figura mais próxima da grade (step em tempos: 0,5 = colcheia,
+ * 0,25 = semicolcheia; com semicolcheias, a tercina vale se ficar bem mais perto); a duração também; um respiro curto entre duas notas vira ligado. beatZero: o instante (s) do tempo 1 depois da
  * contagem. Notas antes dele (anacruse) puxam a melodia um compasso para trás. Devolve { events: [{ beat, beats, midi }],
  * shift (tempos acrescentados no começo) }.
  */
-export function quantize(notes, { bpm, beatZero = 0, beatsPerBar = 4, triplets = true } = {}) {
+export function quantize(notes, { bpm, beatZero = 0, beatsPerBar = 4, step = 0.25, triplets = step <= 0.25 } = {}) {
   const toBeats = (t) => ((t - beatZero) * bpm) / 60;
   const snap = (b) => {
-    const sixteenth = Math.round(b * 4) / 4;
-    if (!triplets) return sixteenth;
+    const even = Math.round(b / step) * step;
+    if (!triplets) return even;
     const triplet = Math.round(b * 3) / 3;
-    return Math.abs(triplet - b) < Math.abs(sixteenth - b) * 0.5 ? triplet : sixteenth;
+    return Math.abs(triplet - b) < Math.abs(even - b) * 0.5 ? triplet : even;
   };
   let events = notes.filter((n) => n.note != null).map((n) => ({ midi: n.note, beat: snap(toBeats(n.start)), end: toBeats(n.end) }));
   events.sort((a, b) => a.beat - b.beat);
@@ -292,9 +371,9 @@ export function quantize(notes, { bpm, beatZero = 0, beatsPerBar = 4, triplets =
   events.forEach((e, i) => {
     const beat = e.beat + shift;
     const next = events[i + 1] ? events[i + 1].beat + shift : null;
-    let beats = Math.max(0.25, snap(e.end - e.beat));
+    let beats = Math.max(step, snap(e.end - e.beat));
     if (next != null) {
-      if (next - beat - beats < 0.26) beats = next - beat; // respiro curto: ligado até a próxima
+      if (next - beat - beats < step + 0.01) beats = next - beat; // respiro curto: ligado até a próxima
       beats = Math.min(beats, next - beat);
     }
     if (beats > 0 && beat >= 0) out.push({ beat: Math.round(beat * 12) / 12, beats: Math.round(beats * 12) / 12, midi: e.midi });
@@ -363,12 +442,12 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
 /**
  * Da gravação às notas. options: { bpm, beatsPerBar, clickTimes (s, na linha do tempo da gravação: os agendados),
  * countInBeats (quantos cliques são da contagem), latencyFallback (s, quando não dá para medir pelo vazamento), middleC,
- * maskClicks (apagar da análise os instantes dos cliques que vazaram; false: nos testes, apagar atrapalhou as notas curtas que
+ * fastest ("8": colcheia, o padrão, para melodias simples; "16": semicolcheia), maskClicks (apagar da análise os instantes dos cliques que vazaram; false: nos testes, apagar atrapalhou as notas curtas que
  * começam junto do clique, e a nota é lida bem mesmo com o clique por cima) }. O clique (e o eco dele) é descartado pela
  * altura: ele soa entre dois semitons (CLICK_MIDI), onde nenhuma nota cantada afinada cai.
  * Devolve { events, text, key, tuning, leak, latency, shift, notes (brutas), warnings }.
  */
-export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false } = {}) {
+export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "8" } = {}) {
   const warnings = [];
   const countIn = clickTimes.slice(0, countInBeats);
   const leak = countIn.length ? measureClicks(samples, sampleRate, countIn) : { leak: false, latency: null, found: 0, total: 0 };
@@ -377,12 +456,14 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   const masks = leak.leak && maskClicks ? clickTimes.map((t) => [t + latency - 0.008, t + latency + 0.045]) : [];
   // o clique e o eco dele na sala são reconhecidos pela altura (entre dois semitons) e viram silêncio
   const reject = leak.leak ? {
-    windows: clickTimes.map((t) => [t + latency - 0.01, t + latency + 0.6]),
+    windows: clickTimes.map((t) => [t + latency - 0.01, t + latency + 0.45]),
     midis: [CLICK_MIDI.normal, CLICK_MIDI.accent, CLICK_MIDI.normal - 12, CLICK_MIDI.accent - 12],
-    tolerance: 0.3,
+    tolerance: 0.25,
   } : null;
-  const track = trackPitch(samples, sampleRate, { masks, reject });
-  const notes = segmentNotes(track);
+  const clickWindows = leak.leak ? clickTimes.map((t) => [t + latency - 0.01, t + latency + 0.09]) : [];
+  const track = trackPitch(samples, sampleRate, { masks, reject, clickWindows });
+  const raw = segmentNotes(track);
+  const notes = raw;
   if (!notes.length) {
     warnings.push("Não encontrei notas cantadas. Cante mais perto do microfone, ou mais alto.");
     return { events: [], text: "", key: null, tuning: { offset: 0, strength: 0 }, leak, latency, shift: 0, notes, warnings };
@@ -390,8 +471,11 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   const tuning = estimateTuning(notes);
   const key = estimateKey(notes.map((n) => ({ ...n, midi: n.midi - tuning.offset })));
   for (const n of notes) n.note = snapPitch(n.midi, tuning.offset, key.scale);
+  // a figura mais rápida que a pessoa quer (colcheia, por padrão): pedaço mais curto que ~60% dela não é nota de verdade
+  const step = fastest === "16" ? 0.25 : 0.5;
+  const simple = simplifyNotes(notes, { minSeconds: 0.6 * step * (60 / bpm), reach: 2 });
   const firstBeat = clickTimes[countInBeats] ?? (countIn.length ? countIn.at(-1) + 60 / bpm : 0);
-  const { events, shift } = quantize(notes, { bpm, beatZero: firstBeat + latency, beatsPerBar });
+  const { events, shift } = quantize(simple, { bpm, beatZero: firstBeat + latency, beatsPerBar, step });
   // o clique chegou ao microfone mais alto que a voz? (com eco forte, aí sim pode confundir)
   let clickVsVoice = null;
   if (leak.leak) {
