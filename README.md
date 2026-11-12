@@ -128,7 +128,7 @@ escala** de cada acorde. O pedido fica leve e a resposta, rápida. O interruptor
 desligado por padrão) decide se a IA pesquisa os artistas citados antes de compor, o que é mais fiel e mais demorado.
 Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
 
-- **Cantar uma melodia** (no cartão da IA): em vez de escrever, você canta. Escolha o **BPM** (obrigatório, de 40 a 100, com botão
+- **Cantar uma melodia** (no cartão da IA): em vez de escrever, você canta. Escolha o **BPM** (obrigatório, de 60 a 100, com botão
   para marcar no toque; cantar devagar acerta mais, e a Voz fica em figuras: depois o BPM do projeto pode subir e ela acompanha) e o compasso; um **metrônomo amadeirado** (woodblock) conta um compasso e segue tocando. Três modos:
   **com fone** (o clique só no fone: a captação mais limpa; prefira fone com fio, porque o Bluetooth atrasa o som e às vezes
   troca o microfone), **sem fone** (clique baixinho no alto-falante) e **só a contagem** (depois, o pulso aparece só na

@@ -5,7 +5,7 @@ import { speller, transcribe, voiceText, woodblockSamples } from "./engine/canto
 const COUNT_IN_BARS = 1;
 // Cantar devagar acerta mais (para quem não é cantor profissional). A Voz fica guardada em figuras, então depois o BPM do
 // projeto pode subir (no campo BPM ou pelo prompt) e a melodia acompanha, sem gravar de novo.
-export const SING_BPM = { min: 40, max: 100, suggested: 80 };
+export const SING_BPM = { min: 60, max: 100, suggested: 80 };
 const MAX_SECONDS = 120;
 const MODES = {
   fone: { volume: 0.7, hint: "O clique toca só no fone. É a captação mais limpa." },
