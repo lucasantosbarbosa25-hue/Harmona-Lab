@@ -13,6 +13,7 @@ export { TICKS_PER_BEAT };
 const CHANNEL = 0;
 const PHRASE_CHANNEL = 1;
 export const BASS_CHANNEL = 2;
+export const VOICE_CHANNEL = 3; // a Voz (melodia cantada)
 export const DRUM_CHANNEL = 9;
 /** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
 export const PHRASE_MODES = ["both", "chords", "line"];
@@ -193,6 +194,10 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     }
     tick += length;
   });
+  for (const e of project.voice_events ?? []) {
+    if (e.start >= tick) continue;
+    notes.push({ start: e.start, end: Math.min(e.start + e.length, tick), pitch: e.note.midi, velocity: project.default_velocity, channel: VOICE_CHANNEL, chord: -1, voice: true });
+  }
   for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat) : []) {
     notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1 });
   }
@@ -207,7 +212,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   const [num, den] = project.time_signature;
   const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
@@ -249,6 +254,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
 
   const title = project.title || "Harmona Lab";
   const tracks = [trackBytes(title, events[CHANNEL], true)];
+  if (events[VOICE_CHANNEL].length) tracks.push(trackBytes("Voz", events[VOICE_CHANNEL], false));
   if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
   if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
   if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));

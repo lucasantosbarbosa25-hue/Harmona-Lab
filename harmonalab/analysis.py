@@ -204,7 +204,10 @@ def analyze(project: Project, issues: list[Issue] | None = None) -> dict[str, An
     if not project.chords:
         all_issues.append(Issue("error", "A progressão está vazia: adicione pelo menos um acorde."))
     elif all(c.is_rest for c in project.chords):
-        all_issues.append(Issue("warning", "Nenhum acorde tem notas: o MIDI sairá vazio."))
+        if project.voice_events:
+            all_issues.append(Issue("info", "Ainda sem acordes: por enquanto só a Voz soa."))
+        else:
+            all_issues.append(Issue("warning", "Nenhum acorde tem notas: o MIDI sairá vazio."))
 
     chords = []
     start = 0.0
@@ -225,6 +228,7 @@ def analyze(project: Project, issues: list[Issue] | None = None) -> dict[str, An
         "strum_delay_ms": project.strum_delay_ms,
         "drums": project.drums or None,
         "percussion": project.percussion or None,
+        "voice": {"text": project.voice, "notes": len(project.voice_events)} if project.voice else None,
         "totals": {
             "chords": len(project.chords),
             "beats": total,

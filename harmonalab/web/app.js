@@ -5,6 +5,7 @@
 import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
+import { setupCanto } from "./voz.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
@@ -189,6 +190,7 @@ function toEditable(data) {
     drums: Array.isArray(data.drums) ? data.drums.join(" | ") : typeof data.drums === "string" ? data.drums : "",
     percussion: Array.isArray(data.percussion) ? data.percussion.join(" | ") : typeof data.percussion === "string" ? data.percussion : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
+    voice: Array.isArray(data.voice) ? data.voice.join(" ") : typeof data.voice === "string" ? data.voice : "",
     chords,
   };
 }
@@ -284,6 +286,7 @@ function renderSettings() {
   $("#project-key").value = p.key || "";
   $("#project-refs").value = p.references || "";
   $("#project-style").value = p.style || "";
+  $("#project-voice").value = p.voice || "";
   renderMeta();
   const select = $("#time-signature");
   const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
@@ -321,6 +324,7 @@ function bindSettings() {
   bind("#project-key", "key", renderMeta);
   bind("#project-refs", "references", renderMeta);
   bind("#project-style", "style", renderMeta);
+  bind("#project-voice", "voice");
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
@@ -817,6 +821,7 @@ function previewProject(only = null) {
     if (!chord.phrase_events.length && !chord.comp_layers.length) chord.duration_beats = Math.min(chord.duration_beats, (project.tempo / 60) * 4);
     project.drum_bars = []; // um acorde só: sem a bateria
     project.percussion_bars = [];
+    project.voice_events = []; // nem a Voz (ela é da música inteira)
   }
   return { project, index };
 }
@@ -1486,6 +1491,37 @@ function bindUi() {
   bindSettings();
   bindGroove();
   bindSound();
+  setupCanto({
+    defaults: () => ({ bpm: toNumber(state.project.tempo) || 80, timeSignature: state.project.time_signature, middleC: state.project.middle_c }),
+    onUse: useVoice,
+    play: (notes, total) => { stopPlayback(); player.play(notes, { total }); },
+    stop: () => stopPlayback(),
+  });
+}
+
+/** A melodia cantada vira a camada Voz: BPM e compasso do canto; compassos vazios no fim, se ela não couber. */
+function useVoice({ text, bpm, timeSignature, beats }) {
+  const undo = snapshot();
+  stopPlayback();
+  const p = state.project;
+  p.tempo = bpm;
+  p.time_signature = timeSignature;
+  p.voice = text;
+  const bpb = beatsPerBar();
+  const needed = Math.ceil(beats / bpb - 1e-9) * bpb;
+  let have = p.chords.reduce((n, c) => n + (toNumber(c.duration_beats) || 0), 0);
+  let added = 0;
+  while (have < needed) {
+    p.chords.push(blankChord({ duration_beats: bpb }));
+    have += bpb;
+    added += 1;
+  }
+  renderAll();
+  validateNow();
+  saveDraftSoon();
+  const notes = text.split(/\s+/).filter((t) => t && !t.startsWith("r/")).length;
+  toast(`Voz com ${notes} notas no projeto${added ? ` (${added} compasso${added > 1 ? "s" : ""} vazio${added > 1 ? "s" : ""} para ela caber)` : ""}. Ela toca na escuta e sai no MIDI, numa faixa própria.`,
+    { action: { label: "Desfazer", run: undo }, timeout: 7000 });
 }
 
 // ---------------------------------------------------------------- links

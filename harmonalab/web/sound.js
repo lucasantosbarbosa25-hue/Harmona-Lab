@@ -20,6 +20,7 @@ export const SAME = "same"; // a frase usa o mesmo som dos acordes
 export const NO_DRUMS = "none"; // bateria muda na escuta (no MIDI ela continua)
 const CHORD_CHANNEL = 0;
 const PHRASE_CHANNEL = 1;
+const VOICE_CHANNEL = 3; // a Voz (melodia cantada) toca com o som da frase
 /** Acima disso o banco pode pesar demais no celular (avisamos antes de carregar). */
 export const LARGE_BANK_BYTES = 200 * 1024 * 1024;
 
@@ -272,6 +273,7 @@ export class SoundFontPlayer {
     this.stop();
     this.#setPatch(CHORD_CHANNEL, chordPatch);
     this.#setPatch(PHRASE_CHANNEL, phrasePatch);
+    this.#setPatch(VOICE_CHANNEL, phrasePatch);
     this.#setPatch(BASS_CHANNEL, chordPatch); // o baixo toca com o som dos acordes (a mão esquerda de um tecladista)
     if (drumPatch) {
       // o banco da bateria escolhida fica na frente, para o canal 10 pegar o kit dele

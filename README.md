@@ -128,6 +128,18 @@ escala** de cada acorde. O pedido fica leve e a resposta, rápida. O interruptor
 desligado por padrão) decide se a IA pesquisa os artistas citados antes de compor, o que é mais fiel e mais demorado.
 Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
 
+- **Cantar uma melodia** (no cartão da IA): em vez de escrever, você canta. Escolha o **BPM** (obrigatório, com botão
+  para marcar no toque) e o compasso; um **metrônomo amadeirado** (woodblock) conta um compasso e segue tocando. Três modos:
+  **com fone** (o clique só no fone: a captação mais limpa; prefira fone com fio, porque o Bluetooth atrasa o som e às vezes
+  troca o microfone), **sem fone** (clique baixinho no alto-falante) e **só a contagem** (depois, o pulso aparece só na
+  tela). O áudio **não sai do aparelho**: o app acha a altura da voz (algoritmo YIN), separa as notas (o vibrato não quebra
+  a nota), corrige quem canta todo um pouco acima ou abaixo, descobre o tom provável (que decide as notas duvidosas) e encaixa
+  o ritmo no pulso. O clique soa de propósito **entre dois semitons**, então, mesmo vazando para o microfone (e com eco), o
+  app o reconhece e não confunde com a voz; os cliques da contagem também medem o atraso entre o som e o microfone, para
+  alinhar a voz com o pulso. No resultado: o desenho das notas, o texto, tom e avisos, e ajustes (oitava da melodia inteira,
+  meio tom de uma nota, apagar nota). **Usar como Voz** põe a melodia no projeto (campo "Voz", em "Sobre esta progressão"),
+  com o BPM e o compasso do canto e compassos vazios se ela não couber. A Voz toca na escuta (com o som da frase, no banco de
+  sons) e sai no MIDI numa faixa própria, **"Voz"** (canal 4). Próxima fase: a IA (e o app) harmonizarem a partir da Voz.
 - **Estilo:** Jazz swing, Blues, Jazz fusion, Neo-soul, **Lo-fi**, Gospel americano, Funk, Salsa, Samba, Bossa nova, Rock ou Ska.
 - **Lo-fi** (70 a 90 BPM): Rhodes com levadas que respiram (acordes soltos, síncope suave, arpejo rolado) e ostinatos de piano;
   **bateria "arrastada"**: caixa, bumbo e contratempos do chimbal tocam um pouquinho depois do tempo (atraso fino, notação `>`
@@ -338,6 +350,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
 | `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO` (dinâmica opcional depois da peça: `!!` forte, `!` acento, `?` leve, `??` fantasma; e, depois dela, atraso fino opcional: `>` toca um pouquinho depois do tempo, ≈ 19 ms a 80 BPM, e `>>` um pouco mais, ≈ 38 ms; ex.: `S!>/4`). Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
+| `voice` | não | A **Voz**: uma melodia (por exemplo, a que você cantou) para a música inteira, a partir do tempo 0, na notação da frase (`NOTA/DURAÇÃO`, `r/` pausa). Ex.: `"r/4 A4/4 C5/8 D5/8 E5/2"`. Não pode durar mais que a progressão. Sai no MIDI numa faixa própria, "Voz". |
 | `percussion` | não | Percussão da progressão, na mesma notação da bateria, em faixa própria. Peças extras: U conga muda, V/W bongô agudo e grave, Y/Z timbal agudo e grave, J/I güiro curto e longo, D agogô. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 

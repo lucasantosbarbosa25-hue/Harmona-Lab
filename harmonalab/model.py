@@ -183,6 +183,8 @@ class Project:
     drum_bars: list = field(default_factory=list)  # derivado de drums
     percussion: str = ""  # percussão, na mesma notação da bateria; canal 10, numa faixa própria
     percussion_bars: list = field(default_factory=list)  # derivado de percussion
+    voice: str = ""  # a Voz: uma melodia (cantada) na notação da frase, valendo para a música inteira, do tempo 0
+    voice_events: list = field(default_factory=list)  # derivado de voice
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
@@ -226,6 +228,8 @@ class Project:
             d["drums"] = self.drums
         if self.percussion:
             d["percussion"] = self.percussion
+        if self.voice:
+            d["voice"] = self.voice
         if self.comment:
             d["comment"] = self.comment
         return d
@@ -362,7 +366,26 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         raw_chords = []
     for index, raw in enumerate(raw_chords):
         project.chords.append(_load_chord(raw, index, project, issues))
+    _load_voice(data.get("voice"), project, issues)
     return project, issues
+
+
+def _load_voice(value: Any, project: Project, issues: list[Issue]) -> None:
+    """A Voz: uma linha melódica (cantada) para a música inteira, na notação da frase, a partir do tempo 0."""
+    if value in (None, ""):
+        return
+    if not isinstance(value, (str, list, tuple)):
+        issues.append(Issue("error", 'A voz ("voice") deve ser um texto, por exemplo "E4/8 G4/8 A4/4 r/4".', None, "voice"))
+        return
+    project.voice = phrase_text(value)
+    events, total, errors = parse_phrase(project.voice, project.middle_c)
+    for message in errors:
+        issues.append(Issue("error", message.replace("Frase:", "Voz:").replace("na frase", "na voz"), None, "voice"))
+    length = beats_to_ticks(project.total_beats)
+    if total > length:
+        issues.append(Issue("error", f"A voz dura {total / TICKS_PER_BEAT:g} tempos, mais que os {project.total_beats:g} da "
+                                     "progressão. Acrescente compassos (ou acordes) até caber.", None, "voice"))
+    project.voice_events = events
 
 
 _STRUM_HINT = 'Use "off", "up" (grave → agudo) ou "down" (agudo → grave).'
@@ -521,4 +544,6 @@ def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, An
                 c[key] = rename_phrase_text(c[key], from_middle_c, to_middle_c)
         chords.append(c)
     out["chords"] = chords
+    if out.get("voice") not in (None, ""):
+        out["voice"] = rename_phrase_text(out["voice"], from_middle_c, to_middle_c)
     return out

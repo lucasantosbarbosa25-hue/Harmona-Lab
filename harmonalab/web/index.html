@@ -53,6 +53,10 @@
         <span class="switch-text">Pesquisar na internet <small>mais fiel ao artista, mais demorado</small></span>
       </label>
       <div class="ai-examples" id="ai-examples" aria-label="Exemplos de pedido"></div>
+      <div class="canto-entry">
+        <button type="button" class="btn secondary" id="canto-open">Cantar uma melodia</button>
+        <span class="canto-entry-hint">Cante com metrônomo: o app ouve as notas (só no aparelho) e elas viram a camada Voz.</span>
+      </div>
       <div class="ai-actions">
         <button type="button" class="btn primary" id="ai-generate"></button>
       </div>
@@ -137,6 +141,10 @@
           <label class="field"><span class="label">Tom</span><input id="project-key" type="text" autocomplete="off" placeholder="ex.: Em"></label>
           <label class="field"><span class="label">Referências (artistas, músicas)</span><input id="project-refs" type="text" autocomplete="off" placeholder="ex.: Jesús Molina, Dirty Loops"></label>
           <label class="field"><span class="label">Levada das frases</span><input id="project-style" type="text" autocomplete="off" placeholder="ex.: Neo-soul"></label>
+          <label class="field wide">
+            <span class="label">Voz (melodia cantada)</span>
+            <textarea id="project-voice" rows="2" spellcheck="false" placeholder="Toque em “Cantar uma melodia”, ou escreva: E4/8 G4/8 A4/4 r/4…"></textarea>
+          </label>
           <label class="field wide">
             <span class="label">Notas do projeto</span>
             <textarea id="project-comment" rows="4" placeholder="Ideia, referências, o que testar… A explicação da IA fica aqui."></textarea>
@@ -305,6 +313,66 @@
     </form>
   </dialog>
 
+
+  <dialog id="canto-dialog" class="sheet" aria-labelledby="canto-title">
+    <div class="sheet-body canto-body">
+      <p class="sheet-title" id="canto-title">Cantar uma melodia</p>
+      <p class="canto-hint">O áudio fica só no aparelho. Use fone com fio se puder: o clique chega na hora e o microfone do celular grava a voz.</p>
+      <div class="canto-settings">
+        <label class="field">
+          <span class="label">BPM (obrigatório)</span>
+          <span class="canto-bpm-row">
+            <input id="canto-bpm" type="number" inputmode="decimal" min="30" max="240" step="1" required>
+            <button type="button" class="btn secondary small" id="canto-tap" title="Toque no ritmo da música para marcar o BPM">Marcar no toque</button>
+          </span>
+        </label>
+        <label class="field">
+          <span class="label">Compasso</span>
+          <select id="canto-signature">
+            <option value="4/4">4/4</option>
+            <option value="3/4">3/4</option>
+            <option value="2/4">2/4</option>
+            <option value="6/8">6/8</option>
+          </select>
+        </label>
+      </div>
+      <span class="label">Metrônomo</span>
+      <div class="segmented" id="canto-mode" role="group" aria-label="Como ouvir o metrônomo">
+        <button type="button" data-mode="fone" aria-pressed="true">Com fone</button>
+        <button type="button" data-mode="semfone" aria-pressed="false">Sem fone</button>
+        <button type="button" data-mode="contagem" aria-pressed="false">Só a contagem</button>
+      </div>
+      <p class="canto-hint" id="canto-mode-hint"></p>
+      <label class="field">
+        <span class="label">Volume do clique</span>
+        <input id="canto-volume" type="range" min="0.05" max="1" step="0.05">
+      </label>
+      <div class="canto-record-row">
+        <button type="button" class="btn primary" id="canto-record">Gravar</button>
+        <div class="canto-beats" id="canto-beats" aria-hidden="true"></div>
+      </div>
+      <p class="canto-status" id="canto-status" role="status" aria-live="polite"></p>
+      <div class="canto-result" id="canto-result" hidden>
+        <canvas id="canto-roll" class="canto-roll" aria-label="As notas que o app ouviu"></canvas>
+        <p class="canto-info" id="canto-info"></p>
+        <ul class="canto-warnings" id="canto-warnings"></ul>
+        <code class="canto-text" id="canto-text"></code>
+        <div class="canto-tools">
+          <button type="button" class="btn secondary small" id="canto-octave-down">Oitava −</button>
+          <button type="button" class="btn secondary small" id="canto-octave-up">Oitava +</button>
+          <button type="button" class="btn secondary small" id="canto-semi-down" disabled>Nota −½ tom</button>
+          <button type="button" class="btn secondary small" id="canto-semi-up" disabled>Nota +½ tom</button>
+          <button type="button" class="btn ghost small" id="canto-delete" disabled>Apagar nota</button>
+        </div>
+        <div class="canto-actions">
+          <button type="button" class="btn secondary" id="canto-play">Ouvir</button>
+          <button type="button" class="btn ghost" id="canto-again">Gravar de novo</button>
+          <button type="button" class="btn primary" id="canto-use">Usar como Voz</button>
+        </div>
+      </div>
+      <button type="button" class="menu-item subtle" id="canto-close">Fechar</button>
+    </div>
+  </dialog>
 
   <input type="file" id="file-input" accept=".json,application/json" hidden>
   <div class="toasts" id="toasts" role="status" aria-live="polite"></div>

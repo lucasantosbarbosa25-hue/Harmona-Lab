@@ -32,6 +32,7 @@ from .timing import TICKS_PER_BEAT, beats_to_ticks, strum_plan  # noqa: F401 (re
 CHANNEL = 0
 PHRASE_CHANNEL = 1
 BASS_CHANNEL = 2
+VOICE_CHANNEL = 3  # a Voz (melodia cantada)
 DRUM_CHANNEL = 9
 #: O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase).
 PHRASE_MODES = ("both", "chords", "line")
@@ -193,6 +194,12 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
                                mido.Message("note_off", channel=PHRASE_CHANNEL, note=pitch, velocity=0)))
         tick += length
     end_tick = tick
+    for e in project.voice_events:
+        if e.start >= end_tick:
+            continue
+        pitch = e.note.midi
+        events.append((e.start, 2, pitch, VOICE_CHANNEL, mido.Message("note_on", channel=VOICE_CHANNEL, note=pitch, velocity=project.default_velocity)))
+        events.append((min(e.start + e.length, end_tick), 0, pitch, VOICE_CHANNEL, mido.Message("note_off", channel=VOICE_CHANNEL, note=pitch, velocity=0)))
 
     drums = [(start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel))
              for start, _, pitch, vel in drum_notes(project, end_tick, ticks_per_beat)]
@@ -205,7 +212,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
                    for _, end, pitch, _ in percussion_notes]
     phrase = [e for e in events if e[3] == PHRASE_CHANNEL]
     bass = [e for e in events if e[3] == BASS_CHANNEL]
-    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL)]
+    voice = [e for e in events if e[3] == VOICE_CHANNEL]
+    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL)]
 
     def make_track(name: str, items: list, header: bool) -> mido.MidiTrack:
         track = mido.MidiTrack()
@@ -222,12 +230,14 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         return track
 
     title = project.title or "Harmona Lab"
-    if not phrase and not drums and not bass and not percussion:
+    if not phrase and not drums and not bass and not percussion and not voice:
         midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
         midi.tracks.append(make_track(title, chords, True))
         return midi
     midi = mido.MidiFile(type=1, ticks_per_beat=ticks_per_beat)
     midi.tracks.append(make_track(title, chords, True))
+    if voice:
+        midi.tracks.append(make_track("Voz", voice, False))
     if phrase:
         midi.tracks.append(make_track("Frase", phrase, False))
     if bass:

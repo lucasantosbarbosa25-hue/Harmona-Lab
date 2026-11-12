@@ -161,6 +161,13 @@ CASES = [
     {"drums": "H!?/4 H???/4 S!!!/4", "chords": [{"notes": "C4"}]},  # combinações que não existem
     {"drums": "K>/4 S!>/4 K>>/8 H??>>/8 S?>/4 ; H>/8 H?>>/8 H/8 H??>/8 H!>/8 H?>/8 H/8 H??>>/8", "percussion": "Q?>/16 Q??>>/16 A>/8", "chords": [{"notes": "C4 E4", "duration_beats": 8}]},  # atraso fino
     {"drums": "K>>>/4 S>!/4 S>>>/4", "chords": [{"notes": "C4"}]},  # combinações que não existem
+    {"voice": "r/4 A4/4 C5/8 D5/8 E5/2 A4/4 G4/8 E4/8+4", "tempo": 78, "chords": [{"duration_beats": 4}, {"notes": "A3 C4 E4 G4", "duration_beats": 4, "phrase": "C5/4 E5/4"}]},  # a Voz
+    {"voice": "C5/4 D5/4", "middle_c": "C3", "chords": [{"notes": "C3", "duration_beats": 2}]},
+    {"voice": "A4/1 B4/4", "chords": [{"duration_beats": 4}]},  # voz mais longa que a progressão
+    {"voice": "A4/4 Hx/4 r/x", "chords": [{"duration_beats": 4}]},  # erros na voz
+    {"voice": 42, "chords": [{"duration_beats": 4}]},
+    {"voice": "A4/2 C5/2 E5/1", "chords": [{"duration_beats": 4}, {"symbol": "Pausa", "duration_beats": 4}]},  # só a Voz, sem acordes ainda
+    {"voice": "E4/4 G4/4 B4/2", "drums": "K/4 S/4 K/4 S/4", "chords": [{"notes": "E3 G3 B3", "duration_beats": 4}]},
     {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
     {"drums": 5, "chords": [{"notes": "C4"}]},
     {"drums": " | ; ", "chords": [{"notes": "C4"}]},

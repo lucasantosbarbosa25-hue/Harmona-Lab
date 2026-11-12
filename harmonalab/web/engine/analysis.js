@@ -216,7 +216,11 @@ export function analyzeChord(project, chord, index, startBeats) {
 export function analyze(project, issues = []) {
   const all = [...issues];
   if (!project.chords.length) all.push(issue("error", "A progressão está vazia: adicione pelo menos um acorde."));
-  else if (project.chords.every(isRest)) all.push(issue("warning", "Nenhum acorde tem notas: o MIDI sairá vazio."));
+  else if (project.chords.every(isRest)) {
+    all.push(project.voice_events.length
+      ? issue("info", "Ainda sem acordes: por enquanto só a Voz soa.")
+      : issue("warning", "Nenhum acorde tem notas: o MIDI sairá vazio."));
+  }
 
   const chords = [];
   let start = 0;
@@ -237,6 +241,7 @@ export function analyze(project, issues = []) {
     strum_delay_ms: project.strum_delay_ms,
     drums: project.drums || null,
     percussion: project.percussion || null,
+    voice: project.voice ? { text: project.voice, notes: project.voice_events.length } : null,
     totals: {
       chords: project.chords.length,
       beats: total,

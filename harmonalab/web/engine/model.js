@@ -84,7 +84,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], percussion: "", percussion_bars: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
+    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], percussion: "", percussion_bars: [], voice: "", voice_events: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -111,6 +111,7 @@ export function projectToDict(project) {
   if (project.style) d.style = project.style;
   if (project.drums) d.drums = project.drums;
   if (project.percussion) d.percussion = project.percussion;
+  if (project.voice) d.voice = project.voice;
   if (project.comment) d.comment = project.comment;
   return d;
 }
@@ -216,6 +217,7 @@ export function loadProject(data) {
     rawChords = [];
   }
   rawChords.forEach((raw, index) => project.chords.push(loadChord(raw, index, project, issues)));
+  loadVoice(data.voice, project, issues);
   return { project, issues };
 }
 
@@ -365,6 +367,24 @@ function loadPhrase(raw, chord, index, project, issues) {
 }
 
 /** Troca a convenção de oitava mantendo as alturas MIDI (funciona com campos incompletos). */
+/** A Voz: uma linha melódica (cantada) para a música inteira, na notação da frase, a partir do tempo 0. */
+function loadVoice(value, project, issues) {
+  if (value === undefined || value === null || value === "") return;
+  if (!(typeof value === "string" || Array.isArray(value))) {
+    issues.push(issue("error", 'A voz ("voice") deve ser um texto, por exemplo "E4/8 G4/8 A4/4 r/4".', null, "voice"));
+    return;
+  }
+  project.voice = phraseText(value);
+  const { events, ticks, errors } = parsePhrase(project.voice, project.middle_c);
+  for (const message of errors) issues.push(issue("error", message.replace("Frase:", "Voz:").replace("na frase", "na voz"), null, "voice"));
+  const total = totalBeats(project);
+  if (ticks > roundHalfEven(total * TICKS_PER_BEAT)) {
+    issues.push(issue("error", `A voz dura ${fmtG(ticks / TICKS_PER_BEAT)} tempos, mais que os ${fmtG(total)} da `
+      + "progressão. Acrescente compassos (ou acordes) até caber.", null, "voice"));
+  }
+  project.voice_events = events;
+}
+
 export function renameProjectNotes(data, toMiddleC) {
   const fromMiddleC = data.middle_c || DEFAULT_MIDDLE_C;
   const out = { ...data, middle_c: toMiddleC };
@@ -381,5 +401,6 @@ export function renameProjectNotes(data, toMiddleC) {
     }
     return c;
   });
+  if (out.voice !== undefined && out.voice !== null && out.voice !== "") out.voice = renamePhraseText(out.voice, fromMiddleC, toMiddleC);
   return out;
 }
