@@ -128,7 +128,13 @@ escala** de cada acorde. O pedido fica leve e a resposta, rápida. O interruptor
 desligado por padrão) decide se a IA pesquisa os artistas citados antes de compor, o que é mais fiel e mais demorado.
 Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
 
-- **Estilo:** Jazz swing, Blues, Jazz fusion, Neo-soul, Gospel americano, Funk, Salsa, Samba, Bossa nova, Rock ou Ska.
+- **Estilo:** Jazz swing, Blues, Jazz fusion, Neo-soul, **Lo-fi**, Gospel americano, Funk, Salsa, Samba, Bossa nova, Rock ou Ska.
+- **Lo-fi** (70 a 90 BPM): Rhodes com levadas que respiram (acordes soltos, síncope suave, arpejo rolado) e ostinatos de piano;
+  **bateria "arrastada"**: caixa, bumbo e contratempos do chimbal tocam um pouquinho depois do tempo (atraso fino, notação `>`
+  e `>>`), com o chimbal ainda dinâmico e groovado (boom-bap, swing de colcheias, semicolcheias suaves) e viradas leves;
+  shaker e pandeirola na percussão; baixo longo com síncope suave. O **fraseado** é o mais calmo de todos (um nível abaixo da
+  intensidade pedida), com os mesmos motivos rítmicos voltando muito e **duetos em oitavas, sextas e tríades** em boa parte
+  das notas. Usa o Weimar em dose pequena, num perfil próprio (`lofi`) que **não muda** se você fizer o rollback do Weimar.
 - **Levada dos acordes:** três ou quatro levadas por estilo, da mais tradicional à mais experimental (shuffle, montuno,
   teleco-teco, skank, Charleston…), e dois **ostinatos ou riffs** por estilo (boogie-woogie, baixo andando, guajeo, dedilhado
   de violão, riff de baixo…). O ostinato repete o mesmo desenho e segue a escala de cada acorde. Desligada, cada acorde soa
@@ -331,7 +337,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
-| `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO` (dinâmica opcional depois da peça: `!!` forte, `!` acento, `?` leve, `??` fantasma). Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
+| `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO` (dinâmica opcional depois da peça: `!!` forte, `!` acento, `?` leve, `??` fantasma; e, depois dela, atraso fino opcional: `>` toca um pouquinho depois do tempo, ≈ 19 ms a 80 BPM, e `>>` um pouco mais, ≈ 38 ms; ex.: `S!>/4`). Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
 | `percussion` | não | Percussão da progressão, na mesma notação da bateria, em faixa própria. Peças extras: U conga muda, V/W bongô agudo e grave, Y/Z timbal agudo e grave, J/I güiro curto e longo, D agogô. |
 | `chords[].symbol`, `omitted` | não | Informativos. |
 

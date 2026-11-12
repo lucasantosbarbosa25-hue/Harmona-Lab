@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
 import { midiBytes } from "../../harmonalab/web/engine/midi.js";
 import { loadProject, projectToDict, renameProjectNotes } from "../../harmonalab/web/engine/model.js";
-import { durationTicks, normalizeRole, parsePhrase, parseScale, phraseText, renamePhraseText, splitPhrase } from "../../harmonalab/web/engine/phrase.js";
+import { durationTicks, normalizeRole, parseDrums, parsePhrase, parseScale, phraseText, renamePhraseText, splitPhrase } from "../../harmonalab/web/engine/phrase.js";
 
 const B7ALT = {
   symbol: "B7alt", duration_beats: 4, left_hand: "B2 A3", right_hand: "D4 Eb4 G4 C5",
@@ -78,4 +78,16 @@ test("o MIDI leva a frase no canal 2 e os três modos funcionam", () => {
   assert.ok(!channels(midiBytes(project, { phraseMode: "chords" })).has(1));
   assert.throws(() => midiBytes(project, { phraseMode: "outro" }));
   assert.notDeepEqual(midiBytes(project, { phraseMode: "line" }), midiBytes(project, { phraseMode: "both" }));
+});
+
+test("bateria: atraso fino \">\" e \">>\" toca um pouquinho depois do tempo, sem mudar a duração da camada", () => {
+  const { bars, errors } = parseDrums("K/4 S>/4 H>>/8 H/8 r/4");
+  assert.deepEqual(errors, []);
+  const [layer] = bars[0];
+  assert.equal(layer.ticks, 480 + 480 + 240 + 240 + 480);
+  assert.deepEqual(layer.hits.map((h) => [h.part, h.start]), [[36, 0], [38, 480 + 12], [42, 960 + 24], [42, 1200]]);
+  const mixed = parseDrums("S!>/4 S??>>/4");
+  assert.deepEqual(mixed.errors, []);
+  assert.deepEqual(mixed.bars[0][0].hits.map((h) => [h.accent, h.start]), [[16, 12], [-40, 480 + 24]]);
+  for (const bad of ["K>>>/4", "S>!/4", "K<>/4"]) assert.ok(parseDrums(bad).errors.length, bad);
 });

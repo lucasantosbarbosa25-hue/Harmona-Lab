@@ -10,7 +10,7 @@ import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../.
 import { loadProject, sounding } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
 import { COLORS, SOURCES, STYLES, findStyle, styleByLabel } from "../../harmonalab/web/kb/estilos.js";
-import { PERFIL_ATIVO, PERFIS } from "../../harmonalab/web/kb/fraseado.js";
+import { PERFIL_ATIVO, PERFIL_POR_ESTILO, PERFIS, perfilDoEstilo } from "../../harmonalab/web/kb/fraseado.js";
 
 const EXAMPLE = JSON.parse(readFileSync(new URL("../../examples/resolucao_em_fsharp_ponta.json", import.meta.url), "utf8"));
 const bare = (color = "") => {
@@ -694,7 +694,7 @@ test("perfil weimar: nos dominantes alterados o solo repousa nas tensões caract
 
 test("rollback: o perfil anterior guarda os pesos de antes do Weimar, e o perfil ativo é um dos dois", () => {
   assert.ok(["anterior", "weimar"].includes(PERFIL_ATIVO));
-  assert.deepEqual(Object.keys(PERFIS).sort(), ["anterior", "weimar"]);
+  assert.deepEqual(Object.keys(PERFIS).sort(), ["anterior", "lofi", "weimar"]);
   const a = PERFIS.anterior;
   assert.equal(a.tensoes.alterada, 1);
   assert.equal(a.repousoNaTensao, 1);
@@ -704,4 +704,81 @@ test("rollback: o perfil anterior guarda os pesos de antes do Weimar, e o perfil
   const again = (perfil) => generateGroove(bare(), { style: findStyle("bossa"), phrases: true, variation: 3, perfil }).chords.map((c) => c.phrase).join("|");
   assert.equal(again("anterior"), again("anterior"));
   assert.equal(again(PERFIL_ATIVO), again(undefined));
+});
+
+test("lo-fi: estilo calmo, com duetos, motivos rítmicos e bateria atrasada que não perde o chimbal", () => {
+  const lofi = findStyle("lofi");
+  assert.equal(lofi.label, "Lo-fi");
+  assert.ok(lofi.influences.includes("Nujabes") && lofi.influences.includes("J Dilla"));
+  // calmo: menos notas por segundo que os outros estilos (a 80 BPM), com duetos em boa parte das notas
+  const profile = (style) => {
+    let notes = 0, duets = 0, seconds = 0;
+    for (let variation = 0; variation < 8; variation++) {
+      const data = structuredClone({ ...VARIED, tempo: 80 });
+      const made = generateGroove(data, { style, phrases: true, variation }).chords;
+      data.chords.forEach((c, i) => Object.assign(c, made[i]));
+      for (const chord of loadProject(data).project.chords) {
+        notes += chord.phrase_events.length;
+        duets += new Set(chord.phrase_extra.map((e) => e.start)).size;
+        seconds += (chord.duration_beats * 60) / 80;
+      }
+    }
+    return { perSecond: notes / seconds, duets: duets / notes };
+  };
+  const calm = profile(lofi);
+  for (const other of STYLES.filter((s) => s.id !== "lofi")) assert.ok(calm.perSecond < profile(other).perSecond, `lo-fi mais calmo que ${other.id}`);
+  assert.ok(calm.duets >= 0.4, `duetos em ${(calm.duets * 100).toFixed(0)}% das notas`);
+  // motivos rítmicos: o ritmo de um trecho volta logo em seguida (mais que na média dos outros estilos)
+  const returns = (style) => {
+    let hits = 0, total = 0;
+    for (let variation = 0; variation < 8; variation++) {
+      const data = structuredClone({ ...VARIED, tempo: 80 });
+      const made = generateGroove(data, { style, phrases: true, variation }).chords;
+      data.chords.forEach((c, i) => Object.assign(c, made[i]));
+      const ev = loadProject(data).project.chords.flatMap((c, ci) => c.phrase_events.map((e) => ({ ...e, start: e.start + ci * 1920 })));
+      const iois = ev.slice(1).map((e, i) => e.start - ev[i].start);
+      for (let i = 0; i + 4 <= iois.length; i++) {
+        total += 1;
+        const w = iois.slice(i, i + 2).join();
+        for (let j = i + 2; j < Math.min(iois.length - 1, i + 8); j++) if (iois.slice(j, j + 2).join() === w) { hits += 1; break; }
+      }
+    }
+    return hits / total;
+  };
+  assert.ok(returns(lofi) >= 0.5, `ritmo que volta: ${returns(lofi)}`);
+  // bateria: toques atrasados (fora da grade) e chimbal com várias velocidades, em todos os beats
+  const data = { ...bare(), chords: [...bare().chords, ...bare().chords] };
+  for (const beat of lofi.beats) {
+    const text = generateGroove(data, { style: lofi, drums: beat.id, drumVariation: 1 }).drums;
+    assert.deepEqual(parseDrums(text).errors, [], beat.id);
+    const notes = drumNotes(loadProject({ ...data, drums: text }).project, 8 * 1920);
+    // na grade da bateria todos os toques caem em múltiplos de 40 ticks; os atrasados saem 12 (">") ou 24 (">>") depois
+    const delayed = notes.filter((n) => n[0] % 40 !== 0);
+    assert.ok(delayed.every((n) => [12, 24].includes(n[0] % 40)), `${beat.id}: atrasos só de 12 ou 24 ticks`);
+    assert.ok(delayed.length >= 20, `${beat.id}: ${delayed.length} toques um pouquinho atrasados`);
+    const hats = notes.filter((n) => [42, 46, 51, 53].includes(n[2]));
+    assert.ok(new Set(hats.map((n) => n[3])).size >= 3, `${beat.id}: chimbal com dinâmica`);
+    assert.ok(hats.length >= 16, `${beat.id}: chimbal presente`);
+  }
+});
+
+test("lo-fi e o rollback do Weimar: o lo-fi tem perfil próprio e não muda com o PERFIL_ATIVO", () => {
+  assert.equal(PERFIL_POR_ESTILO.lofi, "lofi");
+  assert.equal(perfilDoEstilo("lofi"), PERFIS.lofi);
+  assert.equal(perfilDoEstilo("lofi", undefined), PERFIS.lofi);
+  // os outros estilos seguem o perfil ativo (e podem ser forçados, para testes)
+  for (const style of STYLES.filter((s) => s.id !== "lofi")) {
+    assert.equal(perfilDoEstilo(style.id), PERFIS[PERFIL_ATIVO]);
+    assert.equal(perfilDoEstilo(style.id, "anterior"), PERFIS.anterior);
+  }
+  // simula o rollback: forçando "anterior" nos outros estilos, o lo-fi fica igual; nos outros, muda
+  const phrases = (style, perfil) => generateGroove(structuredClone(VARIED), { style, phrases: true, variation: 2, perfil }).chords.map((c) => c.phrase).join("|");
+  const lofi = findStyle("lofi");
+  assert.equal(phrases(lofi, undefined), phrases(lofi, "lofi"));
+  const jazz = findStyle("swing");
+  assert.notEqual(phrases(jazz, "anterior"), phrases(jazz, "weimar"));
+  // o perfil do lo-fi é uma dose pequena do Weimar: sem blue notes, tensões de dominante só como cor
+  assert.equal(PERFIS.lofi.tercaBlue, false);
+  assert.ok(PERFIS.lofi.tensoes.alterada > PERFIS.anterior.tensoes.alterada && PERFIS.lofi.tensoes.alterada < PERFIS.weimar.tensoes.alterada);
+  assert.ok(PERFIS.lofi.repousoNaTensao > 1 && PERFIS.lofi.repousoNaTensao < PERFIS.weimar.repousoNaTensao);
 });

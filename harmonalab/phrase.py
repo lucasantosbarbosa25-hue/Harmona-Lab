@@ -223,7 +223,7 @@ def parse_comp(value) -> tuple[list[tuple[list[CompHit], int]], list[str]]:
 #
 #   "H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"
 #
-# Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve, "!!" forte, "??" fantasma). Cada camada se repete até o fim do compasso, e a
+# Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve, "!!" forte, "??" fantasma; ">" e ">>" tocam um pouquinho depois do tempo). Cada camada se repete até o fim do compasso, e a
 # sequência de compassos se repete até o fim da progressão. As peças seguem o padrão General MIDI (canal 10).
 # ---------------------------------------------------------------------------
 
@@ -236,7 +236,9 @@ DRUM_PIECES = {
 DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, " \
              "T/M/F tons, B cowbell (campana), L clave, A pandeirola, Q ganzá, G conga aberta aguda, N conga grave, U conga muda (tapa), " \
              "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô"
-_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)(!!|\?\?|[!?])?$")
+#: Atraso fino de um toque da bateria (tocar um pouquinho depois do tempo), em ticks: ">" ≈ 19 ms e ">>" ≈ 38 ms a 80 BPM.
+DRUM_DELAY = {"": 0, ">": 12, ">>": 24}
+_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)(!!|\?\?|[!?])?(>>|>)?$")
 
 
 def split_drums(value) -> list[list[list[str]]]:
@@ -266,7 +268,7 @@ def parse_drums(value) -> tuple[list[list[tuple[list[CompHit], int]]], list[str]
                 head, slash, dur_text = token.partition("/")
                 m = _DRUM_TOKEN_RE.match(head)
                 if not slash or not dur_text or not m or (m.group(1) != "r" and m.group(1) not in DRUM_PIECES):
-                    errors.append(f'Não entendi "{token}" na bateria: escreva PEÇA/DURAÇÃO, por exemplo K/4, S!/8 (acento) ou r/8 (pausa). Peças: {DRUM_NAMES}.')
+                    errors.append(f'Não entendi "{token}" na bateria: escreva PEÇA/DURAÇÃO, por exemplo K/4, S!/8 (acento), S>/8 (um pouco atrasada) ou r/8 (pausa). Peças: {DRUM_NAMES}.')
                     continue
                 try:
                     length = duration_ticks(dur_text)
@@ -274,7 +276,7 @@ def parse_drums(value) -> tuple[list[list[tuple[list[CompHit], int]]], list[str]
                     errors.append(f'{exc} (em "{token}")')
                     continue
                 if m.group(1) != "r":
-                    hits.append(CompHit(str(DRUM_PIECES[m.group(1)]), tick, length, COMP_ACCENT[m.group(2) or ""]))
+                    hits.append(CompHit(str(DRUM_PIECES[m.group(1)]), tick + DRUM_DELAY[m.group(3) or ""], length, COMP_ACCENT[m.group(2) or ""]))
                 tick += length
             if tick > 0:
                 layers.append((hits, tick))

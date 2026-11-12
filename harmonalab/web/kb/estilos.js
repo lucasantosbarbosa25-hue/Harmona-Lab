@@ -16,7 +16,8 @@
 //                  A pandeirola (tamborim), Q ganzá, G/N congas. Os beats vão do básico às variações. Viradas (fills): 1 ou 2 tempos
 //                  que substituem o fim do compasso, com uma ou mais camadas (";", ex.: bumbo por baixo); depois dela o beat
 //                  volta no tempo 1, com um ataque de prato. Dinâmica: "!!" forte, "!" acento, "?" leve, "??" fantasma; o app
-//                  dá dinâmica sozinho ao chimbal e à condução que não tiverem marca.
+//                  dá dinâmica sozinho ao chimbal e à condução que não tiverem marca. Atraso fino: ">" (≈ 19 ms a 80 BPM) e
+//                  ">>" (≈ 38 ms) tocam o toque um pouquinho depois do tempo (ex.: S!>/4), a bateria "arrastada" do lo-fi.
 //                  Os beats têm dois compassos: o segundo varia o chimbal (semicolcheias, notas leves, aberturas "O").
 //   percussão (percussion): mesma notação, numa camada própria (congas, bongô, güiro, ganzá, pandeirola, agogô...).
 //                  Peças novas: U conga muda (tapa), V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô.
@@ -39,6 +40,7 @@
 // duet: chance de cada trecho ganhar vozes abaixo da melodia nas notas longas: oitavas (octave), sextas da escala (sixth)
 // ou tríades quartais (triad). Passagens e notas curtas ficam numa voz só. As chegadas sustentam até a próxima nota.
 // motif: chance de o motivo do trecho ser repetido duas vezes (com outras notas) antes da variação.
+// shift (opcional): níveis a somar à intensidade do solo; -1 deixa o estilo mais calmo (lo-fi).
 // Regra fixa do gerador: dentro de uma frase, nunca a mesma nota duas vezes seguidas (pausa de até um tempo no meio não
 // conta como fim de frase). Entre o fim de uma frase e o começo da próxima, pode. Baixo e levadas não seguem essa regra.
 
@@ -183,6 +185,46 @@ export const STYLES = [
     cells: ["r8 16 16+4", "r16 16 8 4", "8. 16+4", "r8 8 4", "16 16 8+4", "4 r4", "r4 r8 16 16", "8 8 r4", "r16 8 16+4", "2", "8t 8t 8t 4", "r8. 16 4"],
     fast: ["16 16 16 16 4", "32 32 32 32 32 32 32 32 4", "16t 16t 16t 16t 16t 16t 4"],
     phrase: { chromatic: 0.3, enclosure: 0.1, blue: 0.15, leap: 0.2, rest: 0.3, motif: 0.6, pentatonic: true, minNotes: 3 , duet: { octave: 0.1, sixth: 0.25, triad: 0.3 } },
+  },
+  {
+    id: "lofi", label: "Lo-fi",
+    influences: ["Nujabes", "J Dilla", "Tomppabeats", "Idealism", "Jinsang"],
+    summary: "Hip hop lento e relaxado (70 a 90 BPM): Rhodes com acordes de sétima e nona, bateria um pouco atrasada e com swing, melodias simples e repetidas, muitas vezes em oitavas ou sextas.",
+    comps: [
+      { id: "soltos", bass: "sub", label: "Acordes soltos e respirando", pattern: "T/2. T?/4" },
+      { id: "sincope", bass: "sincope", label: "Rhodes com síncope suave", pattern: "T/4. T?/8 r/4 T?/4" },
+      { id: "resposta", bass: "oitava", label: "Baixo longo e resposta leve", pattern: "E/2. r/4 ; r/4 D?/8 D/8 r/2" },
+      { id: "rolado", bass: "sub", label: "Arpejo rolado", pattern: "1/8 2/8 3/8 P/8 T?/2" },
+      { id: "motivo", kind: "ostinato", bass: "oitava", label: "Motivo de piano na pentatônica", pattern: "E/1 ; M1/8 M3/8 M2/4 r/4 M3/8 M1/8" },
+      { id: "arpejo", kind: "ostinato", bass: "sub", label: "Arpejo contínuo", pattern: "S1/8 S3/8 S5/8 S3/8 S4/8 S5/8 S3/8 S1/8" },
+    ],
+    // ">" e ">>" tocam um pouquinho depois do tempo (a bateria "arrastada" do estilo, de J Dilla e do boom-bap)
+    beats: [
+      { id: "boombap", label: "Boom-bap atrasado", bars: [
+        "H!/8 H??>/8 H/8 H?>/8 H!/8 H??>/8 H/8 H?>/8 ; K!/4 r/8 K?>/8 r/4 r/8 K/8 ; r/4 S!>/4 r/4 S!>>/4",
+        "H!/8 H??>/8 H/8 H?>/8 H!/8 H??>/8 H/8 O?>/8 ; K!/4 r/8 K?>/8 r/4 r/8 K?>/8 ; r/4 S!>/4 r/4 S!>>/8 S??>>/8"] },
+      { id: "swing", label: "Swing de colcheias", bars: [
+        "H!/4t H??>/8t H/4t H?>/8t H!/4t H??>/8t H/4t H?>/8t ; K!/4 r/4 r/8 K?>/8 r/4 ; r/4 S!>/4 r/4 S!>/4",
+        "H!/4t H??>/8t H/4t H?>/8t H!/4t H??>/8t H/4t O?>/8t ; K!/4 r/8 K?>/8 r/4 K?>/4 ; r/4 S!>/4 r/4 S!>>/4"] },
+      { id: "sutil", label: "Chimbal em semicolcheias suaves", bars: [
+        "H!/16 H??/16 H?>/16 H??/16 H/16 H??/16 H?>/16 H??/16 H!/16 H??/16 H?>/16 H??/16 H/16 H??/16 H?>/16 H??/16 ; K!/4 r/4 K?>/8 r/4 r/8 ; r/4 S!>/4 r/4 S!>>/4",
+        "H!/16 H??/16 H?>/16 H??/16 H/16 H??/16 H?>/16 H??/16 H!/16 H??/16 H?>/16 H??/16 H/16 H??/16 H??/16 O?>/16 ; K!/4 r/8 K?>/8 r/4 r/8 K??>>/8 ; r/4 S!>/4 r/4 S!>>/4"] },
+    ],
+    percussion: [
+      { id: "shaker", label: "Shaker suave", bars: ["Q!/16 Q??/16 Q?>/16 Q??/16 Q/16 Q??/16 Q?>/16 Q??/16 Q!/16 Q??/16 Q?>/16 Q??/16 Q/16 Q??/16 Q?>/16 Q??/16"] },
+      { id: "pandeirola", label: "Shaker e pandeirola", bars: ["Q?/8 Q??>/8 Q?/8 Q??>/8 Q?/8 Q??>/8 Q?/8 Q??>/8 ; r/4 A??>/4 r/4 A??>/4"] },
+    ],
+    fills: ["S??>/16 S?>/16 S>/8 T?>/8 M?>/8 ; K/4 r/4", "r/8 S??>/16 S?>/16 S>/8 S!>/8 ; K/4 r/4", "T?>/8 T>/8 M?>/8 F!>/8 ; r/4 K/4", "S??>/16 S?>/16 S!>/8", "X>/8 X?>/8"],
+    bass: [
+      { id: "sub", label: "Sub longo", pattern: "1/2. 5/4" },
+      { id: "oitava", label: "Raiz e oitava", pattern: "1/4. 1/8 r/4 8/4" },
+      { id: "sincope", label: "Síncope suave", pattern: "1/4 r/8 1/8 r/4 5/8 x/8" },
+    ],
+    bassFill: { chance: 0.25, figure: "8", beats: 1, high: 12, shapes: ["chegada", "descida"], long: 0.3 },
+    cells: ["2", "4 4", "4. 8", "8 8 4", "r8 8 4", "4 r8 8", "8 4 8", "r4 8 8", "4+8 8", "8 8 8 8", "r4 4", "8. 16 4", "4. 8 4", "8 8 r8 8", "8. 16 8 8", "r8 8 8. 16"],
+    fast: ["8 8 8 8 8 8", "16 16 8 8 8", "8. 16 8. 16"],
+    // shift: -1 deixa o solo um nível mais calmo que a intensidade pedida; motif alto: o mesmo motivo rítmico volta muito
+    phrase: { chromatic: 0.08, enclosure: 0, blue: 0, leap: 0.15, rest: 0.4, motif: 0.85, pentatonic: true, minNotes: 2, shift: -1, duet: { octave: 0.25, sixth: 0.35, triad: 0.1 } },
   },
   {
     id: "gospel", label: "Gospel americano",

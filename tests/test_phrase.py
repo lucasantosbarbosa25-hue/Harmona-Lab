@@ -379,3 +379,20 @@ def test_linha_de_baixo_vai_numa_faixa_propria_no_canal_3():
     assert [i["message"] for i in report["issues"] if i["field"] == "bass_line"] == [
         'Baixo: Não entendi "H2". Use nomes como C4, F#2, Eb3 ou números MIDI (0–127).', "A linha de baixo dura 3 tempos, mais que os 1 do acorde."]
     assert rename_project_notes({"chords": [{"bass_line": "E1/4"}]}, "C3")["chords"][0]["bass_line"] == "E0/4"
+
+
+def test_bateria_atraso_fino():
+    """">" e ">>" atrasam o toque um pouquinho, sem mudar a duração da camada nem os outros toques."""
+    from harmonalab.phrase import parse_drums
+    bars, errors = parse_drums("K/4 S>/4 H>>/8 H/8 r/4")
+    assert errors == []
+    hits, total = bars[0][0]
+    assert total == 480 + 480 + 240 + 240 + 480
+    assert [(h.part, h.start) for h in hits] == [("36", 0), ("38", 480 + 12), ("42", 960 + 24), ("42", 1200)]
+    # combina com a dinâmica: a ordem é peça, dinâmica, atraso
+    bars, errors = parse_drums("S!>/4 S??>>/4")
+    assert errors == []
+    assert [(h.accent, h.start) for h in bars[0][0][0]] == [(16, 12), (-40, 480 + 24)]
+    # o que não existe dá erro
+    for bad in ("K>>>/4", "S>!/4", "K<>/4"):
+        assert parse_drums(bad)[1], bad

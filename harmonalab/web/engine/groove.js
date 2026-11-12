@@ -9,7 +9,7 @@
 import { beatsPerBar, loadProject, sounding, totalBeats } from "./model.js";
 import { TICKS_PER_BEAT, durationTicks } from "./phrase.js";
 import { LETTER_PC, makeNote, noteName, pitchClass, pitchClassName } from "./pitch.js";
-import { PERFIL_ATIVO, perfil as perfilDe } from "../kb/fraseado.js";
+import { perfilDoEstilo } from "../kb/fraseado.js";
 
 const LOW = 60; // tessitura da frase: C4 a E6 (com C4 = 60)
 const HIGH = 88;
@@ -105,7 +105,7 @@ function hatDynamics(layer, { swing, rng }) {
     const ticks = durationTicks(dur);
     const at = pos;
     pos += ticks;
-    const m = /^([A-Z])(!!|\?\?|[!?])?$/.exec(head);
+    const m = /^([A-Z])(!!|\?\?|[!?])?(>>|>)?$/.exec(head);
     if (!m || !["H", "R", "E"].includes(m[1]) || m[2]) return token;
     const beat = at % TICKS_PER_BEAT === 0;
     const index = Math.floor(at / TICKS_PER_BEAT);
@@ -114,7 +114,7 @@ function hatDynamics(layer, { swing, rng }) {
     else if (beat) mark = index === 0 && rng.chance(0.3) ? "!!" : rng.chance(0.1) ? "" : "!";
     else if (at % (TICKS_PER_BEAT / 2) === 0) mark = rng.chance(0.15) ? "?" : "";
     else mark = rng.chance(0.3) ? "??" : "?";
-    return `${m[1]}${mark}/${dur}`;
+    return `${m[1]}${mark}${m[3] ?? ""}/${dur}`;
   }).join(" ");
 }
 
@@ -356,7 +356,8 @@ function makePlanner({ style, cellTexts, fastTexts = [], rng, level, tempo, tota
   const newSegment = () => {
     const p = totalTicks ? Math.min(1, at / totalTicks) : 0;
     const curve = p < 0.7 ? p / 0.7 : 1 - ((p - 0.7) / 0.3) * 0.55;
-    let intensity = Math.max(0, Math.min(3, Math.round(base + height * curve + (rng.next() - 0.5) * 0.9)));
+    // style.phrase.shift: estilos mais calmos (lo-fi) ficam um ou mais níveis abaixo da intensidade pedida
+    let intensity = Math.max(0, Math.min(3, Math.round(base + height * curve + (rng.next() - 0.5) * 0.9) + (style.phrase.shift ?? 0)));
     // vozes do trecho (oitava, sexta, tríade): só as notas longas ganham; com tríades, o trecho fica mais calmo
     const r = rng.next();
     const o = duet.octave ?? 0;
@@ -941,7 +942,7 @@ function speller(chord, middleC) {
 export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
   phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null, intensity = "equilibrado",
-  perfil = PERFIL_ATIVO, // perfil de fraseado (kb/fraseado.js): "weimar" ou "anterior"
+  perfil, // perfil de fraseado (kb/fraseado.js), para testes; sem ele vale o do estilo (lo-fi) ou o PERFIL_ATIVO
 } = {}) {
   const { project } = loadProject(data);
   const out = project.chords.map(() => ({}));
@@ -973,7 +974,7 @@ export function generateGroove(data, {
       if (!sounding(chord).length) { planner.skip(length); return { ctx: null, slots: null, length }; }
       if (!chord.phrase_pcs.length) withoutScale += 1;
       const color = colorOf(chord);
-      const ctx = chordContext(chord, { style, color: color === "outside" ? "outside" : color, scales, profile: perfilDe(perfil) });
+      const ctx = chordContext(chord, { style, color: color === "outside" ? "outside" : color, scales, profile: perfilDoEstilo(style.id, perfil) });
       const nextHasPhrase = Boolean(project.chords[i + 1] && sounding(project.chords[i + 1]).length);
       const toNext = nextHasPhrase && length >= 4 * TICKS_PER_BEAT && rng.chance(0.5);
       const slots = (color === "outside" && length >= 3 * TICKS_PER_BEAT ? planner.takeOutside(length, { toNext }) : null) ?? planner.take(length);

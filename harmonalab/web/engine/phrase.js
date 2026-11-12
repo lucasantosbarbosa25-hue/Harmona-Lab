@@ -190,7 +190,7 @@ export function parseComp(value) {
 // ---------------------------------------------------------------------------
 // Bateria ("drums", no projeto): compassos separados por "|"; em cada compasso, camadas separadas por ";" soam juntas.
 //   "H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"
-// Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve, "!!" forte, "??" fantasma). Cada camada se repete até o fim do compasso, e a
+// Cada ficha é PEÇA/DURAÇÃO (r = pausa; "!" acento, "?" leve, "!!" forte, "??" fantasma; ">" e ">>" tocam um pouquinho depois do tempo). Cada camada se repete até o fim do compasso, e a
 // sequência de compassos se repete até o fim da progressão. As peças seguem o padrão General MIDI (canal 10).
 // ---------------------------------------------------------------------------
 
@@ -203,7 +203,9 @@ export const DRUM_PIECES = {
 const DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, "
   + "T/M/F tons, B cowbell (campana), L clave, A pandeirola, Q ganzá, G conga aberta aguda, N conga grave, U conga muda (tapa), "
   + "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô";
-const DRUM_TOKEN_RE = /^([A-Z]|r)(!!|\?\?|[!?])?$/;
+// Atraso fino de um toque da bateria (tocar um pouquinho depois do tempo), em ticks: ">" ≈ 19 ms e ">>" ≈ 38 ms a 80 BPM.
+const DRUM_DELAY = { "": 0, ">": 12, ">>": 24 };
+const DRUM_TOKEN_RE = /^([A-Z]|r)(!!|\?\?|[!?])?(>>|>)?$/;
 
 /** Compassos → camadas → fichas. */
 export function splitDrums(value) {
@@ -229,7 +231,7 @@ export function parseDrums(value) {
         const [head, slash, durText] = partition(token, "/");
         const m = head.match(DRUM_TOKEN_RE);
         if (!slash || !durText || !m || (m[1] !== "r" && !Object.hasOwn(DRUM_PIECES, m[1]))) {
-          errors.push(`Não entendi "${token}" na bateria: escreva PEÇA/DURAÇÃO, por exemplo K/4, S!/8 (acento) ou r/8 (pausa). Peças: ${DRUM_NAMES}.`);
+          errors.push(`Não entendi "${token}" na bateria: escreva PEÇA/DURAÇÃO, por exemplo K/4, S!/8 (acento), S>/8 (um pouco atrasada) ou r/8 (pausa). Peças: ${DRUM_NAMES}.`);
           continue;
         }
         let length;
@@ -240,7 +242,7 @@ export function parseDrums(value) {
           errors.push(`${err.message} (em "${token}")`);
           continue;
         }
-        if (m[1] !== "r") hits.push({ part: DRUM_PIECES[m[1]], start: tick, length, accent: COMP_ACCENT[m[2] ?? ""] });
+        if (m[1] !== "r") hits.push({ part: DRUM_PIECES[m[1]], start: tick + DRUM_DELAY[m[3] ?? ""], length, accent: COMP_ACCENT[m[2] ?? ""] });
         tick += length;
       }
       if (tick > 0) layers.push({ hits, ticks: tick });

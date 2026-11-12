@@ -159,6 +159,8 @@ CASES = [
     {"drums": "Z/4 K K/9 k/4 R!!/4 r!/4 KS/4 K/4+x", "chords": [{"notes": "C4"}]},
     {"drums": "H!!/8 H??/8 H/8 H?/8 O!/8 H??/8 R!!/8 H/8 ; K/4 S??/8 S??/8 S!!/4 r/4", "chords": [{"notes": "C4 E4", "comp": "T!!/8 D??/8 B?/4 E!/2"}]},  # níveis de dinâmica
     {"drums": "H!?/4 H???/4 S!!!/4", "chords": [{"notes": "C4"}]},  # combinações que não existem
+    {"drums": "K>/4 S!>/4 K>>/8 H??>>/8 S?>/4 ; H>/8 H?>>/8 H/8 H??>/8 H!>/8 H?>/8 H/8 H??>>/8", "percussion": "Q?>/16 Q??>>/16 A>/8", "chords": [{"notes": "C4 E4", "duration_beats": 8}]},  # atraso fino
+    {"drums": "K>>>/4 S>!/4 S>>>/4", "chords": [{"notes": "C4"}]},  # combinações que não existem
     {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
     {"drums": 5, "chords": [{"notes": "C4"}]},
     {"drums": " | ; ", "chords": [{"notes": "C4"}]},
