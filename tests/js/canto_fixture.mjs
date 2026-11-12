@@ -21,12 +21,13 @@ function noiseGen(seed) {
  * Grava a melodia "cantada". options: { bpm, transpose (semitons), vibrato (centésimos), detune (centésimos), noise (dB em
  * relação à voz; null = sem), jitter (s), glide (s), legato, click (dB do clique em relação à voz; null = sem vazamento),
  * latency (s), countIn (tempos), seed, echo (s: eco da sala no clique), scoop (s: a voz chega de baixo em cada nota),
- * tremolo (0 a 1: o volume oscila), tail (o fim da respiração depois da última nota) }.
+ * tremolo (0 a 1: o volume oscila), tail (o fim da respiração depois da última nota), drift (centésimos: quanto a voz
+ * desafina, aos poucos, do começo ao fim da frase) }.
  * Devolve { samples, clickTimes (agendados), truth (eventos esperados) }.
  */
 export function singMelody(melody = MELODY, {
   bpm = 80, transpose = 0, vibrato = 0, detune = 0, noise = null, jitter = 0, glide = 0, legato = false,
-  click = null, latency = 0.08, countIn = 4, seed = 7, lead = 0.4, echo = 0, scoop = 0, tremolo = 0, tail = false,
+  click = null, latency = 0.08, countIn = 4, seed = 7, lead = 0.4, echo = 0, scoop = 0, tremolo = 0, tail = false, drift = 0,
 } = {}) {
   const rnd = noiseGen(seed);
   const beat = 60 / bpm;
@@ -42,7 +43,7 @@ export function singMelody(melody = MELODY, {
     const k = notes.findIndex((n) => t >= n.on && t < n.off);
     if (k < 0) { phase = 0; continue; }
     const n = notes[k];
-    let midi = n.midi + detune / 100;
+    let midi = n.midi + detune / 100 + (drift / 100) * (k / Math.max(1, notes.length - 1)); // vai desafinando aos poucos
     const prev = notes[k - 1];
     if (glide && prev && t - n.on < glide) midi = prev.midi + detune / 100 + (midi - prev.midi - detune / 100) * ((t - n.on) / glide);
     if (scoop && t - n.on < scoop) midi -= 1.5 * (1 - (t - n.on) / scoop); // a voz chega de baixo na nota

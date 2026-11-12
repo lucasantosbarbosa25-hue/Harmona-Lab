@@ -3,6 +3,9 @@
 import { speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
 
 const COUNT_IN_BARS = 1;
+// Cantar devagar acerta mais (para quem não é cantor profissional). A Voz fica guardada em figuras, então depois o BPM do
+// projeto pode subir (no campo BPM ou pelo prompt) e a melodia acompanha, sem gravar de novo.
+export const SING_BPM = { min: 40, max: 100, suggested: 80 };
 const MAX_SECONDS = 120;
 const MODES = {
   fone: { volume: 0.7, hint: "O clique toca só no fone. É a captação mais limpa." },
@@ -141,7 +144,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
 
   const open = () => {
     const d = defaults();
-    $("#canto-bpm").value = d.bpm || 80;
+    $("#canto-bpm").value = d.bpm >= SING_BPM.min && d.bpm <= SING_BPM.max ? d.bpm : SING_BPM.suggested;
     $("#canto-signature").value = ["2/4", "3/4", "4/4", "6/8"].includes(d.timeSignature) ? d.timeSignature : "4/4";
     $("#canto-volume").value = MODES[state.mode].volume;
     renderMode();
@@ -154,7 +157,13 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
   const record = async () => {
     if (state.recording) return finish();
     const bpm = Number(String($("#canto-bpm").value).replace(",", "."));
-    if (!(bpm >= 30 && bpm <= 240)) { status("Escolha um BPM entre 30 e 240: é ele que o app usa para encaixar o ritmo.", true); $("#canto-bpm").focus(); return; }
+    if (!(bpm >= SING_BPM.min && bpm <= SING_BPM.max)) {
+      status(bpm > SING_BPM.max
+        ? `Para cantar, use até ${SING_BPM.max} BPM: devagar o app acerta mais. Depois é só subir o BPM do projeto (ou pedir no prompt): a melodia acompanha.`
+        : `Escolha um BPM entre ${SING_BPM.min} e ${SING_BPM.max}: é ele que o app usa para encaixar o ritmo.`, true);
+      $("#canto-bpm").focus();
+      return;
+    }
     const signature = $("#canto-signature").value;
     const beatsPerBar = beatsPerBarOf(signature);
     stop?.();
@@ -290,7 +299,10 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     const recent = state.taps.slice(-5);
     if (recent.length >= 2) {
       const gaps = recent.slice(1).map((t, i) => t - recent[i]);
-      $("#canto-bpm").value = Math.round(60000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length));
+      const tapped = Math.round(60000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length));
+      // rápido demais para cantar: a metade (cantar em meio tempo); devagar demais: o dobro
+      const fit = tapped > SING_BPM.max && tapped / 2 >= SING_BPM.min ? Math.round(tapped / 2) : tapped < SING_BPM.min && tapped * 2 <= SING_BPM.max ? tapped * 2 : tapped;
+      $("#canto-bpm").value = Math.max(SING_BPM.min, Math.min(SING_BPM.max, fit));
     }
   });
   $("#canto-roll").addEventListener("click", (event) => {

@@ -38,7 +38,7 @@ test("afinação geral e tonalidade: quem canta todo um pouco baixo não erra as
   const { result } = run({ detune: -35 });
   assert.ok(Math.abs(result.tuning.offset + 0.35) < 0.08, `afinação estimada: ${result.tuning.offset}`);
   assert.equal(result.key.name, "Am");
-  assert.ok(result.warnings.some((w) => w.includes("35 centésimos abaixo")));
+  assert.ok(result.warnings.some((w) => /3[3-7] centésimos abaixo/.test(w)), result.warnings.join(" | "));
   // nota no meio do caminho: a escala decide
   const scale = estimateKey([{ midi: 60, start: 0, end: 1 }, { midi: 64, start: 1, end: 2 }, { midi: 67, start: 2, end: 3 }]).scale;
   assert.equal(snapPitch(65.45, 0, scale), 65); // F, e não F#, em dó maior
@@ -125,4 +125,15 @@ test("simplificar: o pedaço curto junta-se à nota que permanece (com o começo
   assert.deepEqual(simplifyNotes([n(0, 1, 52), n(1.4, 1.5, 47)], { minSeconds: 0.2 }).map((x) => x.note), [52]);
   // salto grande não é scoop: o pedaço curto colado a uma nota longe sai, não muda a altura dela
   assert.deepEqual(simplifyNotes([n(0, 0.1, 45), n(0.1, 1, 52)], { minSeconds: 0.2 }).map((x) => x.note), [52]);
+});
+
+test("quem vai desafinando aos poucos (comum em quem não é cantor profissional): a afinação acompanha e as notas saem certas", () => {
+  const long = [[0, 2, 64], [2, 1, 67], [3, 1, 69], [4, 2, 71], [6, 2, 69], [8, 1, 67], [9, 1, 64], [10, 2, 62], [12, 2, 64], [14, 1, 67], [15, 1, 66], [16, 4, 64]]
+    .map(([beat, beats, midi]) => ({ beat, beats, midi }));
+  for (const drift of [-90, -70, -50, 40, 70]) {
+    const { result, s } = run({ bpm: 80, drift, vibrato: 20, jitter: 0.02 }, { fastest: "8" }, long);
+    assert.equal(s.hits, s.total, `deriva de ${drift} centésimos: ${result.text}`);
+    assert.equal(s.extra, 0);
+    if (Math.abs(drift) >= 50) assert.ok(result.warnings.some((w) => w.includes("mudando aos poucos")), `avisa a deriva de ${drift}`);
+  }
 });

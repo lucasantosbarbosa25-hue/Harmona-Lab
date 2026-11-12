@@ -250,6 +250,30 @@ export function estimateTuning(notes) {
   return { offset: strength > 0.3 ? offset : 0, strength };
 }
 
+/**
+ * Afinação que acompanha a pessoa: quem não é cantor profissional costuma ir desafinando aos poucos (em geral, caindo).
+ * Começa pela afinação das primeiras notas e, nota a nota, segue a referência devagar: cada nota é lida em relação à
+ * referência do momento, então uma deriva de quase um semitom ao longo da frase não troca as notas. Devolve um deslocamento
+ * (em semitons) por nota, na ordem das notas (por início).
+ */
+export function trackTuning(notes, { follow = 0.35 } = {}) {
+  if (!notes.length) return [];
+  const order = notes.map((n, i) => i).sort((a, b) => notes[a].start - notes[b].start);
+  const first = estimateTuning(order.slice(0, 3).map((i) => notes[i])).offset;
+  const offsets = new Array(notes.length);
+  let ref = first;
+  for (const i of order) {
+    const n = notes[i];
+    const target = Math.round(n.midi - ref);
+    const deviation = n.midi - target; // desvio desta nota em relação ao semitom escolhido
+    offsets[i] = ref;
+    // notas longas pesam mais; o salto de referência por nota é limitado (a deriva é lenta)
+    const weight = Math.min(1, (n.end - n.start) / 0.6) * follow;
+    ref += Math.max(-0.15, Math.min(0.15, weight * (deviation - ref)));
+  }
+  return offsets;
+}
+
 const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
 const MINOR_PROFILE = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
 const NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
@@ -469,8 +493,12 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
     return { events: [], text: "", key: null, tuning: { offset: 0, strength: 0 }, leak, latency, shift: 0, notes, warnings };
   }
   const tuning = estimateTuning(notes);
-  const key = estimateKey(notes.map((n) => ({ ...n, midi: n.midi - tuning.offset })));
-  for (const n of notes) n.note = snapPitch(n.midi, tuning.offset, key.scale);
+  const offsets = trackTuning(notes);
+  const key = estimateKey(notes.map((n, i) => ({ ...n, midi: n.midi - offsets[i] })));
+  notes.forEach((n, i) => { n.note = snapPitch(n.midi, offsets[i], key.scale); });
+  const drift = offsets.length ? Math.max(...offsets) - Math.min(...offsets) : 0;
+  tuning.drift = drift;
+  tuning.offset = offsets.length ? offsets.reduce((a, b) => a + b, 0) / offsets.length : tuning.offset;
   // a figura mais rápida que a pessoa quer (colcheia, por padrão): pedaço mais curto que ~60% dela não é nota de verdade
   const step = fastest === "16" ? 0.25 : 0.5;
   const simple = simplifyNotes(notes, { minSeconds: 0.6 * step * (60 / bpm), reach: 2 });
@@ -491,7 +519,8 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
     if (clickRms && voiceRms) clickVsVoice = 20 * Math.log10(clickRms / voiceRms);
     if (clickVsVoice != null && clickVsVoice > 0) warnings.push("O clique do metrônomo chegou ao microfone mais alto que a voz. Baixe o volume do clique ou use fone, para não confundir as notas.");
   }
-  if (Math.abs(tuning.offset) > 0.25) warnings.push(`O canto estava ${Math.round(Math.abs(tuning.offset) * 100)} centésimos ${tuning.offset > 0 ? "acima" : "abaixo"} da afinação; corrigi.`);
+  if (drift > 0.3) warnings.push(`A afinação foi mudando aos poucos durante o canto (cerca de ${Math.round(drift * 100)} centésimos); acompanhei e corrigi as notas.`);
+  else if (Math.abs(tuning.offset) > 0.25) warnings.push(`O canto estava ${Math.round(Math.abs(tuning.offset) * 100)} centésimos ${tuning.offset > 0 ? "acima" : "abaixo"} da afinação; corrigi.`);
   if (shift) warnings.push("A melodia começou antes do tempo 1 (anacruse): ela ganhou um compasso no começo.");
   return { events, text: voiceText(events, { key, middleC }), key, tuning, leak, latency, shift, notes, warnings, clickVsVoice };
 }

@@ -128,12 +128,12 @@ escala** de cada acorde. O pedido fica leve e a resposta, rápida. O interruptor
 desligado por padrão) decide se a IA pesquisa os artistas citados antes de compor, o que é mais fiel e mais demorado.
 Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
 
-- **Cantar uma melodia** (no cartão da IA): em vez de escrever, você canta. Escolha o **BPM** (obrigatório, com botão
-  para marcar no toque) e o compasso; um **metrônomo amadeirado** (woodblock) conta um compasso e segue tocando. Três modos:
+- **Cantar uma melodia** (no cartão da IA): em vez de escrever, você canta. Escolha o **BPM** (obrigatório, de 40 a 100, com botão
+  para marcar no toque; cantar devagar acerta mais, e a Voz fica em figuras: depois o BPM do projeto pode subir e ela acompanha) e o compasso; um **metrônomo amadeirado** (woodblock) conta um compasso e segue tocando. Três modos:
   **com fone** (o clique só no fone: a captação mais limpa; prefira fone com fio, porque o Bluetooth atrasa o som e às vezes
   troca o microfone), **sem fone** (clique baixinho no alto-falante) e **só a contagem** (depois, o pulso aparece só na
   tela). O áudio **não sai do aparelho**: o app acha a altura da voz (algoritmo YIN), separa as notas (o vibrato não quebra
-  a nota), corrige quem canta todo um pouco acima ou abaixo, descobre o tom provável (que decide as notas duvidosas) e encaixa
+  a nota), corrige quem canta todo um pouco acima ou abaixo **e acompanha quem vai desafinando aos poucos** (até quase um semitom ao longo da frase), descobre o tom provável (que decide as notas duvidosas) e encaixa
   o ritmo no pulso. **Nota mais rápida da melodia**: colcheia (padrão, para melodias simples) ou semicolcheia; pedaços
   mais curtos que isso (a voz chegando de baixo na nota, um escorregão, o volume oscilando, o fim da respiração) juntam-se à
   nota que permanece (com o começo do primeiro) ou saem, e a nota repetida de propósito (sílaba nova) continua repetida.
