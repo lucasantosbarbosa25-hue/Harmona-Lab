@@ -180,10 +180,16 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   compasso vêm do arquivo, a faixa mais provável é escolhida (dá para trocar), acordes viram a nota mais aguda, e o ritmo é
   encaixado em semicolcheias. O resto é igual ao canto: conferir, ajustar e usar (como música toda ou como parte nova).
 
-  **Continuar com a IA.** Depois de cantar uma parte nova, o assistente ganha o modo **Continuar (parte B)**: o pedido leva
-  o projeto, a melodia e a tarefa (harmonizar a parte nova, podendo retocar os 2 últimos acordes da parte anterior para
-  ligar as duas, e devolver o projeto completo com as partes marcadas: `section` no JSON, `sec=A.1,B.9` no link). O texto
-  do pedido é opcional nesse modo. A Voz continua no projeto quando a resposta é carregada.
+  **Continuar com a IA.** Depois de cantar uma parte nova, o assistente ganha o modo **Continuar (parte B)**. O pedido leva
+  só a **harmonia** da música (sem frases, levadas, baixo, bateria nem voz, que são do app), a melodia com as notas da parte
+  nova marcadas, e a tarefa: harmonizar a parte nova (as durações têm de somar os tempos dela) e, se quiser, reescrever o
+  último ou os 2 últimos acordes da parte anterior para ligar as duas. A IA devolve **só os acordes novos**, por link
+  (`#cont=B&ret=1&p=...`: `ret` = quantos acordes do fim da parte anterior foram reescritos) ou em JSON
+  (`{"continuacao": {"parte": "B", "retocados": 1}, "projeto": {"chords": [...]}}`). O app encaixa esses acordes no lugar,
+  confere as durações (se não baterem, explica e não mexe em nada) e mantém todo o resto: os outros acordes, com a levada,
+  o baixo e as frases deles, e a Voz. O ritmo que estava ligado é escrito também nos acordes novos. O texto do pedido é
+  opcional nesse modo (a caixa começa vazia: o pedido antigo não vale para a parte nova). O modo "Ajustar a atual" também
+  passou a mandar só a harmonia.
 
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes

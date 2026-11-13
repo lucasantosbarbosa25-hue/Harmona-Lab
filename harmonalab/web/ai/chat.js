@@ -15,7 +15,7 @@ const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v)
 
 /** Texto completo para colar no chat: instruções + pedido (+ progressão atual, no ajuste). `research`: a IA pesquisa antes de compor? */
 export function buildChatPrompt({ request, mode, currentProject, appUrl, research = false, voice = null, continuation = null }) {
-  return `${instructions(appUrl, { research: Boolean(research) })}\n\n---\n\n${buildUserMessage({ request, mode, currentProject, voice, continuation })}`;
+  return `${instructions(appUrl, { research: Boolean(research) })}\n\n---\n\n${buildUserMessage({ request, mode, currentProject, voice, continuation, appUrl })}`;
 }
 
 /** Acha o JSON na resposta do chat: bloco ```json``` (o maior que for válido) ou o trecho entre a primeira { e a última }. */
@@ -48,7 +48,11 @@ export function readChatAnswer(text) {
     input = { projeto: data, explicacao: typeof data.comment === "string" ? data.comment : "" };
   }
   const check = checkDelivery(input, { requireExplanation: false, requireFunctionNotes: true });
-  return { ok: check.ok, problems: check.problems, project: isObject(input) ? input.projeto : undefined, explanation: check.explanation };
+  // resposta de continuação: {"continuacao": {"parte": "B", "retocados": 1}, "projeto": {"chords": [só os acordes novos]}}
+  const cont = isObject(input) && isObject(input.continuacao) ? input.continuacao : null;
+  const project = isObject(input) ? input.projeto : undefined;
+  if (cont && isObject(project)) project.continuation = { section: String(cont.parte ?? ""), retouched: Number(cont.retocados) || 0 };
+  return { ok: check.ok, problems: check.problems, project, explanation: check.explanation };
 }
 
 /** Texto para colar no mesmo chat quando a conferência acha problemas. */

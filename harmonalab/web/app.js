@@ -1434,8 +1434,10 @@ function toggleTag(key, id, current) {
 }
 
 /** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
-function applyGroove({ comp, phrases, drums, bass, percussion, settings, before }, message) {
-  const undo = snapshot();
+function applyGroove({ comp, phrases, drums, bass, percussion, settings, before, only = null, quiet = false }, message) {
+  // only: conjunto de índices de acordes; só neles a levada, o baixo e a frase são reescritos (a bateria é da música inteira)
+  const touch = (i) => !only || only.has(i);
+  const undo = quiet ? null : snapshot();
   before?.();
   if (settings) state.project.groove = { ...state.project.groove, ...settings };
   stopPlayback();
@@ -1450,7 +1452,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
     bassFill: state.project.groove?.bassFill, drumFill: state.project.groove?.drumFill,
   });
   if (bass !== undefined) {
-    state.project.chords.forEach((chord, i) => { chord.bass_line = bass ? result.chords[i]?.bass_line ?? "" : ""; });
+    state.project.chords.forEach((chord, i) => { if (touch(i)) chord.bass_line = bass ? result.chords[i]?.bass_line ?? "" : ""; });
     state.project.groove = { ...state.project.groove, bass: bass || "" };
   }
   if (drums !== undefined) {
@@ -1463,6 +1465,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
   }
   state.project.chords.forEach((chord, i) => {
     const made = result.chords[i] || {};
+    if (!touch(i)) return;
     if (comp !== undefined) chord.comp = comp ? made.comp ?? "" : "";
     if (phrases === true) {
       chord.phrase = made.phrase ?? "";
@@ -1478,7 +1481,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
   renderChords();
   validateNow();
   saveDraftSoon();
-  toast([message, ...result.notes].join(" "), { action: { label: "Desfazer", run: undo }, timeout: result.notes.length ? 9000 : 4500 });
+  if (!quiet) toast([message, ...result.notes].join(" "), { action: { label: "Desfazer", run: undo }, timeout: result.notes.length ? 9000 : 4500 });
 }
 
 function bindGroove() {
@@ -2189,6 +2192,71 @@ function getContinuation() {
 
 const hasProgression = () => Boolean(state.report?.chords?.some((c) => !c.is_rest));
 
+/**
+ * Encaixa a resposta de uma continuação: a IA mandou só os acordes novos (primeiro os reescritos do fim da parte anterior,
+ * `continuation.retouched` deles, depois os da parte nova). Todo o resto da música fica como está, com a levada, o baixo e
+ * as frases; nos acordes novos, o app escreve o ritmo que estiver ligado. Devolve { problems, title }.
+ */
+function applyContinuation(data, { explanation = "" } = {}) {
+  const target = getContinuation();
+  const asked = String(data.continuation?.section || "").trim();
+  if (!target) return { problems: ["Não há uma parte nova esperando a harmonia: esta resposta é de uma continuação. Cante a parte nova antes (ou use “Nova progressão”)."] };
+  if (asked && asked.toLowerCase() !== target.section.toLowerCase()) {
+    return { problems: [`A resposta é da parte "${asked}", mas a parte que espera a harmonia é a "${target.section}".`] };
+  }
+  const p = state.project;
+  const mc = p.middle_c;
+  const raw = { middle_c: "C4", chords: Array.isArray(data.chords) ? data.chords : [] };
+  const incoming = toEditable(mc === "C4" ? raw : renameProjectNotes(raw, mc)).chords;
+  const blocks = sectionBlocks(p.chords);
+  const part = blocks.at(-1);
+  const previous = blocks.at(-2);
+  const count = Math.max(0, Math.min(2, Math.round(Number(data.continuation?.retouched) || 0), previous.to - previous.from, incoming.length));
+  const sum = (list) => list.reduce((n, c) => n + (toNumber(c.duration_beats) || 0), 0);
+  const replaced = p.chords.slice(part.from - count, part.from);
+  const retouched = incoming.slice(0, count);
+  const fresh = incoming.slice(count);
+  const problems = [];
+  const near = (a, b) => Math.abs(a - b) < 1e-6;
+  if (!fresh.length) problems.push(`Faltam os acordes da parte "${target.section}".`);
+  else if (!near(sum(fresh), part.beats)) {
+    problems.push(`Os acordes da parte "${target.section}" somam ${fmt(sum(fresh))} tempos, mas a parte tem ${fmt(part.beats)} (a melodia dela não pode sair do lugar).`);
+  }
+  if (count && !near(sum(retouched), sum(replaced))) {
+    problems.push(`Os ${count} acordes reescritos do fim da parte "${target.previous}" somam ${fmt(sum(retouched))} tempos, mas os que eles substituem somam ${fmt(sum(replaced))}.`);
+  }
+  if (problems.length) return { problems };
+  const undo = snapshot();
+  stopPlayback();
+  // as marcas das partes ficam onde estavam: a do começo da parte anterior (se o 1º acorde dela foi reescrito) e a da nova
+  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; });
+  fresh.forEach((c, i) => { c.section = i === 0 ? part.name : ""; });
+  const start = part.from - count;
+  p.chords = [...p.chords.slice(0, start), ...retouched, ...fresh];
+  if (explanation) p.comment = [p.comment, `Parte ${target.section}: ${explanation}`].filter(Boolean).join("\n\n");
+  // o ritmo que já estava ligado continua, agora também nos acordes novos (os antigos não mudam)
+  const g = p.groove || {};
+  const only = new Set(p.chords.map((_, i) => i).filter((i) => i >= start));
+  const had = (key) => p.chords.slice(0, start).some((c) => String(c[key] || "").trim());
+  const pick = (id) => (id && id !== CUSTOM_COMP ? id : undefined);
+  const options = {
+    comp: had("comp") ? pick(g.comp) : undefined, bass: had("bass_line") ? pick(g.bass) : undefined,
+    drums: String(p.drums || "").trim() ? pick(g.drums) : undefined, percussion: String(p.percussion || "").trim() ? pick(g.percussion) : undefined,
+    phrases: had("phrase") ? true : undefined,
+  };
+  formSelected = blocks.length - 1;
+  renderAll();
+  if (Object.values(options).some((v) => v !== undefined)) applyGroove({ ...options, only, quiet: true });
+  refreshSecondVoice();
+  renderAll();
+  validateNow();
+  saveDraftSoon();
+  const what = count ? ` e ${count} acorde${count > 1 ? "s" : ""} do fim da parte ${target.previous} reescrito${count > 1 ? "s" : ""}` : "";
+  toast(`Parte ${target.section} harmonizada: ${fresh.length} acordes${what}. O resto da música ficou como estava.`, { action: { label: "Desfazer", run: undo }, timeout: 9000 });
+  $("#progression-heading").scrollIntoView({ behavior: "smooth", block: "start" });
+  return { problems: [], title: `parte ${target.section} de ${p.title}` };
+}
+
 /** Carrega a progressão gerada. A IA escreve em C4 = dó central; convertemos para a convenção escolhida aqui. */
 function applyGenerated(data, { comment, message }) {
   const project = { ...data, comment, middle_c: "C4" };
@@ -2245,7 +2313,7 @@ async function init() {
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getContinuation, hasProgression, applyGenerated,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getContinuation, hasProgression, applyGenerated, applyContinuation,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);

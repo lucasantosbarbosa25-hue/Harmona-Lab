@@ -26,7 +26,7 @@ const loadResearch = () => { try { return localStorage.getItem(RESEARCH_KEY) ===
 const saveResearch = (on) => { try { localStorage.setItem(RESEARCH_KEY, on ? "1" : "0"); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
-  const { $, h, icon, toast, getProjectJson, getVoice, getContinuation, hasProgression, applyGenerated } = api;
+  const { $, h, icon, toast, getProjectJson, getVoice, getContinuation, hasProgression, applyGenerated, applyContinuation } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
     mic: $("#ai-mic"), mode: $("#ai-mode"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
@@ -41,7 +41,7 @@ export function initAssistant(api) {
 
   // ------------------------------------------------------------ pedido
   els.prompt.value = loadPrompt();
-  els.prompt.addEventListener("input", () => savePrompt(els.prompt.value));
+  els.prompt.addEventListener("input", () => { if (mode !== "continue") savePrompt(els.prompt.value); });
   els.research.checked = loadResearch();
   els.research.addEventListener("change", () => saveResearch(els.research.checked));
   els.examples.replaceChildren(...EXAMPLES.map((text) => h("button", {
@@ -51,14 +51,23 @@ export function initAssistant(api) {
   els.generate.replaceChildren(icon("paste"), "1. Copiar pedido para a IA");
   els.generate.addEventListener("click", copyForChat);
   $("#ai-load-answer").addEventListener("click", loadAnswer);
-  els.mode.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => { mode = b.dataset.mode; refresh(); }));
+  // o pedido da continuação é outro texto: o pedido antigo (“20 acordes no estilo…”) não vale para a parte nova
+  let otherText = "";
+  function switchMode(next) {
+    const was = mode === "continue";
+    const will = next === "continue";
+    if (was !== will) { const current = els.prompt.value; els.prompt.value = otherText; otherText = current; if (!will) savePrompt(els.prompt.value); }
+    mode = next;
+    refresh();
+  }
+  els.mode.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => switchMode(b.dataset.mode)));
 
   function refresh() {
     const canAdjust = hasProgression();
     const next = canAdjust ? getContinuation?.() ?? null : null; // há uma parte nova, vazia, esperando a harmonia?
     els.mode.hidden = !canAdjust;
     if (!canAdjust) mode = "new";
-    if (mode === "continue" && !next) mode = "adjust";
+    if (mode === "continue" && !next) { mode = "adjust"; const current = els.prompt.value; els.prompt.value = otherText; otherText = current; }
     const button = els.mode.querySelector('[data-mode="continue"]');
     button.hidden = !next;
     if (next) button.textContent = `Continuar (parte ${next.section})`;
@@ -96,7 +105,7 @@ export function initAssistant(api) {
       return;
     }
     dictation?.stop();
-    savePrompt(request);
+    if (!continuation) savePrompt(request);
     const adjust = mode === "adjust" && hasProgression();
     const text = buildChatPrompt({
       request, mode: continuation ? "continue" : adjust ? "adjust" : "new", currentProject: adjust || continuation ? getProjectJson() : null,
@@ -129,7 +138,28 @@ export function initAssistant(api) {
     els.result.hidden = false;
   }
 
+  /** Resposta de continuação (só os acordes novos): o app encaixa na parte nova. Devolve true se era uma continuação. */
+  function acceptContinuation(project, explanation, problems) {
+    if (!project?.continuation) return false;
+    const result = applyContinuation(project, { explanation });
+    if (result.problems.length) {
+      pending = { problems: result.problems };
+      els.fixActions.hidden = false;
+      $("#ai-load-anyway").hidden = true;
+      els.chatStep.hidden = false;
+      setStatus("error", `A parte nova não encaixou: ${result.problems.join(" · ")}`);
+      return true;
+    }
+    showResult(result.title, explanation, problems);
+    pending = null;
+    els.fixActions.hidden = true;
+    els.answer.value = "";
+    setStatus("", "");
+    return true;
+  }
+
   function accept(project, explanation, problems, message, request = chatRequest || els.prompt.value.trim()) {
+    if (acceptContinuation(project, explanation, problems)) return;
     const title = String(project.title || "Progressão");
     applyGenerated(project, { comment: buildComment(request, explanation), message: message || `Progressão carregada: ${title}` });
     showResult(title, explanation, problems);
@@ -167,7 +197,7 @@ export function initAssistant(api) {
       els.prompt.scrollIntoView({ behavior: "smooth", block: "center" });
       return true;
     }
-    if (askBeforeReplacing && !window.confirm("Abrir a progressão deste link? Ela substitui a atual (dá para desfazer logo em seguida).")) return true;
+    if (!link.project?.continuation && askBeforeReplacing && !window.confirm("Abrir a progressão deste link? Ela substitui a atual (dá para desfazer logo em seguida).")) return true;
     receiveProject(link.project, link.explanation);
     return true;
   }
@@ -226,6 +256,6 @@ export function initAssistant(api) {
 
   refresh();
   /** Escolhe o modo de fora (depois de cantar uma parte nova, o app já deixa em "Continuar"). */
-  const setMode = (next) => { mode = next; refresh(); };
+  const setMode = (next) => { switchMode(next); };
   return { refresh, openLink, setMode };
 }

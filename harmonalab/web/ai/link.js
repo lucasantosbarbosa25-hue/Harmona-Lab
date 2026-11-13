@@ -2,6 +2,7 @@
 // O que fica depois do "#" nunca vai para o servidor: a progressão não sai do aparelho de quem abre.
 //
 // Formatos (parâmetros separados por &):
+//   #cont=B&ret=1&x=explicação&p=...   continuação: só os acordes novos (ret = quantos do fim da parte anterior foram reescritos)
 //   #t=título&k=tom&bpm=80&ts=4/4&ref=A,B&st=Levada&x=explicação&sec=A.1,B.9&p=cifra:notas:duração:função:escala:comentário:frase:notas_da_escala:cor;...
 //                                                                                                compacto, para qualquer IA
 //   #json=<JSON do projeto, com % codificado>                                                   para quem monta com código
@@ -86,6 +87,8 @@ export function compactToProject(params) {
   if (params.ref) project.references = textOf(params.ref).split(",").map((t) => t.trim()).filter(Boolean);
   if (params.x) project.comment = textOf(params.x);
   project.chords = (params.p || "").split(";").map((s) => s.trim()).filter(Boolean).map(chordFromSpec);
+  // cont=B&ret=1: o link traz só os acordes novos de uma continuação (1 reescrito do fim da parte anterior + os da parte B)
+  if (params.cont) project.continuation = { section: textOf(params.cont), retouched: Number(decode(params.ret || "0")) || 0 };
   // sec=A.1,B.9: a parte A começa no acorde 1 e a parte B no acorde 9
   for (const piece of (params.sec ? decode(params.sec) : "").split(",")) {
     const m = piece.trim().match(/^(.+)\.(\d+)$/);

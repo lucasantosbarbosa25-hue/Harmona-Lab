@@ -79,3 +79,35 @@ test("a melodia cantada entra no pedido, com compasso, tempo e duração de cada
   assert.doesNotMatch(buildChatPrompt({ request: "x", mode: "new" }), /MELODIA CANTADA/);
   assert.match(buildChatPrompt({ request: "x", mode: "adjust", currentProject: { chords: [] }, voice }), /MELODIA CANTADA[\s\S]*PROGRESSÃO ATUAL/);
 });
+
+test("continuação: o pedido leva só a harmonia e pede só os acordes novos; a resposta é reconhecida no JSON e no link", async () => {
+  const { harmonyOnly } = await import("../../harmonalab/web/ai/prompt.js");
+  const { compactToProject } = await import("../../harmonalab/web/ai/link.js");
+  const project = {
+    title: "S", tempo: 90, time_signature: "4/4", drums: "K/4 S/4", voice: "A4/1 C5/1", voice2: "C4/1", pad: true, groove: { bass: "x" },
+    chords: [
+      { symbol: "Am7", section: "A", duration_beats: 4, left_hand: ["A2"], right_hand: ["C4", "E4"], top_note: "E4", velocity: null, phrase: "C5/4", comp: "T/4", bass_line: "A1/1", phrase_scale: "A B C D E F G", comment: "Tônica." },
+      { symbol: "", section: "B", duration_beats: 8, left_hand: [], right_hand: [] },
+    ],
+  };
+  const slim = harmonyOnly(project);
+  assert.deepEqual(Object.keys(slim), ["title", "tempo", "time_signature", "chords"]);
+  assert.deepEqual(Object.keys(slim.chords[0]), ["symbol", "duration_beats", "left_hand", "right_hand", "top_note", "comment", "phrase_scale", "section"]);
+  assert.deepEqual(slim.chords[1], { duration_beats: 8, section: "B" });
+  const continuation = { section: "B", previous: "A", fromBar: 2, toBar: 3, beats: 8 };
+  const text = buildChatPrompt({ request: "", mode: "continue", currentProject: project, voice: { text: project.voice, tempo: 90, timeSignature: "4/4" }, continuation, appUrl: "https://x.test/" });
+  const tail = text.slice(text.lastIndexOf("PEDIDO (pode"));
+  assert.match(tail, /Harmonize a parte nova da música/);
+  assert.match(tail, /somar EXATAMENTE 8 tempos/);
+  assert.match(tail, /devolva SÓ os acordes novos/);
+  assert.match(tail, /https:\/\/x\.test\/#cont=B&ret=K/);
+  assert.match(tail, /compasso 2, tempo 1: C5 \(dura 4 tempos\) {2}<- parte B/);
+  assert.doesNotMatch(tail.slice(tail.indexOf("HARMONIA ATUAL")), /bass_line|"phrase"|"voice|"drums"|"comp"/);
+  assert.doesNotMatch(buildChatPrompt({ request: "x", mode: "adjust", currentProject: project }), /bass_line|"drums"/);
+  // a resposta
+  const answer = '```json\n{"explicacao": "ok", "continuacao": {"parte": "B", "retocados": 1}, "projeto": {"chords": [{"symbol": "E7", "duration_beats": 4, "right_hand": ["G#3", "D4", "E4"], "top_note": "E4", "comment": "Dominante.", "phrase_scale": "E F# G# A B C# D"}]}}\n```';
+  assert.deepEqual(readChatAnswer(answer).project.continuation, { section: "B", retouched: 1 });
+  const fromLink = compactToProject({ cont: "B", ret: "2", p: "E7:Gs3,D4,E4:4:V7::Dominante.::E_Fs_Gs_A_B_Cs_D" });
+  assert.deepEqual(fromLink.continuation, { section: "B", retouched: 2 });
+  assert.equal(fromLink.chords.length, 1);
+});

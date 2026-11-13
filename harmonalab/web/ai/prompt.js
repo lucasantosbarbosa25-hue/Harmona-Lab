@@ -119,7 +119,7 @@ export const PERMANENT_INSTRUCTIONS = (appUrl = DEFAULT_APP_URL) => instructions
  * A melodia cantada (a Voz) em palavras para a IA: cada nota com compasso, tempo e duração, mais o total. Sem Voz, devolve "".
  * voice: { text, tempo, timeSignature }. As notas saem em C4 = dó central, como a IA escreve.
  */
-export function describeVoice(voice) {
+export function describeVoice(voice, part = null) {
   const { text, tempo, timeSignature = "4/4" } = voice ?? {};
   if (!text || !String(text).trim()) return "";
   const { events, ticks, errors } = parsePhrase(text, "C4");
@@ -131,10 +131,24 @@ export function describeVoice(voice) {
     const beat = e.start / TICKS_PER_BEAT;
     const bar = Math.floor(beat / perBar + 1e-9) + 1;
     const inBar = round((beat % perBar) + 1);
-    return `- compasso ${bar}, tempo ${inBar}: ${noteName(e.note, "C4")} (dura ${round(e.length / TICKS_PER_BEAT)} tempos)`;
+    const mark = part && bar >= part.fromBar && bar <= part.toBar ? `  <- parte ${part.section}` : "";
+    return `- compasso ${bar}, tempo ${inBar}: ${noteName(e.note, "C4")} (dura ${round(e.length / TICKS_PER_BEAT)} tempos)${mark}`;
   });
   const beats = ticks / TICKS_PER_BEAT;
   const bars = Math.ceil(beats / perBar - 1e-9);
+  const rules = "Regras da harmonização: as notas da melodia que caem nos tempos fortes (e as longas) devem ser notas do acorde ou tensões da escala dele; "
+    + "as de passagem podem ser de fora. Não escreva a melodia no JSON (não use \"voice\" nem \"phrase\"): o app já a tem. "
+    + "A ponta (top_note) pode ser a própria melodia ou ficar abaixo dela, mas nunca competir com ela.";
+  if (part) {
+    // continuação: a lista traz a música inteira, para dar contexto, e marca as notas da parte que falta harmonizar
+    return [
+      `MELODIA CANTADA (a Voz), da música inteira. Andamento ${tempo ? `${tempo} BPM` : "o do projeto"}, compasso ${timeSignature}. `
+      + `As notas marcadas com "<- parte ${part.section}" (compassos ${part.fromBar} a ${part.toBar}) são as da parte que falta harmonizar; as outras já têm harmonia.`,
+      "Notas (C4 = dó central; nas pausas a melodia silencia):",
+      ...lines,
+      rules,
+    ].join("\n");
+  }
   return [
     "MELODIA CANTADA (a Voz). A pessoa cantou esta melodia e ela já está no projeto: o Harmona Lab a mantém e a toca por cima dos acordes. "
     + `Harmonize-a: crie os acordes que a sustentam (a melodia é o "assunto"; os acordes dão a cor), trocando de acorde onde a melodia pede.`,
@@ -143,45 +157,67 @@ export function describeVoice(voice) {
     + `${perBar} tempos). Mantenha o BPM e o compasso informados.`,
     "Notas (C4 = dó central; nas pausas a melodia silencia):",
     ...lines,
-    "Regras da harmonização: as notas da melodia que caem nos tempos fortes (e as longas) devem ser notas do acorde ou tensões da escala dele; "
-    + "as de passagem podem ser de fora. Não escreva a melodia no JSON (não use \"voice\" nem \"phrase\"): o app já a tem. "
-    + "A ponta (top_note) pode ser a própria melodia ou ficar abaixo dela, mas nunca competir com ela.",
+    rules,
   ].join("\n");
 }
 
 /**
- * A tarefa da continuação: a última parte da música está vazia (só a melodia cantada) e a IA harmoniza essa parte.
- * continuation: { section (nome da parte nova), previous (nome da anterior), fromBar, toBar, beats }.
+ * Só a harmonia de um projeto, para mandar à IA: os acordes (notas, duração, função, escala, parte) e os dados gerais.
+ * O ritmo, as frases, o baixo, a bateria, a percussão, o pad e as vozes são escritos pelo app: não vão no pedido (a IA
+ * não mexe neles, e eles nem cabem no link de volta).
  */
-export function describeContinuation(c) {
+export function harmonyOnly(project) {
+  if (!project || typeof project !== "object") return project;
+  const keep = ["symbol", "duration_beats", "bass", "left_hand", "right_hand", "notes", "top_note", "function", "scale", "comment", "phrase_scale", "phrase_color", "section"];
+  const filled = (v) => v !== undefined && v !== null && v !== "" && !(Array.isArray(v) && !v.length);
+  const out = {};
+  for (const key of ["title", "key", "tempo", "time_signature", "middle_c", "style", "references"]) if (filled(project[key])) out[key] = project[key];
+  out.chords = (Array.isArray(project.chords) ? project.chords : []).map((chord) => Object.fromEntries(keep.filter((k) => filled(chord?.[k])).map((k) => [k, chord[k]])));
+  return out;
+}
+
+const APP_LAYERS = "O ritmo dos acordes, as frases, o baixo, a bateria e a melodia são do Harmona Lab e não aparecem abaixo: não os escreva nem os devolva (o app mantém os que existem e escreve os que faltarem).";
+
+/**
+ * A tarefa da continuação: a última parte da música está vazia (só a melodia cantada) e a IA harmoniza essa parte.
+ * continuation: { section (nome da parte nova), previous (nome da anterior), fromBar, toBar, beats, appUrl }.
+ * A IA devolve SÓ os acordes novos (os retocados do fim da parte anterior, se houver, e os da parte nova): a resposta fica
+ * curta, cabe no link, e o resto da música não corre risco.
+ */
+export function describeContinuation(c, appUrl = DEFAULT_APP_URL) {
   if (!c) return "";
   const bars = c.toBar - c.fromBar + 1;
   return [
-    `CONTINUAÇÃO DA MÚSICA: a parte "${c.section}". O projeto abaixo já tem a harmonia pronta até a parte "${c.previous}". `
-    + `A parte "${c.section}" vai do compasso ${c.fromBar} ao ${c.toBar} (${bars} compasso${bars === 1 ? "" : "s"}, ${c.beats} tempos) e está vazia: `
+    `CONTINUAÇÃO DA MÚSICA: a parte "${c.section}". A música já tem a harmonia pronta até a parte "${c.previous}" (JSON resumido, abaixo). `
+    + `A parte "${c.section}" vai do compasso ${c.fromBar} ao ${c.toBar} (${bars} compasso${bars === 1 ? "" : "s"}, ${c.beats} tempos) e ainda não tem acordes: `
     + "a pessoa cantou a melodia dela (está na lista da melodia, nesses compassos). O que fazer:",
-    `1. Crie os acordes da parte "${c.section}" para harmonizar a melodia dela, somando exatamente ${c.beats} tempos, no lugar dos compassos vazios. `
+    `1. Crie os acordes da parte "${c.section}" para harmonizar a melodia dela. As durações (duration_beats) devem somar EXATAMENTE ${c.beats} tempos. `
     + "Ela deve soar como continuação da música: mesma linguagem, mas com contraste (outra região, outro caminho, ou uma modulação, se a melodia pedir).",
-    `2. Você pode RETOCAR O FIM da parte "${c.previous}" (no máximo os 2 últimos acordes) para ligar melhor na parte nova: `
-    + "um dominante, um II-V, um acorde pivô. Diga na explicação o que mudou. Todo o resto da música fica IGUAL, nota por nota.",
-    '3. Devolva o projeto COMPLETO, com todas as partes. Marque o começo de cada parte com o campo "section" no primeiro acorde dela '
-    + `(no link: sec=${c.previous}.1,${c.section}.N, onde N é o número do acorde em que a parte começa).`,
+    `2. Opcional: você pode reescrever o último ou os 2 últimos acordes da parte "${c.previous}" para ligar melhor na parte nova `
+    + "(um dominante, um II-V, um acorde pivô). Os acordes reescritos devem somar a MESMA duração dos que eles substituem. Diga na explicação o que mudou.",
+    `3. ENTREGA: devolva SÓ os acordes novos, nesta ordem: primeiro os reescritos da parte "${c.previous}" (se houver), depois os da parte "${c.section}". `
+    + "NÃO repita os outros acordes da música: o app encaixa os novos no lugar e mantém todo o resto.",
+    `   - Link: use cont=${c.section} e ret=K no lugar de t=, k= e bpm= (K = quantos acordes do fim da parte "${c.previous}" você reescreveu: 0, 1 ou 2). `
+    + `Formato: ${appUrl}#cont=${c.section}&ret=K&x=explicação_curta&p=acorde;acorde;... (cada acorde como nas instruções).`,
+    `   - JSON de reserva: {"explicacao": "...", "continuacao": {"parte": "${c.section}", "retocados": K}, "projeto": {"chords": [ ...só os acordes novos... ]}}.`,
+    "   - A explicação acorde a acorde, no chat, também é só dos acordes novos.",
+    APP_LAYERS,
   ].join("\n");
 }
 
 /** A mensagem do pedido. O pedido fica entre aspas triplas para ficar claramente separado das instruções. */
-export function buildUserMessage({ request, mode, currentProject, voice, continuation = null }) {
+export function buildUserMessage({ request, mode, currentProject, voice, continuation = null, appUrl = DEFAULT_APP_URL }) {
   const asked = request.trim() || (mode === "continue" ? "Harmonize a parte nova da música." : "");
   const parts = [`PEDIDO (pode ter sido ditado por voz):\n"""\n${asked}\n"""`];
-  const sung = describeVoice(voice);
+  const sung = describeVoice(voice, mode === "continue" && continuation ? continuation : null);
   if (sung) parts.push(sung);
   if (mode === "continue" && currentProject && continuation) {
-    parts.push(describeContinuation(continuation));
-    parts.push("PROJETO ATUAL (JSON do Harmona Lab):\n" + JSON.stringify(currentProject));
+    parts.push(describeContinuation(continuation, appUrl));
+    parts.push("HARMONIA ATUAL (JSON resumido do Harmona Lab):\n" + JSON.stringify(harmonyOnly(currentProject)));
   } else if (mode === "adjust" && currentProject) {
     parts.push(
-      "PROGRESSÃO ATUAL (JSON do Harmona Lab). Ajuste-a conforme o pedido e devolva o projeto COMPLETO:\n"
-      + JSON.stringify(currentProject),
+      "PROGRESSÃO ATUAL (JSON resumido do Harmona Lab: só a harmonia). Ajuste-a conforme o pedido e devolva a progressão COMPLETA. "
+      + APP_LAYERS + "\n" + JSON.stringify(harmonyOnly(currentProject)),
     );
   } else {
     parts.push("Crie uma progressão nova.");
