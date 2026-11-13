@@ -170,7 +170,7 @@ export class CantoRecorder {
 export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
   const $ = (s) => document.querySelector(s);
   const dialog = $("#canto-dialog");
-  const state = { mode: "fone", fastest: "auto", target: "toda", recorder: null, recording: false, result: null, selected: -1, taps: [], midi: null };
+  const state = { mode: "fone", fastest: "auto", target: "toda", recorder: null, recording: false, result: null, selected: -1, taps: [], midi: null, zoom: 1, history: [] };
   /** A melodia entra como parte nova (depois da música que já existe)? */
   const asNewPart = () => state.target === "nova" && Boolean(defaults().canAppend);
 
@@ -237,6 +237,8 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     const onEighths = notes.every((n) => Number.isInteger(Math.round(n.beat * 1e6) / 5e5) && Number.isInteger(Math.round(n.beats * 1e6) / 5e5));
     state.midi = null;
     state.selected = -1;
+    state.history = []; // melodia nova no desenho: o Desfazer e o zoom começam do zero
+    state.zoom = 1;
     state.result = {
       events: notes, key, warnings: [], bpm: d.bpm, signature: d.timeSignature, shift: 0, leak: { leak: false }, latency: 0,
       fastest: onEighths ? "8" : "16", diatonic: false, source: "projeto", target: "editar", maxBeats: d.totalBeats,
@@ -315,6 +317,8 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     });
     if (!result.events.length) { status(result.warnings[0] || "Não encontrei notas cantadas.", true); return; }
     state.midi = null;
+    state.history = []; // melodia nova no desenho: o Desfazer e o zoom começam do zero
+    state.zoom = 1;
     state.result = { ...result, bpm: state.bpm, signature: state.signature, target };
     state.selected = -1;
     status("Pronto! Confira as notas: toque numa nota do desenho para ajustá-la.");
@@ -342,6 +346,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     $("#canto-text").textContent = text();
     const hasSelection = state.selected >= 0;
     for (const id of ["#canto-semi-down", "#canto-semi-up", "#canto-delete"]) $(id).disabled = !hasSelection;
+    $("#canto-undo").disabled = !state.history.length;
     // oitava: com uma nota escolhida, mexe só nela; sem nenhuma, na melodia toda (o texto do botão diz qual)
     $("#canto-octave-down").textContent = hasSelection ? "Nota −8ª" : "Tudo −8ª";
     $("#canto-octave-up").textContent = hasSelection ? "Nota +8ª" : "Tudo +8ª";
@@ -352,6 +357,9 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
   /** O passo da grade em tempos: o da quantização (colcheia = 0,5; semicolcheia = 0,25). */
   const gridStep = () => (state.result?.fastest === "8" ? 0.5 : 0.25);
   /** As medidas do desenho: quantos pixels vale um tempo (zoom: uns 2 compassos na largura da tela) e as linhas das alturas. */
+  /** Computador (mouse, tela larga): o desenho fica mais alto e mostra mais compassos. */
+  const roomy = () => ($("#canto-roll-wrap").clientWidth || 320) >= 600;
+  /** As medidas do desenho: quantos pixels vale um tempo (zoom) e as linhas das alturas. */
   const rollLayout = () => {
     const r = state.result;
     const wrap = $("#canto-roll-wrap");
@@ -360,23 +368,29 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     const step = gridStep();
     const bars = Math.ceil(Math.max(totalBeats(), 1) / bpb - 1e-9) + 1; // um compasso de folga, para dar para atrasar o fim
     const span = r.maxBeats ? Math.max(r.maxBeats, totalBeats()) : bars * bpb; // editando a do projeto: até o fim da música
-    // cada quadradinho com pelo menos 14 px (o dedo precisa acertar), sem passar do que o navegador desenha de uma vez
-    const perBeat = Math.min(Math.max(view / (2 * bpb), 14 / step), 7600 / span);
+    // cada quadradinho com pelo menos 14 px (o dedo precisa acertar), sem passar do que o navegador desenha de uma vez;
+    // na tela larga cabem 4 compassos; o zoom (Ctrl + roda, ou os botões) multiplica
+    const base = Math.max(view / ((roomy() ? 4 : 2) * bpb), 14 / step);
+    const perBeat = Math.min(Math.max(base * state.zoom, 6 / step), 7600 / span);
     const pitches = r.events.map((e) => e.midi);
-    const low = Math.min(...pitches) - 2;
-    const high = Math.max(...pitches) + 2;
-    const height = 170;
+    // folga de alturas para dar para arrastar a nota para cima e para baixo (na tela larga, mais)
+    const margin = roomy() ? 5 : 2;
+    const low = Math.max(21, Math.min(...pitches) - margin);
+    const high = Math.min(110, Math.max(...pitches) + margin);
+    const height = roomy() ? 300 : 170;
     const row = (height - 22) / (high - low + 1);
     return {
       view, bpb, step, span, perBeat, low, high, height, row, width: Math.max(view, Math.round(span * perBeat) + 8),
       x: (beat) => 4 + beat * perBeat, beatAt: (px) => (px - 4) / perBeat, y: (midi) => 18 + (high - midi) * row,
+      midiAt: (py) => high - Math.floor((py - 18) / row),
     };
   };
 
-  const drawRoll = () => {
+  const drawRoll = (frozen = null) => {
     const canvas = $("#canto-roll");
     const r = state.result;
-    const L = rollLayout();
+    const L = frozen ?? rollLayout(); // durante um arrasto, as medidas ficam paradas (a grade não pula sob o mouse)
+    canvas.style.height = `${L.height}px`;
     const { width, height } = L;
     const ratio = Math.min(window.devicePixelRatio || 1, 15000 / width);
     canvas.style.width = `${width}px`;
@@ -415,9 +429,10 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
         g.strokeStyle = color("--text", "#111");
         g.lineWidth = 2;
         g.strokeRect(left, top, w, h);
-        // a alça de esticar, na ponta direita da nota escolhida
+        // as alças de esticar: na ponta direita e, com espaço, na esquerda
         g.fillStyle = color("--text", "#111");
         g.fillRect(left + w - 4, top + 2, 2, h - 4);
+        if (w >= 20) g.fillRect(left + 2, top + 2, 2, h - 4);
       }
       if (i === state.selected && playing >= 0) { g.strokeStyle = color("--primary", "#a85a00"); g.lineWidth = 2; g.strokeRect(left, top, w, h); }
       g.globalAlpha = 1;
@@ -442,78 +457,255 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     canvas.dataset.beats = String(L.span);
     canvas.dataset.step = String(L.step);
     canvas.dataset.perBeat = String(L.perBeat);
+    canvas.dataset.row = String(L.row);
+    canvas.dataset.high = String(L.high);
     canvas.dataset.playing = String(playing);
   };
 
-  /** A nota que está embaixo de um ponto do desenho (índice, ou -1) e se o ponto está na alça de esticar dela. */
-  const noteAt = (px, py) => {
-    const L = rollLayout();
+  /** A nota que está embaixo de um ponto do desenho (índice, ou -1). `exact`: só vale acertar a nota mesmo (mouse). */
+  const noteAt = (px, py, exact = false, L = rollLayout()) => {
     const beat = L.beatAt(px);
-    const tolerance = 6 / L.perBeat;
-    let index = state.result.events.findIndex((e) => beat >= e.beat - tolerance && beat <= e.beat + e.beats + tolerance && Math.abs(py - (L.y(e.midi) + L.row / 2)) <= Math.max(14, L.row));
-    if (index < 0) index = state.result.events.findIndex((e) => beat >= e.beat && beat <= e.beat + e.beats); // toque fora da altura: vale a coluna
+    const tolerance = (exact ? 2 : 6) / L.perBeat;
+    const reach = exact ? L.row / 2 + 1 : Math.max(14, L.row);
+    let index = state.result.events.findIndex((e) => beat >= e.beat - tolerance && beat <= e.beat + e.beats + tolerance && Math.abs(py - (L.y(e.midi) + L.row / 2)) <= reach);
+    if (index < 0 && !exact) index = state.result.events.findIndex((e) => beat >= e.beat && beat <= e.beat + e.beats); // dedo fora da altura: vale a coluna
     return index;
   };
 
+  // ------------------------------------------------------------ desfazer (dentro do editor)
+  const snapshotNotes = () => JSON.stringify({ events: state.result.events, selected: state.selected });
+  /** Guarda o estado antes de uma mudança, para o Desfazer (Ctrl+Z). */
+  const remember = () => {
+    const now = snapshotNotes();
+    if (state.history.at(-1) !== now) state.history.push(now);
+    if (state.history.length > 100) state.history.shift();
+  };
+  const undo = () => {
+    const last = state.history.pop();
+    if (!last || !state.result) return;
+    halt();
+    const saved = JSON.parse(last);
+    state.result.events = saved.events;
+    state.selected = saved.selected;
+    renderResult();
+  };
+
+  /** Toca a nota por um instante: é o retorno de quem muda a altura de uma nota (como numa DAW). */
+  const audition = (midi) => { if (!state.listen) play?.([{ midi, start: 0, length: 0.22, velocity: 90 }], 0.3); };
+
+  // ------------------------------------------------------------ mudanças nas notas (as mesmas para mouse, dedo e teclado)
+  const snapTo = (value, step) => Math.round(value / step) * step;
+  const tidy = (value) => Math.round(value * 12) / 12;
+  /** Move a nota `index` para o tempo `beat` (preso à grade e às vizinhas) e, se pedido, para a altura `midi`. */
+  const moveNote = (index, beat, midi, L) => {
+    const events = state.result.events;
+    const e = events[index];
+    const before = events[index - 1];
+    const after = events[index + 1];
+    const min = before ? before.beat + before.beats : 0;
+    const max = (after ? after.beat : L.span) - e.beats;
+    let changed = false;
+    if (max >= min) {
+      const next = tidy(Math.max(min, Math.min(max, snapTo(beat, L.step))));
+      if (next !== e.beat) { e.beat = next; changed = true; }
+    }
+    if (midi != null) {
+      const pitch = Math.max(24, Math.min(108, midi));
+      if (pitch !== e.midi) { e.midi = pitch; changed = true; audition(pitch); }
+    }
+    return changed;
+  };
+  /** Estica ou encurta pela ponta direita (`end`) ou pela esquerda (`start`), de quadradinho em quadradinho. */
+  const resizeNote = (index, { start = null, end = null }, L) => {
+    const events = state.result.events;
+    const e = events[index];
+    const before = events[index - 1];
+    const after = events[index + 1];
+    const stop = e.beat + e.beats;
+    if (end !== null) {
+      const limit = after ? after.beat : L.span;
+      const length = tidy(Math.max(L.step, Math.min(limit - e.beat, snapTo(end, L.step) - e.beat)));
+      if (length === e.beats) return false;
+      e.beats = length;
+      return true;
+    }
+    const floor = before ? before.beat + before.beats : 0;
+    const from = tidy(Math.max(floor, Math.min(stop - L.step, snapTo(start, L.step))));
+    if (from === e.beat) return false;
+    e.beat = from;
+    e.beats = tidy(stop - from);
+    return true;
+  };
+  /** Cria uma nota num espaço vazio (um tempo, ou o que couber até a próxima). Devolve o índice, ou -1 se não couber. */
+  const createNote = (beat, midi, L) => {
+    const events = state.result.events;
+    const start = tidy(Math.floor(beat / L.step + 1e-9) * L.step);
+    if (start < 0 || start >= L.span || events.some((e) => start >= e.beat && start < e.beat + e.beats)) return -1;
+    const next = events.find((e) => e.beat > start);
+    const room = (next ? next.beat : L.span) - start;
+    const length = tidy(Math.max(L.step, Math.min(1, room)));
+    if (room < L.step - 1e-9) return -1;
+    remember();
+    const note = { beat: start, beats: length, midi: Math.max(24, Math.min(108, midi)) };
+    events.push(note);
+    events.sort((a, b) => a.beat - b.beat);
+    audition(note.midi);
+    return events.indexOf(note);
+  };
+  const removeSelected = () => {
+    if (state.selected < 0) return;
+    halt();
+    remember();
+    state.result.events.splice(state.selected, 1);
+    state.selected = -1;
+    if (!state.result.events.length) { state.result = null; $("#canto-result").hidden = true; status("Todas as notas foram apagadas. Grave de novo."); return; }
+    renderResult();
+  };
+
   /**
-   * Dedo (ou mouse) no desenho. Um toque escolhe a nota. Arrastar a nota ESCOLHIDA para os lados muda o tempo dela, de
-   * quadradinho em quadradinho, sem passar por cima das vizinhas. Arrastar em outro lugar rola o desenho.
+   * O ponteiro no desenho. Há dois jeitos, escolhidos sozinhos pelo tipo de ponteiro:
+   *   mouse (ou caneta): como numa DAW. Arrastar uma nota move no tempo (lados) e na altura (cima e baixo); as pontas
+   *     esticam; duplo clique no vazio cria; arrastar o vazio rola.
+   *   dedo: um toque escolhe; só a nota ESCOLHIDA anda, e só para os lados (ou estica pela ponta direita), para ninguém
+   *     mudar uma nota sem querer ao rolar a tela. A altura fica nos botões.
+   * O interruptor "Edição completa no toque" (Mais opções) dá ao dedo o jeito do mouse.
    */
   const bindRollPointer = () => {
     const canvas = $("#canto-roll");
     const wrap = $("#canto-roll-wrap");
+    const full = (event) => event.pointerType !== "touch" || $("#canto-full-touch").checked;
+    const point = (event) => { const rect = canvas.getBoundingClientRect(); return { px: event.clientX - rect.left, py: event.clientY - rect.top }; };
+    /** Em que parte da nota o ponteiro está: "start" (ponta esquerda), "end" (ponta direita) ou "body". */
+    const zone = (note, px, L, both) => {
+      const left = L.x(note.beat);
+      const right = L.x(note.beat + note.beats);
+      const grip = Math.min(both ? 8 : 14, (right - left) / (both ? 3 : 2));
+      if (px >= right - grip && px <= right + (both ? 4 : 8)) return "end";
+      if (both && right - left >= 20 && px <= left + grip) return "start";
+      return "body";
+    };
     let drag = null;
     canvas.addEventListener("pointerdown", (event) => {
       if (!state.result || event.button > 0) return;
-      const rect = canvas.getBoundingClientRect();
-      const px = event.clientX - rect.left;
-      const index = noteAt(px, event.clientY - rect.top);
-      const note = state.result.events[index];
-      // na nota escolhida: a ponta direita estica ou encurta; o resto dela move. Fora dela, o arrasto rola o desenho.
+      canvas.focus({ preventScroll: true });
       const L = rollLayout();
-      const own = index >= 0 && index === state.selected;
-      const edge = own ? L.x(note.beat + note.beats) : 0;
-      const handle = own && px >= edge - Math.min(14, (note.beats * L.perBeat) / 2) && px <= edge + 8;
-      drag = { x: event.clientX, index, moved: false, mode: handle ? "stretch" : own ? "move" : "pan", scroll: wrap.scrollLeft, beat: note?.beat ?? 0, beats: note?.beats ?? 0 };
-      canvas.setPointerCapture?.(event.pointerId);
+      const { px, py } = point(event);
+      const isFull = full(event);
+      const index = noteAt(px, py, isFull, L);
+      const note = state.result.events[index];
+      let mode = "pan";
+      if (note && isFull) {
+        // mouse: pegar a nota já a escolhe
+        const where = zone(note, px, L, true);
+        mode = where === "body" ? "move" : where;
+        if (state.selected !== index) { state.selected = index; renderResult(); }
+      } else if (note && index === state.selected) {
+        mode = zone(note, px, L, false) === "end" ? "end" : "move";
+      }
+      drag = { x: event.clientX, y: event.clientY, index, moved: false, mode, full: isFull, L, scroll: wrap.scrollLeft, beat: note?.beat ?? 0, beats: note?.beats ?? 0, midi: note?.midi ?? 0 };
+      try { canvas.setPointerCapture?.(event.pointerId); } catch { /* ponteiro que não dá para capturar: segue sem */ }
     });
     canvas.addEventListener("pointermove", (event) => {
-      if (!drag) return;
-      const dx = event.clientX - drag.x;
-      if (!drag.moved && Math.abs(dx) < 6) return;
-      if (!drag.moved && drag.mode !== "pan") halt(); // mexer numa nota para a escuta
-      drag.moved = true;
-      if (drag.mode === "pan") { wrap.scrollLeft = drag.scroll - dx; return; }
-      const L = rollLayout();
-      const events = state.result.events;
-      const e = events[drag.index];
-      const snap = (value) => Math.round(value / L.step) * L.step;
-      const before = events[drag.index - 1];
-      const after = events[drag.index + 1];
-      if (drag.mode === "stretch") {
-        // a duração anda de quadradinho em quadradinho: no mínimo um, no máximo até a próxima nota (ou o fim)
-        const room = (after ? after.beat : L.span) - e.beat;
-        const length = Math.max(L.step, Math.min(room, snap(drag.beats + dx / L.perBeat)));
-        if (length !== e.beats) { e.beats = Math.round(length * 12) / 12; drawRoll(); }
+      if (!drag) {
+        // mouse parado sobre o desenho: o cursor mostra o que o arrasto vai fazer
+        if (event.pointerType === "mouse" && state.result) {
+          const L = rollLayout();
+          const { px, py } = point(event);
+          const note = state.result.events[noteAt(px, py, true, L)];
+          canvas.style.cursor = !note ? "default" : zone(note, px, L, true) === "body" ? "grab" : "ew-resize";
+        }
         return;
       }
-      const min = before ? before.beat + before.beats : 0;
-      const max = (after ? after.beat : L.span) - e.beats;
-      const next = Math.max(min, Math.min(max, snap(drag.beat + dx / L.perBeat)));
-      if (next !== e.beat && max >= min) { e.beat = Math.round(next * 12) / 12; drawRoll(); }
+      const dx = event.clientX - drag.x;
+      const dy = event.clientY - drag.y;
+      if (!drag.moved && Math.hypot(dx, drag.full ? dy : 0) < (drag.full ? 4 : 6)) return;
+      if (!drag.moved && drag.mode !== "pan") { halt(); remember(); } // mexer numa nota para a escuta e guarda o antes
+      drag.moved = true;
+      if (drag.mode === "pan") { wrap.scrollLeft = drag.scroll - dx; return; }
+      const L = drag.L;
+      let changed;
+      if (drag.mode === "end") changed = resizeNote(drag.index, { end: drag.beat + drag.beats + dx / L.perBeat }, L);
+      else if (drag.mode === "start") changed = resizeNote(drag.index, { start: drag.beat + dx / L.perBeat }, L);
+      else {
+        // com mouse, a nota também sobe e desce (dentro das alturas à vista); com o dedo, só anda para os lados
+        const midi = drag.full ? Math.max(L.low, Math.min(L.high, drag.midi - Math.round(dy / L.row))) : null;
+        changed = moveNote(drag.index, drag.beat + dx / L.perBeat, midi, L);
+        canvas.style.cursor = "grabbing";
+      }
+      if (changed) drawRoll(L);
     });
     const end = (event) => {
       if (!drag) return;
-      const { moved, mode, index } = drag;
+      const { moved, mode, index, full: isFull } = drag;
       drag = null;
       try { canvas.releasePointerCapture?.(event.pointerId); } catch { /* já solto */ }
-      if (event.type === "pointercancel") { if (moved && mode !== "pan") renderResult(); return; }
-      if (moved) { if (mode !== "pan") renderResult(); return; }
-      state.selected = index === state.selected ? -1 : index; // toque sem arrastar: escolhe (ou solta) a nota
+      if (moved) {
+        if (mode !== "pan") { if (state.history.at(-1) === snapshotNotes()) state.history.pop(); renderResult(); } // nada mudou: sem passo de desfazer
+        return;
+      }
+      if (event.type === "pointercancel") return;
+      if (isFull) {
+        // mouse: clicar na nota já a escolheu (no pointerdown); clicar no vazio solta a escolha
+        if (index < 0 && state.selected >= 0) { state.selected = -1; renderResult(); }
+        return;
+      }
+      state.selected = index === state.selected ? -1 : index; // dedo: um toque escolhe (ou solta) a nota
       renderResult();
     };
     canvas.addEventListener("pointerup", end);
     canvas.addEventListener("pointercancel", end);
+    let lastPointer = "mouse";
+    canvas.addEventListener("pointerdown", (event) => { lastPointer = event.pointerType; }, true);
+    canvas.addEventListener("dblclick", (event) => {
+      // duplo clique no vazio cria uma nota (só no jeito completo)
+      if (!state.result || (lastPointer === "touch" && !$("#canto-full-touch").checked)) return;
+      const L = rollLayout();
+      const { px, py } = point(event);
+      if (noteAt(px, py, true, L) >= 0) return;
+      halt();
+      const index = createNote(L.beatAt(px), L.midiAt(py), L);
+      if (index >= 0) { state.selected = index; renderResult(); }
+    });
+    // roda do mouse: rola o desenho para os lados; com Ctrl, dá zoom (mantendo no lugar o ponto sob o mouse)
+    wrap.addEventListener("wheel", (event) => {
+      if (!state.result) return;
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        zoomBy(event.deltaY < 0 ? 1.2 : 1 / 1.2, event.clientX - wrap.getBoundingClientRect().left);
+      } else if (Math.abs(event.deltaY) > Math.abs(event.deltaX) && wrap.scrollWidth > wrap.clientWidth) {
+        event.preventDefault();
+        wrap.scrollLeft += event.deltaY;
+      }
+    }, { passive: false });
+    // teclado (com o desenho em foco): setas movem a nota escolhida, Delete apaga, Ctrl+Z desfaz, Espaço ouve
+    canvas.addEventListener("keydown", (event) => {
+      if (!state.result) return;
+      const key = event.key;
+      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === "z") { event.preventDefault(); undo(); return; }
+      if (key === " ") { event.preventDefault(); $("#canto-play").click(); return; }
+      if (state.selected < 0) return;
+      const L = rollLayout();
+      const e = state.result.events[state.selected];
+      if (key === "Delete" || key === "Backspace") { event.preventDefault(); removeSelected(); return; }
+      const arrows = { ArrowLeft: [-L.step, 0], ArrowRight: [L.step, 0], ArrowUp: [0, event.shiftKey ? 12 : 1], ArrowDown: [0, event.shiftKey ? -12 : -1] };
+      if (!arrows[key]) return;
+      event.preventDefault();
+      halt();
+      const before = snapshotNotes();
+      const [beats, semis] = arrows[key];
+      if (moveNote(state.selected, e.beat + beats, semis ? e.midi + semis : null, L)) { state.history.push(before); renderResult(); }
+    });
+  };
+
+  /** Zoom do desenho: `factor` multiplica; `anchor` (px dentro da área visível) fica no mesmo tempo depois do zoom. */
+  const zoomBy = (factor, anchor = null) => {
+    const wrap = $("#canto-roll-wrap");
+    const before = rollLayout();
+    const at = anchor ?? wrap.clientWidth / 2;
+    const beat = before.beatAt(wrap.scrollLeft + at);
+    state.zoom = Math.max(0.4, Math.min(5, state.zoom * factor));
+    drawRoll();
+    wrap.scrollLeft = Math.max(0, rollLayout().x(beat) - at);
   };
 
   /** Para o destaque do "Ouvir" (o som em si para com stop()). */
@@ -529,11 +721,13 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
 
   const shiftAll = (semitones) => {
     halt();
+    remember();
     state.result.events = state.result.events.map((e) => ({ ...e, midi: Math.max(24, Math.min(108, e.midi + semitones)) }));
     renderResult();
   };
   const shiftSelected = (semitones) => {
     halt();
+    remember();
     const e = state.result.events[state.selected];
     if (e) e.midi = Math.max(24, Math.min(108, e.midi + semitones));
     renderResult();
@@ -574,13 +768,11 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
   $("#canto-octave-up").addEventListener("click", () => (state.selected >= 0 ? shiftSelected(12) : shiftAll(12)));
   $("#canto-semi-down").addEventListener("click", () => shiftSelected(-1));
   $("#canto-semi-up").addEventListener("click", () => shiftSelected(1));
-  $("#canto-delete").addEventListener("click", () => {
-    halt();
-    state.result.events.splice(state.selected, 1);
-    state.selected = -1;
-    if (!state.result.events.length) { state.result = null; $("#canto-result").hidden = true; status("Todas as notas foram apagadas. Grave de novo."); return; }
-    renderResult();
-  });
+  $("#canto-delete").addEventListener("click", removeSelected);
+  $("#canto-undo").addEventListener("click", undo);
+  $("#canto-zoom-in").addEventListener("click", () => zoomBy(1.3));
+  $("#canto-zoom-out").addEventListener("click", () => zoomBy(1 / 1.3));
+  $("#canto-full-touch").addEventListener("change", (e) => { $("#canto-roll").style.touchAction = e.target.checked ? "none" : ""; });
   $("#canto-play").addEventListener("click", () => {
     if (state.listen) { stopListening(); stop?.(); return; }
     const seconds = 60 / state.result.bpm;
@@ -623,6 +815,8 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     if (melody.timeSignature && melody.timeSignature !== signature) warnings.push(`O MIDI está em ${melody.timeSignature}; a melodia entra no compasso ${signature} do projeto. Confira os tempos.`);
     const bpm = newPart ? d.bpm : Math.round(melody.bpm ?? d.bpm) || d.bpm;
     if (newPart && melody.bpm && Math.round(melody.bpm) !== Math.round(d.bpm)) warnings.push(`O MIDI está a ${Math.round(melody.bpm)} BPM; a parte nova segue o BPM do projeto (${d.bpm}). As figuras são as mesmas.`);
+    state.history = []; // melodia nova no desenho: o Desfazer e o zoom começam do zero
+    state.zoom = 1;
     state.result = { ...melody, warnings, bpm, signature, shift: 0, leak: { leak: false }, latency: 0, fastest: "16", diatonic: false, target: newPart ? "nova" : "toda" };
     state.selected = -1;
     status("Melodia lida do MIDI. Confira as notas: toque numa nota do desenho para ajustá-la.");

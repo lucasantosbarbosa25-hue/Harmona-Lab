@@ -612,3 +612,15 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .song h2 { margin: 0; font-size: 1.05rem; }
 .song .form-strip, .song .mixer, .song .listen-row, .song .phrase-mode { margin: 0; }
 .song-listen { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
+.canto-roll-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.canto-zoom { display: none; align-items: center; gap: 2px; color: var(--muted); font-size: .85rem; }
+.canto-zoom .btn { min-width: 36px; font-size: 1.1rem; }
+.canto-roll:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.hint-mouse { display: none; }
+/* computador (mouse): zoom à vista, a dica do mouse no lugar da do dedo, e a janela do canto bem mais larga */
+@media (hover: hover) and (pointer: fine) {
+  .canto-zoom { display: inline-flex; }
+  .hint-mouse { display: block; }
+  .hint-touch { display: none; }
+}
+@media (min-width: 900px) { dialog#canto-dialog { max-width: min(1100px, 94vw); } }

@@ -453,6 +453,11 @@
         <span class="switch-track" aria-hidden="true"></span>
         <span class="switch-text">Anacruse <small>a melodia começa antes do tempo 1: a contagem passa a ter 2 compassos e você pode entrar cantando no segundo</small></span>
       </label>
+      <label class="switch" for="canto-full-touch">
+        <input type="checkbox" id="canto-full-touch" role="switch">
+        <span class="switch-track" aria-hidden="true"></span>
+        <span class="switch-text">Edição completa no toque <small>com o dedo (ou caneta), arrastar a nota também muda a altura, como com o mouse; desligado, o dedo só move para os lados</small></span>
+      </label>
       <label class="switch" for="canto-eighths">
         <input type="checkbox" id="canto-eighths" role="switch" checked>
         <span class="switch-track" aria-hidden="true"></span>
@@ -476,8 +481,13 @@
           <span class="label">Faixa do MIDI com a melodia</span>
           <select id="canto-track"></select>
         </label>
-        <div class="canto-roll-wrap" id="canto-roll-wrap"><canvas id="canto-roll" class="canto-roll" aria-label="As notas que o app ouviu"></canvas></div>
-        <p class="canto-hint">Toque numa nota para escolher. Arraste a nota escolhida para os lados para adiantar ou atrasar, ou puxe a ponta direita dela para esticar ou encurtar: tudo anda de quadradinho em quadradinho. Arraste o fundo para ver o resto da melodia.</p>
+        <div class="canto-roll-bar">
+          <button type="button" class="btn ghost small" id="canto-undo" disabled title="Desfazer a última mudança (Ctrl+Z)">Desfazer</button>
+          <span class="canto-zoom"><button type="button" class="btn ghost small" id="canto-zoom-out" aria-label="Diminuir o zoom" title="Menos zoom (Ctrl + roda do mouse)">−</button><span>zoom</span><button type="button" class="btn ghost small" id="canto-zoom-in" aria-label="Aumentar o zoom" title="Mais zoom (Ctrl + roda do mouse)">+</button></span>
+        </div>
+        <div class="canto-roll-wrap" id="canto-roll-wrap"><canvas id="canto-roll" class="canto-roll" tabindex="0" aria-label="As notas da melodia. Com uma nota escolhida: setas movem, Delete apaga, Ctrl+Z desfaz, Espaço ouve."></canvas></div>
+        <p class="canto-hint hint-touch">Toque numa nota para escolher. Arraste a nota escolhida para os lados para adiantar ou atrasar, ou puxe a ponta direita dela para esticar ou encurtar: tudo anda de quadradinho em quadradinho. A altura fica nos botões abaixo. Arraste o fundo para ver o resto da melodia.</p>
+        <p class="canto-hint hint-mouse"><strong>Arraste</strong> uma nota: para os lados muda o tempo; para cima e para baixo, a altura. Puxe as <strong>pontas</strong> para esticar ou encurtar. <strong>Duplo clique</strong> no vazio cria uma nota; <strong>Delete</strong> apaga. Setas movem a nota escolhida, <strong>Ctrl+Z</strong> desfaz e <strong>Espaço</strong> ouve. A roda do mouse rola; com Ctrl, dá zoom.</p>
         <p class="canto-info" id="canto-info"></p>
         <ul class="canto-warnings" id="canto-warnings"></ul>
         <code class="canto-text" id="canto-text"></code>

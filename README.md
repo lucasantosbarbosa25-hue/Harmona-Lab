@@ -212,6 +212,15 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   baterias), usar o timbre simples, ou carregar um banco do aparelho. Se os sons não puderem ser baixados (sem internet na
   primeira vez), a música toca com o timbre simples e o app avisa. Os sons só valem para a escuta: o MIDI não muda.
 
+  **Editor de notas no computador (como numa DAW).** O jeito de editar é escolhido sozinho pelo tipo de ponteiro, sem
+  interruptor. Com **mouse** (ou caneta): arrastar uma nota move no tempo (lados) e na altura (cima e baixo, de semitom em
+  semitom, tocando a nota para você ouvir); as **duas pontas** esticam e encurtam; **duplo clique** no vazio cria uma nota
+  de um tempo; **Delete** apaga; as **setas** movem a nota escolhida (Shift + cima/baixo: uma oitava); **Ctrl+Z** desfaz
+  passo a passo (há também o botão Desfazer); **Espaço** ouve; a roda do mouse rola e, com **Ctrl**, dá zoom (também nos
+  botões − e +). No computador a janela fica larga e o desenho mais alto, com 4 compassos à vista. Com o **dedo**, vale o
+  jeito seguro: um toque escolhe, e só a nota escolhida anda, só para os lados (a altura fica nos botões). Quem quiser o
+  jeito completo no toque liga "Edição completa no toque", em "Mais opções".
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e
