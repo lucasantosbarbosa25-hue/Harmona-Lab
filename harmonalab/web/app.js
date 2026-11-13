@@ -10,7 +10,7 @@ import {
   appendSection, emptyLastSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
   sectionBlocks, splitSection, voiceNotes,
 } from "./partes.js";
-import { drawDiagrams } from "./diagram.js";
+import { buildPdf, drawDiagramPages } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { FILL_FREEDOMS, FILL_FREQUENCIES, INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
 import { SECOND_VOICE_MODES, generateSecondVoice } from "./engine/segunda.js";
@@ -1897,25 +1897,38 @@ async function exportDiagrams() {
   if (!all.length) { toast("A progressão ainda não tem notas para desenhar.", { error: true }); return; }
   const [low, high] = keyboardRange(all);
   const p = state.project;
-  const canvas = drawDiagrams({
+  // a música em ordem: o começo de cada parte, os acordes, e os acordes vazios seguidos resumidos numa linha
+  const blocks = sectionBlocks(p.chords);
+  const starts = new Map(blocks.map((b) => [b.from, b.name]));
+  const items = [];
+  p.chords.forEach((chord, i) => {
+    if (blocks.length > 1 && starts.has(i)) items.push({ section: starts.get(i) });
+    const info = state.byId.get(chord.id)?.chord;
+    const notes = info?.notes || [];
+    if (!notes.length && !String(chord.symbol || "").trim()) {
+      const last = items.at(-1);
+      if (last?.rests) last.rests += 1; else items.push({ rests: 1 });
+      return;
+    }
+    items.push({
+      number: i + 1, symbol: chord.symbol,
+      fn: [chord.function, chord.scale].map((t) => String(t || "").trim()).filter(Boolean).join(" · "),
+      note: String(chord.comment || "").trim(), notes, top: info?.top?.midi ?? null,
+    });
+  });
+  const pages = drawDiagramPages({
     title: p.title,
     subtitle: [p.key && `Tom: ${p.key}`, toNumber(p.tempo) > 0 && `${fmt(toNumber(p.tempo))} BPM`, p.time_signature, p.style].filter(Boolean).join(" · "),
-    low, high,
-    chords: p.chords.map((chord) => {
-      const info = state.byId.get(chord.id)?.chord;
-      return {
-        symbol: chord.symbol,
-        fn: [chord.function, chord.scale].map((t) => String(t || "").trim()).filter(Boolean).join(" · "),
-        note: String(chord.comment || "").trim(),
-        notes: info?.notes || [],
-        top: info?.top?.midi ?? null,
-      };
-    }),
+    low, high, items,
   });
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
-  const filename = `${slugify(p.title)}-diagramas.png`;
-  const saved = await saveFile(blob, filename, "Imagem PNG", "image/png", ".png");
-  if (saved) toast(`${saved.name} salvo.`);
+  const images = [];
+  for (const canvas of pages) {
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.92));
+    images.push({ bytes: new Uint8Array(await blob.arrayBuffer()), width: canvas.width, height: canvas.height });
+  }
+  const filename = `${slugify(p.title)}-diagramas.pdf`;
+  const saved = await saveFile(new Blob([buildPdf(images)], { type: "application/pdf" }), filename, "Documento PDF", "application/pdf", ".pdf");
+  if (saved) toast(`${saved.name} salvo (${pages.length} página${pages.length > 1 ? "s" : ""}).`);
 }
 
 async function saveProject() {

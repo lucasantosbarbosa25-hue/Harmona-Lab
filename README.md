@@ -255,7 +255,7 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   arco. Tudo dentro do **baixo de 4 cordas** (do E1, a corda solta mais grave, ao G4): uma nota que cairia abaixo sobe
   uma oitava, e uma aproximação abaixo do E1 vem por cima. No MIDI, faixa própria (canal 3). Com banco de sons, toca com
   o som dos acordes.
-- **Diagramas:** no menu, "Exportar diagramas dos acordes" gera uma imagem com o desenho do teclado de cada acorde.
+- **Diagramas:** no menu, "Exportar diagramas dos acordes (PDF)" gera um PDF em páginas A4, em duas colunas, com o desenho do teclado, a função e a frase de cada acorde, o cabeçalho de cada parte (A, B…) e os acordes vazios resumidos numa linha. (Antes era uma imagem única, que passava do tamanho que o navegador aguenta quando havia muitos acordes.)
 - **Repetir** e **andamento de estudo** (75% ou 50%) valem só para ouvir: o BPM do projeto e o MIDI não mudam.
 - **Frases melódicas** (interruptor): o app escreve o solo como um improvisador pensa, **a partir da chegada**. Primeiro
   escolhe os pontos de chegada (o tempo 1 de cada acorde, o meio do compasso, as notas longas, o começo e o fim de cada
