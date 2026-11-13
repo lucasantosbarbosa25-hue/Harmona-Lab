@@ -195,6 +195,15 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   blocos das partes (com o desenho da melodia) e os controles de escuta (o que ouvir, Mixer, Repetir e andamento de
   estudo). O botão Ouvir continua na barra fixa de baixo. "Ritmo e frases" e a lista de acordes vêm depois.
 
+  **Desenho das notas com grade, zoom e arrasto.** Na janela do canto, o desenho da melodia tem uma grade discreta de
+  quadradinhos do tamanho da quantização (colcheia = quadradinhos largos; semicolcheia = metade), com os tempos e os
+  compassos um pouco mais fortes e o número de cada compasso. O desenho mostra uns 2 compassos por vez e rola para os
+  lados. Um toque escolhe a nota; arrastar a nota **escolhida** para os lados adianta ou atrasa, de quadradinho em
+  quadradinho, sem passar por cima das vizinhas; puxar a **ponta direita** dela estica ou encurta (no mínimo um
+  quadradinho, no máximo até a próxima nota). A altura continua nos botões de meio tom e oitava. Arrastar o fundo, ou uma
+  nota não escolhida, só rola o desenho. **Editar melodia** (no cartão Melodia e partes, quando há uma Voz) abre o mesmo
+  desenho com a melodia do projeto: "Salvar a melodia" grava só o texto dela, sem mexer no BPM nem nos acordes.
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e

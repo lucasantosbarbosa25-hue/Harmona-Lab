@@ -1,6 +1,7 @@
 // Cantar uma melodia: metrônomo amadeirado, um compasso de contagem, a gravação (só no aparelho) e as notas que o app
 // ouviu, para conferir, ajustar e usar como a camada Voz do projeto. A análise está em engine/canto.js.
-import { SIXTEENTHS_UP_TO_BPM, hatTickSamples, hzFromMidi, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
+import { SIXTEENTHS_UP_TO_BPM, estimateKey, hatTickSamples, hzFromMidi, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
+import { TICKS_PER_BEAT, parsePhrase } from "./engine/phrase.js";
 import { melodyFromMidi, melodyTracks, parseMidi } from "./engine/midi-read.js";
 
 const COUNT_IN_BARS = 1; // 2 quando há anacruse ou quando o fim da parte anterior toca antes (parte nova)
@@ -191,7 +192,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
       : state.fastest === "8" ? "Colcheias: o melhor para melodias simples." : "Semicolcheias: para melodias com notas rápidas.";
     $("#canto-mode-hint").textContent = MODES[state.mode].hint;
     const d = defaults();
-    $("#canto-target-box").hidden = !d.canAppend;
+    $("#canto-target-box").hidden = !d.canAppend || state.result?.target === "editar";
     document.querySelectorAll("#canto-target button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.target === state.target)));
     const fresh = asNewPart();
     $("#canto-target-hint").textContent = fresh
@@ -199,7 +200,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
       : "A melodia vale para a música inteira, a partir do compasso 1, e substitui a Voz que houver.";
     $("#canto-signature").disabled = fresh; // a parte nova segue o compasso do projeto
     if (fresh) $("#canto-signature").value = d.timeSignature;
-    $("#canto-use").textContent = state.result?.target === "nova" ? `Usar como parte ${d.nextSection}` : "Usar como Voz";
+    $("#canto-use").textContent = state.result?.target === "editar" ? "Salvar a melodia" : state.result?.target === "nova" ? `Usar como parte ${d.nextSection}` : "Usar como Voz";
   };
   const renderDots = (beatsPerBar, active = -1) => {
     const box = $("#canto-beats");
@@ -214,11 +215,35 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     $("#canto-volume").value = MODES[state.mode].volume;
     state.target = d.canAppend && d.hasVoice ? "nova" : "toda"; // já há melodia: o natural é continuar a música
     if (state.result && state.result.target === "nova" && !d.canAppend) state.result = null;
+    if (state.result?.target === "editar") state.result = null; // a edição da melodia do projeto não fica de um dia para o outro
     renderMode();
     renderDots(beatsPerBarOf($("#canto-signature").value));
     $("#canto-result").hidden = !state.result;
     status("Escolha o BPM e toque em Gravar. Depois da contagem, cante.");
     dialog.showModal();
+  };
+
+  /** Abre a janela já com a melodia do projeto no desenho, para mexer no tempo e na altura das notas (sem gravar). */
+  const edit = () => {
+    const d = defaults();
+    const text = String(d.voiceText || "").trim();
+    const { events, errors } = parsePhrase(text, d.middleC);
+    if (!text || errors.length || !events.length) { toast?.("A melodia do projeto tem um erro de escrita: corrija o texto dela em “Sobre esta progressão”."); return; }
+    open();
+    const notes = events.filter((e) => e.voice === 0).map((e) => ({ beat: e.start / TICKS_PER_BEAT, beats: e.length / TICKS_PER_BEAT, midi: e.note.midi }));
+    const guess = estimateKey(notes.map((n) => ({ midi: n.midi, start: n.beat, end: n.beat + n.beats })));
+    // a grafia segue a da melodia como está escrita (bemóis ou sustenidos)
+    const key = { ...guess, flats: /[A-G]b/.test(text) || (!text.includes("#") && guess.flats) };
+    const onEighths = notes.every((n) => Number.isInteger(Math.round(n.beat * 1e6) / 5e5) && Number.isInteger(Math.round(n.beats * 1e6) / 5e5));
+    state.midi = null;
+    state.selected = -1;
+    state.result = {
+      events: notes, key, warnings: [], bpm: d.bpm, signature: d.timeSignature, shift: 0, leak: { leak: false }, latency: 0,
+      fastest: onEighths ? "8" : "16", diatonic: false, source: "projeto", target: "editar", maxBeats: d.totalBeats,
+    };
+    status("A melodia do projeto. Toque numa nota para escolher; arraste para os lados para mexer no tempo.");
+    renderResult();
+    $("#canto-result").scrollIntoView({ block: "start" });
   };
 
   const record = async () => {
@@ -305,11 +330,13 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     const leak = r.leak.leak ? `o clique vazou para o microfone (atraso medido: ${Math.round(r.latency * 1000)} ms, usado para alinhar)` : "o clique não vazou para o microfone";
     const grid = r.fastest === "16" ? "semicolcheias" : "colcheias";
     const scale = r.diatonic ? ` (notas na escala de ${r.key?.name ?? "?"})` : "";
-    $("#canto-info").textContent = r.source === "midi"
+    $("#canto-info").textContent = r.source === "projeto"
+      ? `${r.events.length} notas da melodia do projeto · grade em ${grid}.`
+      : r.source === "midi"
       ? `${r.events.length} notas do arquivo MIDI · tom provável: ${r.key?.name ?? "?"} · ${r.bpm} BPM, compasso ${r.signature}.`
       : `${r.events.length} notas · tom provável: ${r.key?.name ?? "?"}${scale} · ${r.bpm} BPM, ritmo em ${grid} · ${leak}.`;
     $("#canto-track-box").hidden = !(r.source === "midi" && state.midi && state.midi.tracks.length > 1);
-    $("#canto-again").hidden = r.source === "midi";
+    $("#canto-again").hidden = r.source === "midi" || r.source === "projeto";
     renderMode();
     $("#canto-warnings").replaceChildren(...r.warnings.map((w) => Object.assign(document.createElement("li"), { textContent: w })));
     $("#canto-text").textContent = text();
@@ -321,63 +348,172 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     drawRoll();
   };
 
+  // ------------------------------------------------------------ o desenho das notas (com grade, zoom e arrasto)
+  /** O passo da grade em tempos: o da quantização (colcheia = 0,5; semicolcheia = 0,25). */
+  const gridStep = () => (state.result?.fastest === "8" ? 0.5 : 0.25);
+  /** As medidas do desenho: quantos pixels vale um tempo (zoom: uns 2 compassos na largura da tela) e as linhas das alturas. */
+  const rollLayout = () => {
+    const r = state.result;
+    const wrap = $("#canto-roll-wrap");
+    const view = wrap.clientWidth || 320;
+    const bpb = beatsPerBarOf(r.signature);
+    const step = gridStep();
+    const bars = Math.ceil(Math.max(totalBeats(), 1) / bpb - 1e-9) + 1; // um compasso de folga, para dar para atrasar o fim
+    const span = r.maxBeats ? Math.max(r.maxBeats, totalBeats()) : bars * bpb; // editando a do projeto: até o fim da música
+    // cada quadradinho com pelo menos 14 px (o dedo precisa acertar), sem passar do que o navegador desenha de uma vez
+    const perBeat = Math.min(Math.max(view / (2 * bpb), 14 / step), 7600 / span);
+    const pitches = r.events.map((e) => e.midi);
+    const low = Math.min(...pitches) - 2;
+    const high = Math.max(...pitches) + 2;
+    const height = 170;
+    const row = (height - 22) / (high - low + 1);
+    return {
+      view, bpb, step, span, perBeat, low, high, height, row, width: Math.max(view, Math.round(span * perBeat) + 8),
+      x: (beat) => 4 + beat * perBeat, beatAt: (px) => (px - 4) / perBeat, y: (midi) => 18 + (high - midi) * row,
+    };
+  };
+
   const drawRoll = () => {
     const canvas = $("#canto-roll");
     const r = state.result;
-    const width = canvas.clientWidth || 320;
-    const height = 150;
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = width * ratio;
-    canvas.height = height * ratio;
+    const L = rollLayout();
+    const { width, height } = L;
+    const ratio = Math.min(window.devicePixelRatio || 1, 15000 / width);
+    canvas.style.width = `${width}px`;
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
     const g = canvas.getContext("2d");
     g.scale(ratio, ratio);
     const css = getComputedStyle(document.documentElement);
     const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
-    const beats = Math.max(totalBeats(), 1);
-    const pitches = r.events.map((e) => e.midi);
-    const low = Math.min(...pitches) - 2;
-    const high = Math.max(...pitches) + 2;
-    const x = (b) => 4 + (b / beats) * (width - 8);
-    const y = (m) => 6 + ((high - m) / (high - low)) * (height - 24);
     g.clearRect(0, 0, width, height);
-    const bpb = beatsPerBarOf(r.signature);
-    g.strokeStyle = color("--border", "#ccc");
-    g.lineWidth = 1;
-    for (let b = 0; b <= beats; b += bpb) { g.beginPath(); g.moveTo(x(b), 0); g.lineTo(x(b), height); g.stroke(); }
+    // a grade: quadradinhos do tamanho do passo da quantização, bem transparentes; tempos e compassos um pouco mais fortes
+    g.fillStyle = color("--text", "#111");
+    for (let m = L.low; m <= L.high + 1; m++) { g.globalAlpha = 0.07; g.fillRect(0, Math.round(L.y(m) + L.row), width, 1); }
+    for (let k = 0; k * L.step <= L.span + 1e-9; k++) {
+      const beat = k * L.step;
+      const onBar = Math.abs(beat / L.bpb - Math.round(beat / L.bpb)) < 1e-6;
+      const onBeat = Math.abs(beat - Math.round(beat)) < 1e-6;
+      g.globalAlpha = onBar ? 0.4 : onBeat ? 0.17 : 0.07;
+      g.fillRect(Math.round(L.x(beat)), 0, 1, height);
+      if (onBar && beat < L.span) { g.globalAlpha = 0.55; g.font = "10px system-ui, sans-serif"; g.fillText(String(Math.round(beat / L.bpb) + 1), L.x(beat) + 3, 10); }
+    }
+    g.globalAlpha = 1;
     const spell = speller(r.key, defaults().middleC);
-    g.font = "11px system-ui, sans-serif";
     const playing = state.listen ? r.events.findIndex((e) => state.listen.beat >= e.beat && state.listen.beat < e.beat + e.beats) : -1;
     r.events.forEach((e, i) => {
-      const left = x(e.beat);
-      const w = Math.max(3, x(e.beat + e.beats) - left - 2);
-      const top = y(e.midi) - 5;
+      const left = L.x(e.beat);
+      const w = Math.max(3, L.x(e.beat + e.beats) - left - 1);
+      const top = L.y(e.midi) + 1;
+      const h = Math.max(6, L.row - 1);
       const lit = i === playing;
-      const chosen = playing < 0 && i === state.selected; // só UMA nota fica escolhida: maior, com contorno e o nome em destaque
+      const chosen = playing < 0 && i === state.selected; // só UMA nota fica escolhida: com contorno e o nome em destaque
       g.globalAlpha = playing >= 0 && !lit ? 0.45 : 1; // ao ouvir, as outras notas apagam um pouco
       g.fillStyle = lit || chosen ? color("--primary", "#a85a00") : color("--muted", "#666");
-      if (lit || chosen) g.fillRect(left - 1, top - 3, w + 2, 16); // a nota que soa (ou a escolhida) cresce
-      else g.fillRect(left, top, w, 10);
-      if (chosen) { g.strokeStyle = color("--text", "#111"); g.lineWidth = 2; g.strokeRect(left - 1, top - 3, w + 2, 16); }
-      if (i === state.selected && playing >= 0) { g.strokeStyle = color("--primary", "#a85a00"); g.lineWidth = 2; g.strokeRect(left, top, w, 10); }
+      g.fillRect(left, top, w, h);
+      if (chosen) {
+        g.strokeStyle = color("--text", "#111");
+        g.lineWidth = 2;
+        g.strokeRect(left, top, w, h);
+        // a alça de esticar, na ponta direita da nota escolhida
+        g.fillStyle = color("--text", "#111");
+        g.fillRect(left + w - 4, top + 2, 2, h - 4);
+      }
+      if (i === state.selected && playing >= 0) { g.strokeStyle = color("--primary", "#a85a00"); g.lineWidth = 2; g.strokeRect(left, top, w, h); }
       g.globalAlpha = 1;
       if (w > 22 || chosen || lit) {
         const strong = chosen || lit;
         g.font = strong ? "bold 12px system-ui, sans-serif" : "11px system-ui, sans-serif";
         g.fillStyle = strong ? color("--text", "#111") : color("--muted", "#666"); // os nomes das outras ficam discretos: não parecem escolhidas
         g.globalAlpha = strong ? 1 : 0.7;
-        g.fillText(spell(e.midi), left, top - 6 > 10 ? top - 6 : top + 24);
+        g.fillText(spell(e.midi), left, top - 4 > 22 ? top - 4 : top + h + 12);
         g.globalAlpha = 1;
       }
     });
     if (state.listen) {
-      // a linha que corre junto com o som
-      const at = x(Math.min(beats, state.listen.beat));
+      // a linha que corre junto com o som (e a tela acompanha)
+      const at = L.x(Math.min(L.span, state.listen.beat));
       g.strokeStyle = color("--primary", "#a85a00");
       g.lineWidth = 2;
       g.beginPath(); g.moveTo(at, 0); g.lineTo(at, height); g.stroke();
+      const wrap = $("#canto-roll-wrap");
+      if (at < wrap.scrollLeft + 20 || at > wrap.scrollLeft + L.view - 40) wrap.scrollLeft = Math.max(0, at - 40);
     }
-    canvas.dataset.beats = String(beats);
+    canvas.dataset.beats = String(L.span);
+    canvas.dataset.step = String(L.step);
+    canvas.dataset.perBeat = String(L.perBeat);
     canvas.dataset.playing = String(playing);
+  };
+
+  /** A nota que está embaixo de um ponto do desenho (índice, ou -1) e se o ponto está na alça de esticar dela. */
+  const noteAt = (px, py) => {
+    const L = rollLayout();
+    const beat = L.beatAt(px);
+    const tolerance = 6 / L.perBeat;
+    let index = state.result.events.findIndex((e) => beat >= e.beat - tolerance && beat <= e.beat + e.beats + tolerance && Math.abs(py - (L.y(e.midi) + L.row / 2)) <= Math.max(14, L.row));
+    if (index < 0) index = state.result.events.findIndex((e) => beat >= e.beat && beat <= e.beat + e.beats); // toque fora da altura: vale a coluna
+    return index;
+  };
+
+  /**
+   * Dedo (ou mouse) no desenho. Um toque escolhe a nota. Arrastar a nota ESCOLHIDA para os lados muda o tempo dela, de
+   * quadradinho em quadradinho, sem passar por cima das vizinhas. Arrastar em outro lugar rola o desenho.
+   */
+  const bindRollPointer = () => {
+    const canvas = $("#canto-roll");
+    const wrap = $("#canto-roll-wrap");
+    let drag = null;
+    canvas.addEventListener("pointerdown", (event) => {
+      if (!state.result || event.button > 0) return;
+      const rect = canvas.getBoundingClientRect();
+      const px = event.clientX - rect.left;
+      const index = noteAt(px, event.clientY - rect.top);
+      const note = state.result.events[index];
+      // na nota escolhida: a ponta direita estica ou encurta; o resto dela move. Fora dela, o arrasto rola o desenho.
+      const L = rollLayout();
+      const own = index >= 0 && index === state.selected;
+      const edge = own ? L.x(note.beat + note.beats) : 0;
+      const handle = own && px >= edge - Math.min(14, (note.beats * L.perBeat) / 2) && px <= edge + 8;
+      drag = { x: event.clientX, index, moved: false, mode: handle ? "stretch" : own ? "move" : "pan", scroll: wrap.scrollLeft, beat: note?.beat ?? 0, beats: note?.beats ?? 0 };
+      canvas.setPointerCapture?.(event.pointerId);
+    });
+    canvas.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      const dx = event.clientX - drag.x;
+      if (!drag.moved && Math.abs(dx) < 6) return;
+      if (!drag.moved && drag.mode !== "pan") halt(); // mexer numa nota para a escuta
+      drag.moved = true;
+      if (drag.mode === "pan") { wrap.scrollLeft = drag.scroll - dx; return; }
+      const L = rollLayout();
+      const events = state.result.events;
+      const e = events[drag.index];
+      const snap = (value) => Math.round(value / L.step) * L.step;
+      const before = events[drag.index - 1];
+      const after = events[drag.index + 1];
+      if (drag.mode === "stretch") {
+        // a duração anda de quadradinho em quadradinho: no mínimo um, no máximo até a próxima nota (ou o fim)
+        const room = (after ? after.beat : L.span) - e.beat;
+        const length = Math.max(L.step, Math.min(room, snap(drag.beats + dx / L.perBeat)));
+        if (length !== e.beats) { e.beats = Math.round(length * 12) / 12; drawRoll(); }
+        return;
+      }
+      const min = before ? before.beat + before.beats : 0;
+      const max = (after ? after.beat : L.span) - e.beats;
+      const next = Math.max(min, Math.min(max, snap(drag.beat + dx / L.perBeat)));
+      if (next !== e.beat && max >= min) { e.beat = Math.round(next * 12) / 12; drawRoll(); }
+    });
+    const end = (event) => {
+      if (!drag) return;
+      const { moved, mode, index } = drag;
+      drag = null;
+      try { canvas.releasePointerCapture?.(event.pointerId); } catch { /* já solto */ }
+      if (event.type === "pointercancel") { if (moved && mode !== "pan") renderResult(); return; }
+      if (moved) { if (mode !== "pan") renderResult(); return; }
+      state.selected = index === state.selected ? -1 : index; // toque sem arrastar: escolhe (ou solta) a nota
+      renderResult();
+    };
+    canvas.addEventListener("pointerup", end);
+    canvas.addEventListener("pointercancel", end);
   };
 
   /** Para o destaque do "Ouvir" (o som em si para com stop()). */
@@ -433,15 +569,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
       $("#canto-bpm").value = Math.max(SING_BPM.min, Math.min(SING_BPM.max, fit));
     }
   });
-  $("#canto-roll").addEventListener("click", (event) => {
-    if (!state.result) return;
-    const canvas = event.currentTarget;
-    const rect = canvas.getBoundingClientRect();
-    const beat = ((event.clientX - rect.left - 4) / (rect.width - 8)) * Number(canvas.dataset.beats || 1);
-    const index = state.result.events.findIndex((e) => beat >= e.beat - 0.1 && beat <= e.beat + e.beats + 0.1);
-    state.selected = index === state.selected ? -1 : index;
-    renderResult();
-  });
+  bindRollPointer();
   $("#canto-octave-down").addEventListener("click", () => (state.selected >= 0 ? shiftSelected(-12) : shiftAll(-12)));
   $("#canto-octave-up").addEventListener("click", () => (state.selected >= 0 ? shiftSelected(12) : shiftAll(12)));
   $("#canto-semi-down").addEventListener("click", () => shiftSelected(-1));
@@ -475,7 +603,8 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
   $("#canto-use").addEventListener("click", () => {
     const r = state.result;
     onUse({
-      text: text(), bpm: r.bpm, timeSignature: r.signature, beats: totalBeats(), target: r.target === "nova" && defaults().canAppend ? "nova" : "toda",
+      text: text(), bpm: r.bpm, timeSignature: r.signature, beats: totalBeats(),
+      target: r.target === "editar" ? "editar" : r.target === "nova" && defaults().canAppend ? "nova" : "toda",
       events: r.events.map((e) => ({ ...e })), pickup: r.shift || 0, spell: speller(r.key, defaults().middleC), source: r.source || "canto",
     });
     state.result = null; // já foi para o projeto: a próxima vez começa limpa
@@ -520,9 +649,10 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
   $("#canto-track").addEventListener("change", (event) => { halt(); useMidiTrack(Number(event.target.value)); });
   document.querySelectorAll("#canto-target button").forEach((b) => b.addEventListener("click", () => {
     state.target = b.dataset.target;
-    if (state.result) state.result.target = asNewPart() ? "nova" : "toda";
+    if (state.result && state.result.target !== "editar") state.result.target = asNewPart() ? "nova" : "toda";
     renderMode();
   }));
   $("#canto-pickup").addEventListener("change", () => renderMode());
   $("#canto-again").addEventListener("click", () => { halt(); state.result = null; $("#canto-result").hidden = true; record(); });
+  return { edit };
 }

@@ -1023,6 +1023,7 @@ function renderPhraseMode() {
   const any = (state.report?.chords || []).some((c) => c.phrase);
   $("#phrase-mode-box").hidden = !any;
   renderMixer();
+  $("#voice-edit").hidden = !String(state.project.voice || "").trim();
   document.querySelectorAll("#phrase-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.phraseMode)));
 }
 
@@ -2076,18 +2077,22 @@ function bindUi() {
   bindSettings();
   bindGroove();
   bindSound();
-  setupCanto({
+  const canto = setupCanto({
     defaults: () => ({
       bpm: toNumber(state.project.tempo) || 80, timeSignature: state.project.time_signature, middleC: state.project.middle_c,
       // dá para acrescentar uma parte quando já existe música (acordes de verdade ou uma Voz)
       canAppend: hasProgression() || Boolean(String(state.project.voice || "").trim()),
       hasVoice: Boolean(String(state.project.voice || "").trim()), nextSection: nextSectionName(state.project.chords),
+      voiceText: state.project.voice || "", totalBeats: state.project.chords.reduce((n, c) => n + (toNumber(c.duration_beats) || 0), 0),
     }),
     onUse: useVoice,
     preroll: prerollNotes,
+    toast,
     play: (notes, total, options = {}) => { stopPlayback(); player.play(notes, { total, ...options }); },
     stop: () => stopPlayback(),
   });
+  $("#voice-edit").addEventListener("click", () => { stopPlayback(); canto.edit(); });
+
 }
 
 /**
@@ -2118,6 +2123,16 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
   const undo = snapshot();
   stopPlayback();
   const p = state.project;
+  if (target === "editar") {
+    // a melodia do projeto, depois de mexida no desenho: só o texto dela muda (BPM, compasso e acordes ficam)
+    p.voice = text;
+    refreshSecondVoice();
+    renderAll();
+    validateNow();
+    saveDraftSoon();
+    toast("Melodia atualizada.", { action: { label: "Desfazer", run: undo } });
+    return;
+  }
   if (target === "nova") {
     const result = appendSection(p, { events, pickup, beatsPerBar: beatsPerBar(), spell, blankChord });
     if (!result) { toast("Não deu para acrescentar a parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }

@@ -93,6 +93,7 @@
       <h2 id="song-heading">Melodia e partes</h2>
       <div class="canto-entry">
         <button type="button" class="btn secondary" id="canto-open">Cantar uma melodia</button>
+        <button type="button" class="btn secondary" id="voice-edit" hidden>Editar melodia</button>
         <span class="canto-entry-hint">Cante com metrônomo: o app ouve as notas (só no aparelho) e elas viram a camada Voz.</span>
       </div>
       <div class="form-strip" id="form-strip" hidden>
@@ -473,7 +474,8 @@
           <span class="label">Faixa do MIDI com a melodia</span>
           <select id="canto-track"></select>
         </label>
-        <canvas id="canto-roll" class="canto-roll" aria-label="As notas que o app ouviu"></canvas>
+        <div class="canto-roll-wrap" id="canto-roll-wrap"><canvas id="canto-roll" class="canto-roll" aria-label="As notas que o app ouviu"></canvas></div>
+        <p class="canto-hint">Toque numa nota para escolher. Arraste a nota escolhida para os lados para adiantar ou atrasar, ou puxe a ponta direita dela para esticar ou encurtar: tudo anda de quadradinho em quadradinho. Arraste o fundo para ver o resto da melodia.</p>
         <p class="canto-info" id="canto-info"></p>
         <ul class="canto-warnings" id="canto-warnings"></ul>
         <code class="canto-text" id="canto-text"></code>
