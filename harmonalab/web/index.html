@@ -59,10 +59,6 @@
         <span class="switch-text">Pesquisar na internet <small>mais fiel ao artista, mais demorado</small></span>
       </label>
       <div class="ai-examples" id="ai-examples" aria-label="Exemplos de pedido"></div>
-      <div class="canto-entry">
-        <button type="button" class="btn secondary" id="canto-open">Cantar uma melodia</button>
-        <span class="canto-entry-hint">Cante com metrônomo: o app ouve as notas (só no aparelho) e elas viram a camada Voz.</span>
-      </div>
       <div class="ai-actions">
         <button type="button" class="btn primary" id="ai-generate"></button>
       </div>
@@ -91,6 +87,50 @@
           <p class="ai-help wide">Usa o Claude com Skills? Baixe a <a href="harmona-harmonia.zip" download>skill do Harmona Lab (.zip)</a> e instale como as suas outras skills: ela confere as notas e gera o link sozinha. Para IAs com navegação, vale mandar: <em>“leia <a href="ia.md" target="_blank" rel="noopener">ia.md</a> e monte uma progressão…”</em>.</p>
         </div>
       </details>
+    </section>
+
+    <section class="card song" id="song" aria-labelledby="song-heading">
+      <h2 id="song-heading">Melodia e partes</h2>
+      <div class="canto-entry">
+        <button type="button" class="btn secondary" id="canto-open">Cantar uma melodia</button>
+        <span class="canto-entry-hint">Cante com metrônomo: o app ouve as notas (só no aparelho) e elas viram a camada Voz.</span>
+      </div>
+      <div class="form-strip" id="form-strip" hidden>
+        <span class="label">Partes da música <small>arraste um bloco para mudar a ordem; toque nele para repetir, renomear ou apagar</small></span>
+        <div class="form-blocks" id="form-blocks"></div>
+        <canvas class="song-roll" id="song-roll" aria-label="A melodia ao longo das partes; toque para ouvir a partir dali" hidden></canvas>
+        <div class="form-actions" id="form-actions" hidden></div>
+      </div>
+      <div class="song-listen">
+        <span class="label">Para ouvir <small>o botão Ouvir fica na barra de baixo</small></span>
+      <div class="phrase-mode" id="phrase-mode-box" hidden>
+        <span class="label">Ouvir e exportar</span>
+        <div class="segmented" id="phrase-mode" role="group" aria-label="O que ouvir e exportar">
+          <button type="button" data-mode="both" aria-pressed="true">Acorde + frase</button>
+          <button type="button" data-mode="line" aria-pressed="false">Mão esquerda + frase</button>
+          <button type="button" data-mode="chords" aria-pressed="false">Só acorde</button>
+        </div>
+      </div>
+      <details class="mixer" id="mixer" hidden>
+        <summary>Mixer <small id="mixer-summary"></small></summary>
+        <p class="ai-help">Liga, desliga e acerta o volume de cada parte, só para ouvir. No MIDI, você escolhe as partes ao gerar.</p>
+        <div class="mixer-rows" id="mixer-rows"></div>
+      </details>
+      <div class="listen-row" id="listen-row">
+        <label class="switch" for="listen-loop">
+          <input type="checkbox" id="listen-loop" role="switch">
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">Repetir</span>
+        </label>
+        <label class="field listen-rate" for="listen-rate"><span class="sr-only">Andamento de estudo</span>
+          <select id="listen-rate">
+            <option value="1">Andamento normal</option>
+            <option value="0.75">Estudo: 75%</option>
+            <option value="0.5">Estudo: 50%</option>
+          </select>
+        </label>
+      </div>
+      </div>
     </section>
 
     <section class="card project" aria-labelledby="project-heading">
@@ -229,33 +269,6 @@
           <div class="segmented" id="tags-intensity" role="group" aria-label="Intensidade do solo"></div>
         </div>
       </div>
-      <div class="phrase-mode" id="phrase-mode-box" hidden>
-        <span class="label">Ouvir e exportar</span>
-        <div class="segmented" id="phrase-mode" role="group" aria-label="O que ouvir e exportar">
-          <button type="button" data-mode="both" aria-pressed="true">Acorde + frase</button>
-          <button type="button" data-mode="line" aria-pressed="false">Mão esquerda + frase</button>
-          <button type="button" data-mode="chords" aria-pressed="false">Só acorde</button>
-        </div>
-      </div>
-      <details class="mixer" id="mixer" hidden>
-        <summary>Mixer <small id="mixer-summary"></small></summary>
-        <p class="ai-help">Liga, desliga e acerta o volume de cada parte, só para ouvir. No MIDI, você escolhe as partes ao gerar.</p>
-        <div class="mixer-rows" id="mixer-rows"></div>
-      </details>
-      <div class="listen-row" id="listen-row">
-        <label class="switch" for="listen-loop">
-          <input type="checkbox" id="listen-loop" role="switch">
-          <span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-text">Repetir</span>
-        </label>
-        <label class="field listen-rate" for="listen-rate"><span class="sr-only">Andamento de estudo</span>
-          <select id="listen-rate">
-            <option value="1">Andamento normal</option>
-            <option value="0.75">Estudo: 75%</option>
-            <option value="0.5">Estudo: 50%</option>
-          </select>
-        </label>
-      </div>
       <details class="more sound-tools" id="sound-tools">
         <summary>Som da pré-escuta: <span id="sound-summary">timbre simples</span></summary>
         <div class="more-body">
@@ -288,12 +301,6 @@
           <p class="ai-help wide">Só mudam as oitavas da mão direita; a esquerda e o baixo ficam como estão. Em cada acorde dá para trocar o voicing no cartão. Tudo pode ser desfeito.</p>
         </div>
       </details>
-      <div class="form-strip" id="form-strip" hidden>
-        <span class="label">Partes da música <small>arraste um bloco para mudar a ordem; toque nele para repetir, renomear ou apagar</small></span>
-        <div class="form-blocks" id="form-blocks"></div>
-        <canvas class="song-roll" id="song-roll" aria-label="A melodia ao longo das partes; toque para ouvir a partir dali" hidden></canvas>
-        <div class="form-actions" id="form-actions" hidden></div>
-      </div>
       <div class="chords-tools">
         <span class="ai-help">Cada acorde vem recolhido: toque em “Editar” para mexer nas notas.</span>
         <button type="button" class="btn ghost small" id="chords-toggle-all">Abrir todos</button>

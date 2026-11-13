@@ -191,6 +191,10 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   opcional nesse modo (a caixa começa vazia: o pedido antigo não vale para a parte nova). O modo "Ajustar a atual" também
   passou a mandar só a harmonia.
 
+  **Melodia e partes num lugar só.** Logo abaixo do pedido à IA fica o cartão **Melodia e partes**: o botão de cantar, os
+  blocos das partes (com o desenho da melodia) e os controles de escuta (o que ouvir, Mixer, Repetir e andamento de
+  estudo). O botão Ouvir continua na barra fixa de baixo. "Ritmo e frases" e a lista de acordes vêm depois.
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e

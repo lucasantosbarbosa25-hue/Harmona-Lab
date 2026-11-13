@@ -344,7 +344,7 @@ function bindSettings() {
   bind("#project-key", "key", renderMeta);
   bind("#project-refs", "references", renderMeta);
   bind("#project-style", "style", renderMeta);
-  bind("#project-voice", "voice", () => { refreshSecondVoice(); renderGroove(); });
+  bind("#project-voice", "voice", () => { refreshSecondVoice(); renderGroove(); drawSongRoll(); });
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";

@@ -607,3 +607,7 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .export-perc[hidden] { display: none; }
 .export-perc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0 8px; }
 .export-perc .export-part { padding: 6px 4px; font-size: .95rem; }
+.song { padding: 16px; display: grid; gap: 14px; }
+.song h2 { margin: 0; font-size: 1.05rem; }
+.song .form-strip, .song .mixer, .song .listen-row, .song .phrase-mode { margin: 0; }
+.song-listen { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
