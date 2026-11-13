@@ -254,6 +254,9 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     $("#canto-text").textContent = text();
     const hasSelection = state.selected >= 0;
     for (const id of ["#canto-semi-down", "#canto-semi-up", "#canto-delete"]) $(id).disabled = !hasSelection;
+    // oitava: com uma nota escolhida, mexe só nela; sem nenhuma, na melodia toda (o texto do botão diz qual)
+    $("#canto-octave-down").textContent = hasSelection ? "Nota −8ª" : "Tudo −8ª";
+    $("#canto-octave-up").textContent = hasSelection ? "Nota +8ª" : "Tudo +8ª";
     drawRoll();
   };
 
@@ -378,8 +381,8 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     state.selected = index === state.selected ? -1 : index;
     renderResult();
   });
-  $("#canto-octave-down").addEventListener("click", () => shiftAll(-12));
-  $("#canto-octave-up").addEventListener("click", () => shiftAll(12));
+  $("#canto-octave-down").addEventListener("click", () => (state.selected >= 0 ? shiftSelected(-12) : shiftAll(-12)));
+  $("#canto-octave-up").addEventListener("click", () => (state.selected >= 0 ? shiftSelected(12) : shiftAll(12)));
   $("#canto-semi-down").addEventListener("click", () => shiftSelected(-1));
   $("#canto-semi-up").addEventListener("click", () => shiftSelected(1));
   $("#canto-delete").addEventListener("click", () => {
