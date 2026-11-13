@@ -336,11 +336,18 @@
           </select>
         </label>
       </div>
-      <span class="label">Nota mais rápida da melodia</span>
-      <div class="segmented" id="canto-fastest" role="group" aria-label="Nota mais rápida da melodia">
-        <button type="button" data-fastest="8" aria-pressed="true">Colcheia (melodia simples)</button>
-        <button type="button" data-fastest="16" aria-pressed="false">Semicolcheia</button>
+      <span class="label">Ritmo encaixado em</span>
+      <div class="segmented" id="canto-fastest" role="group" aria-label="Figura mais curta do ritmo">
+        <button type="button" data-fastest="auto" aria-pressed="true">Automático</button>
+        <button type="button" data-fastest="8" aria-pressed="false">Colcheias</button>
+        <button type="button" data-fastest="16" aria-pressed="false">Semicolcheias</button>
       </div>
+      <p class="canto-hint" id="canto-fastest-hint"></p>
+      <label class="switch" for="canto-diatonic">
+        <input type="checkbox" id="canto-diatonic" role="switch" checked>
+        <span class="switch-track" aria-hidden="true"></span>
+        <span class="switch-text">Ajustar à escala do tom <small>toda nota vai para a escala diatônica do tom que o app identificar no canto</small></span>
+      </label>
       <span class="label">Metrônomo</span>
       <div class="segmented" id="canto-mode" role="group" aria-label="Como ouvir o metrônomo">
         <button type="button" data-mode="fone" aria-pressed="true">Com fone</button>

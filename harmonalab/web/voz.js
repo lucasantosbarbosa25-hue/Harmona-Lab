@@ -1,6 +1,6 @@
 // Cantar uma melodia: metrônomo amadeirado, um compasso de contagem, a gravação (só no aparelho) e as notas que o app
 // ouviu, para conferir, ajustar e usar como a camada Voz do projeto. A análise está em engine/canto.js.
-import { hatTickSamples, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
+import { SIXTEENTHS_UP_TO_BPM, hatTickSamples, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
 
 const COUNT_IN_BARS = 1;
 // Cantar devagar acerta mais (para quem não é cantor profissional). A Voz fica guardada em figuras, então depois o BPM do
@@ -140,7 +140,7 @@ export class CantoRecorder {
 export function setupCanto({ defaults, onUse, play, stop, toast }) {
   const $ = (s) => document.querySelector(s);
   const dialog = $("#canto-dialog");
-  const state = { mode: "fone", fastest: "8", recorder: null, recording: false, result: null, selected: -1, taps: [] };
+  const state = { mode: "fone", fastest: "auto", recorder: null, recording: false, result: null, selected: -1, taps: [] };
 
   const beatsPerBarOf = (sig) => {
     const [num, den] = String(sig).split("/").map(Number);
@@ -154,6 +154,10 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
   const renderMode = () => {
     document.querySelectorAll("#canto-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.mode)));
     document.querySelectorAll("#canto-fastest button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fastest === state.fastest)));
+    const bpm = Number($("#canto-bpm").value);
+    $("#canto-fastest-hint").textContent = state.fastest === "auto"
+      ? `Automático: semicolcheias até ${SIXTEENTHS_UP_TO_BPM} BPM, colcheias acima${bpm ? ` (a ${bpm} BPM: ${bpm <= SIXTEENTHS_UP_TO_BPM ? "semicolcheias" : "colcheias"})` : ""}.`
+      : state.fastest === "8" ? "Colcheias: o melhor para melodias simples." : "Semicolcheias: para melodias com notas rápidas.";
     $("#canto-mode-hint").textContent = MODES[state.mode].hint;
   };
   const renderDots = (beatsPerBar, active = -1) => {
@@ -226,7 +230,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     await new Promise((resolve) => setTimeout(resolve, 30)); // deixa a tela mostrar "Analisando" antes da conta
     const result = transcribe(take.samples, take.sampleRate, {
       bpm: state.bpm, beatsPerBar: beatsPerBarOf(state.signature), clickTimes: take.clickTimes, tickTimes: take.tickTimes, countInBeats: take.countInBeats,
-      latencyFallback: take.latencyFallback, middleC: defaults().middleC, fastest: state.fastest,
+      latencyFallback: take.latencyFallback, middleC: defaults().middleC, fastest: state.fastest, diatonic: $("#canto-diatonic").checked,
     });
     if (!result.events.length) { status(result.warnings[0] || "Não encontrei notas cantadas.", true); return; }
     state.result = { ...result, bpm: state.bpm, signature: state.signature };
@@ -242,7 +246,9 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     const r = state.result;
     $("#canto-result").hidden = false;
     const leak = r.leak.leak ? `o clique vazou para o microfone (atraso medido: ${Math.round(r.latency * 1000)} ms, usado para alinhar)` : "o clique não vazou para o microfone";
-    $("#canto-info").textContent = `${r.events.length} notas · tom provável: ${r.key?.name ?? "?"} · ${r.bpm} BPM · ${leak}.`;
+    const grid = r.fastest === "16" ? "semicolcheias" : "colcheias";
+    const scale = r.diatonic ? ` (notas na escala de ${r.key?.name ?? "?"})` : "";
+    $("#canto-info").textContent = `${r.events.length} notas · tom provável: ${r.key?.name ?? "?"}${scale} · ${r.bpm} BPM, ritmo em ${grid} · ${leak}.`;
     $("#canto-warnings").replaceChildren(...r.warnings.map((w) => Object.assign(document.createElement("li"), { textContent: w })));
     $("#canto-text").textContent = text();
     const hasSelection = state.selected >= 0;
@@ -311,6 +317,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     renderMode();
   }));
   $("#canto-volume").addEventListener("input", (e) => state.recorder?.setVolume(Number(e.target.value)));
+  $("#canto-bpm").addEventListener("input", () => renderMode());
   $("#canto-signature").addEventListener("change", (e) => renderDots(beatsPerBarOf(e.target.value)));
   $("#canto-tap").addEventListener("click", () => {
     const now = performance.now();

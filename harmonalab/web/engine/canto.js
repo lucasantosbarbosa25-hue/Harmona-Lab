@@ -22,6 +22,8 @@ export const midiFromHz = (hz) => 69 + 12 * Math.log2(hz / 440);
 export const hzFromMidi = (midi) => 440 * 2 ** ((midi - 69) / 12);
 
 const ANALYSIS_RATE = 16000;
+/** Até este BPM o ritmo encaixa em semicolcheias (cada uma dura 200 ms ou mais); acima, em colcheias. */
+export const SIXTEENTHS_UP_TO_BPM = 75;
 const FRAME_SECONDS = 0.064;
 const HOP_SECONDS = 0.01;
 
@@ -336,9 +338,20 @@ export function estimateKey(notes) {
   return { ...best, flats, name: `${names[best.tonic]}${best.mode === "menor" ? "m" : ""}`, scale: new Set(steps.map((s) => mod12(best.tonic + s))) };
 }
 
-/** A nota MIDI de uma altura cantada: corrige a afinação geral e, se ficar perto do meio do caminho, prefere a da escala. */
-export function snapPitch(midi, offset = 0, scale = null) {
+/**
+ * A nota MIDI de uma altura cantada: corrige a afinação e, se ficar perto do meio do caminho, prefere a da escala. Com
+ * diatonic, toda nota vai para a escala do tom (no menor, a sensível também vale).
+ */
+export function snapPitch(midi, offset = 0, scale = null, { diatonic = false } = {}) {
   const x = midi - offset;
+  if (diatonic && scale) {
+    // só notas da escala: a mais perto do que foi cantado (empate: a de baixo)
+    let best = null;
+    for (let c = Math.floor(x) - 2; c <= Math.ceil(x) + 2; c++) {
+      if (scale.has(mod12(c)) && (best === null || Math.abs(c - x) < Math.abs(best - x) - 1e-9)) best = c;
+    }
+    if (best !== null) return best;
+  }
   let n = Math.round(x);
   const dev = x - n;
   if (scale && Math.abs(dev) > 0.3) {
@@ -496,12 +509,13 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
  * Da gravação às notas. options: { bpm, beatsPerBar, clickTimes (s, na linha do tempo da gravação: os agendados),
  * tickTimes (s: os tiques das colcheias, entre os tempos),
  * countInBeats (quantos cliques são da contagem), latencyFallback (s, quando não dá para medir pelo vazamento), middleC,
- * fastest ("8": colcheia, o padrão, para melodias simples; "16": semicolcheia), maskClicks (apagar da análise os instantes dos cliques que vazaram; false: nos testes, apagar atrapalhou as notas curtas que
+ * fastest ("auto", o padrão: semicolcheia até SIXTEENTHS_UP_TO_BPM e colcheia acima; "8" ou "16" fixos), diatonic (true:
+ * toda nota vai para a escala do tom identificado), maskClicks (apagar da análise os instantes dos cliques que vazaram; false: nos testes, apagar atrapalhou as notas curtas que
  * começam junto do clique, e a nota é lida bem mesmo com o clique por cima) }. O clique (e o eco dele) é descartado pela
  * altura: ele soa entre dois semitons (CLICK_MIDI), onde nenhuma nota cantada afinada cai.
  * Devolve { events, text, key, tuning, leak, latency, shift, notes (brutas), warnings }.
  */
-export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "8" } = {}) {
+export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true } = {}) {
   const warnings = [];
   const countIn = clickTimes.slice(0, countInBeats);
   const leak = countIn.length ? measureClicks(samples, sampleRate, countIn) : { leak: false, latency: null, found: 0, total: 0 };
@@ -528,12 +542,18 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   const tuning = estimateTuning(notes);
   const offsets = trackTuning(notes);
   const key = estimateKey(notes.map((n, i) => ({ ...n, midi: n.midi - offsets[i] })));
-  notes.forEach((n, i) => { n.note = snapPitch(n.midi, offsets[i], key.scale); });
+  let adjusted = 0;
+  notes.forEach((n, i) => {
+    n.note = snapPitch(n.midi, offsets[i], key.scale, { diatonic });
+    if (diatonic && n.note !== Math.round(n.midi - offsets[i])) adjusted += 1; // foi para a escala (não é a nota cromática mais perto)
+  });
   const drift = offsets.length ? Math.max(...offsets) - Math.min(...offsets) : 0;
   tuning.drift = drift;
   tuning.offset = offsets.length ? offsets.reduce((a, b) => a + b, 0) / offsets.length : tuning.offset;
   // a figura mais rápida que a pessoa quer (colcheia, por padrão): pedaço mais curto que ~60% dela não é nota de verdade
-  const step = fastest === "16" ? 0.25 : 0.5;
+  // automático: semicolcheias até 75 BPM (a semicolcheia dura 200 ms ou mais: dá para cantar de propósito), colcheias acima
+  const resolved = fastest === "auto" ? (bpm <= SIXTEENTHS_UP_TO_BPM ? "16" : "8") : fastest;
+  const step = resolved === "16" ? 0.25 : 0.5;
   const simple = simplifyNotes(notes, { minSeconds: 0.6 * step * (60 / bpm), reach: 2 });
   const firstBeat = clickTimes[countInBeats] ?? (countIn.length ? countIn.at(-1) + 60 / bpm : 0);
   const { events, shift } = quantize(simple, { bpm, beatZero: firstBeat + latency, beatsPerBar, step });
@@ -555,5 +575,6 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   if (drift > 0.3) warnings.push(`A afinação foi mudando aos poucos durante o canto (cerca de ${Math.round(drift * 100)} centésimos); acompanhei e corrigi as notas.`);
   else if (Math.abs(tuning.offset) > 0.25) warnings.push(`O canto estava ${Math.round(Math.abs(tuning.offset) * 100)} centésimos ${tuning.offset > 0 ? "acima" : "abaixo"} da afinação; corrigi.`);
   if (shift) warnings.push("A melodia começou antes do tempo 1 (anacruse): ela ganhou um compasso no começo.");
-  return { events, text: voiceText(events, { key, middleC }), key, tuning, leak, latency, shift, notes, warnings, clickVsVoice };
+  if (adjusted) warnings.push(`${adjusted} nota${adjusted > 1 ? "s" : ""} fora da escala de ${key.name} ${adjusted > 1 ? "foram ajustadas" : "foi ajustada"} para a nota da escala mais perto.`);
+  return { events, text: voiceText(events, { key, middleC }), key, tuning, leak, latency, shift, notes, warnings, clickVsVoice, fastest: resolved, adjusted, diatonic };
 }

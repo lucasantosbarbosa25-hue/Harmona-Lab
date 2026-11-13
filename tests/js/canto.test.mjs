@@ -155,3 +155,37 @@ test("tique de chimbal nas colcheias: sem altura definida, e vazando junto com o
     }
   }
 });
+
+test("escala diatônica (padrão): a nota que escapou da escala vai para a nota da escala mais perto; desligado, fica como cantou", () => {
+  // em Lá menor, o Mi da 4ª nota cantado como Ré# (um pouco alto, 75,1): na escala, a mais perto é o Mi
+  const sung = MELODY.map((e, i) => (i === 3 ? { ...e, midi: 75.1 } : e));
+  const take = singMelody(sung, { latency: 0.08, vibrato: 15 });
+  const truth = MELODY;
+  const on = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08 });
+  assert.equal(score(on.events, truth).hits, truth.length, on.text);
+  assert.equal(on.adjusted, 1);
+  assert.ok(on.warnings.some((w) => w.includes("ajustada")), on.warnings.join(" | "));
+  const off = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: false });
+  assert.ok(off.text.includes("D#5") || off.text.includes("Eb5"), `sem o ajuste, fica o Ré#: ${off.text}`);
+  // a sensível do tom menor (Sol# em Lá menor) é da escala
+  const minor = estimateKey([{ midi: 57, start: 0, end: 1 }, { midi: 60, start: 1, end: 2 }, { midi: 64, start: 2, end: 3 }]);
+  assert.equal(snapPitch(68, 0, minor.scale, { diatonic: true }), 68);
+  assert.equal(snapPitch(65.9, 0, minor.scale, { diatonic: true }), 65); // um Fá# baixo: o Fá, mais perto
+  assert.equal(snapPitch(66.1, 0, minor.scale, { diatonic: true }), 67); // um Fá# alto: o Sol, mais perto
+});
+
+test("ritmo automático: semicolcheias até 75 BPM (cada uma com 200 ms ou mais), colcheias acima", () => {
+  const sixteenths = [69, 71, 72, 74, 76, 74, 72, 71].map((midi, i) => ({ beat: i * 0.25, beats: 0.25, midi })).concat([{ beat: 2, beats: 2, midi: 69 }]);
+  for (const bpm of [60, 70, 75]) {
+    const take = singMelody(sixteenths, { bpm, latency: 0.08, vibrato: 15, jitter: 0.015 });
+    const r = transcribe(take.samples, RATE, { bpm, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08 });
+    assert.equal(r.fastest, "16", `${bpm} BPM`);
+    assert.equal(score(r.events, take.truth).hits, take.truth.length, `${bpm} BPM: ${r.text}`);
+  }
+  for (const bpm of [76, 90, 100]) {
+    const take = singMelody(MELODY, { bpm, latency: 0.08, vibrato: 15, jitter: 0.015 });
+    const r = transcribe(take.samples, RATE, { bpm, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08 });
+    assert.equal(r.fastest, "8", `${bpm} BPM`);
+    assert.equal(score(r.events, take.truth).hits, take.truth.length, `${bpm} BPM: ${r.text}`);
+  }
+});

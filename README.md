@@ -134,8 +134,10 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   troca o microfone), **sem fone** (clique baixinho no alto-falante) e **só a contagem** (depois, o pulso aparece só na
   tela). O áudio **não sai do aparelho**: o app acha a altura da voz (algoritmo YIN), separa as notas (o vibrato não quebra
   a nota), corrige quem canta todo um pouco acima ou abaixo **e acompanha quem vai desafinando aos poucos** (até quase um semitom ao longo da frase), descobre o tom provável (que decide as notas duvidosas) e encaixa
-  o ritmo no pulso. **Nota mais rápida da melodia**: colcheia (padrão, para melodias simples) ou semicolcheia; pedaços
-  mais curtos que isso (a voz chegando de baixo na nota, um escorregão, o volume oscilando, o fim da respiração) juntam-se à
+  o ritmo no pulso. **Ritmo encaixado em**: automático (padrão: semicolcheias até 75 BPM, quando cada uma dura 200 ms ou
+  mais; colcheias de 76 a 100 BPM), ou colcheias ou semicolcheias fixas. **Ajustar à escala do tom** (ligado por padrão):
+  toda nota vai para a escala diatônica do tom identificado no canto (no menor, a sensível também vale); pedaços
+  mais curtos que a figura escolhida (a voz chegando de baixo na nota, um escorregão, o volume oscilando, o fim da respiração) juntam-se à
   nota que permanece (com o começo do primeiro) ou saem, e a nota repetida de propósito (sílaba nova) continua repetida.
   O clique soa de propósito **entre dois semitons**, então, mesmo vazando para o microfone (e com eco), o
   app o reconhece e não confunde com a voz; os cliques da contagem também medem o atraso entre o som e o microfone, para
