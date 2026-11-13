@@ -144,7 +144,7 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   alinhar a voz com o pulso. No resultado: o desenho das notas, o texto, tom e avisos, e ajustes (oitava da melodia inteira,
   meio tom de uma nota, apagar nota). **Usar como Voz** põe a melodia no projeto (campo "Voz", em "Sobre esta progressão"),
   com o BPM e o compasso do canto e compassos vazios se ela não couber. A Voz toca na escuta (com o som da frase, no banco de
-  sons) e sai no MIDI numa faixa própria, **"Voz"** (canal 4). O interruptor **Voz cantada** (aparece quando há uma Voz, junto de "Ouvir e exportar") liga e desliga a melodia ao ouvir, para ouvir só o solo do app depois da harmonia importada; a Voz continua guardada no projeto. **Gerar MIDI** abre uma lista com as partes que o projeto tem (Acordes, Voz cantada, Solo, Baixo, Bateria, Percussão): marque qualquer combinação, ou todas; cada parte sai numa faixa e o BPM, o compasso e os nomes dos acordes vão sempre. A escolha fica lembrada no aparelho e o nome do arquivo diz as partes (ex.: `minha-musica-voz-baixo.mid`). O pedido copiado para a IA leva a melodia (cada nota com compasso, tempo e duração) para ela harmonizar. Próxima fase: o app harmonizar sozinho a partir da Voz.
+  sons) e sai no MIDI numa faixa própria, **"Voz"** (canal 4). O **Mixer** (acima do botão Ouvir, quando a música tem mais de uma parte sonora) liga, desliga e acerta o volume de cada camada só para a escuta: acordes, voz, solo, baixo, pad, bateria e percussão. Desligue a Voz ali para ouvir só o solo do app; ela continua guardada no projeto. **Gerar MIDI** abre uma lista com as partes que o projeto tem (Acordes, Voz cantada, Solo, Baixo, Bateria, Percussão): marque qualquer combinação, ou todas; cada parte sai numa faixa e o BPM, o compasso e os nomes dos acordes vão sempre. A escolha fica lembrada no aparelho e o nome do arquivo diz as partes (ex.: `minha-musica-voz-baixo.mid`). O pedido copiado para a IA leva a melodia (cada nota com compasso, tempo e duração) para ela harmonizar. Próxima fase: o app harmonizar sozinho a partir da Voz.
 
   **Partes da música (A, B, C...).** Acima da lista de acordes fica a faixa **Partes da música**: um bloco por parte, na
   ordem em que tocam. **Arraste** um bloco para mudar a ordem; **toque** nele para repetir, renomear, juntar à anterior ou
@@ -168,6 +168,14 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   o projeto, a melodia e a tarefa (harmonizar a parte nova, podendo retocar os 2 últimos acordes da parte anterior para
   ligar as duas, e devolver o projeto completo com as partes marcadas: `section` no JSON, `sec=A.1,B.9` no link). O texto
   do pedido é opcional nesse modo. A Voz continua no projeto quando a resposta é carregada.
+
+  **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
+  harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
+  vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e
+  tocar na divisória de uma parte recolhe os acordes dela. Na faixa das partes, a **melodia aparece desenhada** por cima dos
+  blocos, com a nota que soa acesa e uma linha correndo enquanto toca; tocar no desenho ouve a partir daquela parte, e cada
+  bloco tem **Ouvir** (só aquela parte; com "Repetir", em laço) e **Ouvir daqui**. O nome da parte é editado no próprio
+  campo. Na janela do canto, o que é menos usado fica em "Mais opções". Em telas de toque, os botões pequenos têm 44 px.
 
   **Pad.** O interruptor "Pad" (em "Ritmo e frases") acrescenta uma camada de sustentação: cada acorde aberto e parado,
   do começo ao fim dele (a nota mais grave, a quinta acima e as outras notas na oitava seguinte; nota igual no acorde

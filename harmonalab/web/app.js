@@ -8,12 +8,12 @@ import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
 import {
   appendSection, emptyLastSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
-  sectionBlocks, splitSection,
+  sectionBlocks, splitSection, voiceNotes,
 } from "./partes.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
-import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents, MIDI_PARTS, padNotes, partsPresent } from "./engine/midi.js";
+import { DRUM_CHANNEL, TICKS_PER_BEAT, beatsToTicks, midiBytes, noteEvents, notePart, MIDI_PARTS, padNotes, partsPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
@@ -103,13 +103,16 @@ const state = {
   report: null, // última análise do servidor
   byId: new Map(), // id do acorde → { chord, issues }
   playing: false,
-  voiceOn: true, // a Voz cantada entra ao ouvir e exportar? (desligada, só o solo do app aparece)
+  mix: {}, // mixer da escuta: { parte: { on, gain } } (parte que não está aqui = ligada, volume normal)
+  clock: null, // enquanto toca: { start (ms), secondsPerBeat, fromBeat, beats } para a linha que corre na melodia
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
   sound: { chords: SIMPLE, phrase: SAME, drums: builtinValue("sonor3007") }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
   groove: { style: STYLES[0].id, variation: 0, drumVariation: 0 }, // estilo do ritmo e das frases, e as variações das frases e das viradas
-  listen: { loop: false, rate: 1 }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
+  listen: { loop: false, rate: 1, range: null }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
 };
 const refs = new WeakMap(); // acorde → elementos do cartão
+const openChords = new Set(); // ids dos acordes com o cartão aberto (os outros ficam recolhidos)
+const foldedSections = new Set(); // ids do 1º acorde das partes recolhidas na lista
 const player = new Player();
 const soundFont = new SoundFontPlayer(); // banco de sons (.sf2): só carrega a biblioteca quando alguém usa
 let soundTimers = [];
@@ -416,6 +419,10 @@ function chordCard(chord, index, total) {
     h("div", { style: "flex:1;min-width:0" }, r.symbol, r.fn, r.pos),
     r.badge,
     h("button", { type: "button", class: "btn ghost icon-only", "aria-label": `Ouvir acorde ${n}`, title: "Ouvir este acorde", onclick: () => playOne(chord) }, icon("play")),
+    r.toggle = h("button", {
+      type: "button", class: "btn ghost small chord-toggle", "aria-expanded": String(openChords.has(chord.id)), "aria-label": `Editar o acorde ${n}`,
+      onclick: () => setChordOpen(chord, !openChords.has(chord.id)),
+    }, openChords.has(chord.id) ? "Fechar" : "Editar"),
   );
 
   // O que vai para o MIDI: teclado + notas do grave ao agudo
@@ -548,11 +555,32 @@ function chordCard(chord, index, total) {
     h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
   );
 
-  r.card = h("li", { class: "card chord", dataset: { id: chord.id } }, head, r.note, view, r.phraseLine, r.colorRow, hands, voicingRow, params, r.more, r.issues, actions);
+  // O cartão vem recolhido (nome, função, teclado e frase); "Editar" abre as notas, o voicing e o resto.
+  r.body = h("div", { class: "chord-body" }, r.colorRow, hands, voicingRow, params, r.more, actions);
+  r.card = h("li", { class: `card chord${openChords.has(chord.id) ? "" : " collapsed"}`, dataset: { id: chord.id } }, head, r.note, view, r.phraseLine, r.issues, r.body);
   updateDuration(chord);
   updateLock(chord);
   updateFn(chord);
   return r.card;
+}
+
+/** Abre ou recolhe o cartão de um acorde. */
+function setChordOpen(chord, open) {
+  if (open) openChords.add(chord.id); else openChords.delete(chord.id);
+  const r = refs.get(chord);
+  if (!r) return;
+  r.card.classList.toggle("collapsed", !open);
+  r.toggle.textContent = open ? "Fechar" : "Editar";
+  r.toggle.setAttribute("aria-expanded", String(open));
+  renderToggleAll();
+}
+
+function renderToggleAll() {
+  const chords = state.project.chords;
+  const allOpen = chords.length > 0 && chords.every((c) => openChords.has(c.id));
+  const button = $("#chords-toggle-all");
+  button.textContent = allOpen ? "Recolher todos" : "Abrir todos";
+  button.hidden = chords.length === 0;
 }
 
 /** Função e escala logo abaixo do nome do acorde, e a frase que diz o que ele faz ali: é o que o app ensina em cada acorde. */
@@ -618,15 +646,24 @@ function renderChords() {
   const blocks = sectionBlocks(chords);
   const starts = new Map(blocks.map((b, i) => [b.from, { ...b, index: i }]));
   const items = [];
+  let folded = false;
   chords.forEach((c, i) => {
     const block = starts.get(i);
+    if (block) folded = blocks.length > 1 && foldedSections.has(c.id);
     if (block && blocks.length > 1) {
-      items.push(h("li", { class: "section-divider", style: `--hue:${sectionHue(block.name)}`, dataset: { section: block.index } },
-        `Parte ${block.name}`, h("small", null, barsText(block.beats))));
+      const isFolded = folded;
+      items.push(h("li", { class: "section-divider-row" }, h("button", {
+        type: "button", class: "section-divider", style: `--hue:${sectionHue(block.name)}`, dataset: { section: block.index }, "aria-expanded": String(!isFolded),
+        title: isFolded ? "Mostrar os acordes desta parte" : "Recolher esta parte",
+        onclick: () => { if (isFolded) foldedSections.delete(c.id); else foldedSections.add(c.id); renderChords(); },
+      }, h("span", { "aria-hidden": "true" }, isFolded ? "▸" : "▾"), `Parte ${block.name}`, h("small", null, `${barsText(block.beats)}${isFolded ? ` · ${block.to - block.from} acorde${block.to - block.from === 1 ? "" : "s"} recolhido${block.to - block.from === 1 ? "" : "s"}` : ""}`))));
     }
-    items.push(chordCard(c, i, chords.length));
+    const card = chordCard(c, i, chords.length);
+    card.hidden = folded;
+    items.push(card);
   });
   $("#chords").replaceChildren(...items);
+  renderToggleAll();
   renderForm();
   renderAnalysis();
 }
@@ -658,6 +695,7 @@ function renderForm() {
   tiles.push(h("button", { type: "button", class: "form-block add", "aria-label": "Acrescentar uma parte vazia", onclick: addEmptySection },
     h("strong", null, "+"), h("small", null, "parte")));
   $("#form-blocks").replaceChildren(...tiles);
+  drawSongRoll();
   const actions = $("#form-actions");
   const b = blocks[formSelected];
   actions.hidden = !b;
@@ -666,23 +704,89 @@ function renderForm() {
   const button = (label, run, { disabled = false, danger = false, iconName = null } = {}) => h("button", {
     type: "button", class: `btn ghost small${danger ? " danger" : ""}`, disabled, onclick: run,
   }, iconName ? icon(iconName) : null, label);
+  const rename = h("input", {
+    type: "text", class: "form-rename", value: b.name, maxlength: "24", "aria-label": "Nome da parte", autocomplete: "off",
+    onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } },
+    onchange: (e) => {
+      const name = e.target.value.trim();
+      if (!name || name === b.name) { e.target.value = b.name; return; }
+      const chordsNow = renameSection(state.project.chords, i, name);
+      changeSections(chordsNow && { chords: chordsNow }, `Parte renomeada para ${name}.`, i);
+    },
+  });
   actions.replaceChildren(
-    h("span", { class: "who" }, `Parte ${b.name}:`),
+    h("label", { class: "who" }, "Parte", rename),
+    button("Ouvir", () => playRange(b.from, b.to), { iconName: "play" }),
+    button("Ouvir daqui", () => playRange(b.from, chords.length), { disabled: i === blocks.length - 1 }),
     button("◀ Antes", () => changeSections(moveSection(state.project, i, i - 1), `Parte ${b.name} foi para antes.`, i - 1), { disabled: i === 0 }),
     button("Depois ▶", () => changeSections(moveSection(state.project, i, i + 1), `Parte ${b.name} foi para depois.`, i + 1), { disabled: i === blocks.length - 1 }),
     button("Repetir", () => changeSections(repeatSection(state.project, i), `Parte ${b.name} repetida (acordes e melodia).`, i + 1), { iconName: "copy" }),
-    button("Renomear", () => {
-      const name = window.prompt("Nome da parte (uma letra ou uma palavra curta, como Refrão):", b.name);
-      if (name == null) return;
-      const chordsNow = renameSection(state.project.chords, i, name);
-      changeSections(chordsNow && { chords: chordsNow }, `Parte renomeada para ${String(name).trim()}.`, i);
-    }),
     button("Juntar à anterior", () => {
       const chordsNow = joinSection(state.project.chords, i);
       changeSections(chordsNow && { chords: chordsNow }, `Parte ${b.name} juntada à anterior.`, i - 1);
     }, { disabled: i === 0 }),
     button("Apagar", () => changeSections(removeSection(state.project, i), `Parte ${b.name} apagada (acordes e melodia).`, -1), { disabled: blocks.length < 2, danger: true, iconName: "trash" }),
   );
+}
+
+/** Ouve só um trecho: do acorde `from` até antes do `to`. Com "Repetir" ligado, o trecho fica em laço. */
+function playRange(from, to) {
+  stopPlayback();
+  state.listen.range = { from, to };
+  playAll();
+}
+
+/**
+ * A melodia ao longo das partes: uma faixa colorida por parte, as notas da Voz por cima e, tocando, a linha que corre e a
+ * nota que soa acesa. Um toque ouve a partir da parte que está embaixo do dedo.
+ */
+function drawSongRoll() {
+  const canvas = $("#song-roll");
+  const chords = state.project.chords;
+  const blocks = sectionBlocks(chords);
+  const notes = voiceNotes(state.project.voice, state.project.middle_c) || [];
+  const total = blocks.reduce((sum, b) => sum + b.beats, 0);
+  canvas.hidden = !notes.length || total <= 0;
+  if (canvas.hidden) return;
+  const width = canvas.clientWidth || 320;
+  const height = 72;
+  const ratio = window.devicePixelRatio || 1;
+  if (canvas.width !== Math.round(width * ratio)) { canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio); }
+  const g = canvas.getContext("2d");
+  g.setTransform(ratio, 0, 0, ratio, 0, 0);
+  g.clearRect(0, 0, width, height);
+  const css = getComputedStyle(document.documentElement);
+  const color = (name, fallback) => css.getPropertyValue(name).trim() || fallback;
+  const x = (beat) => (beat / total) * width;
+  blocks.forEach((b) => {
+    g.fillStyle = `hsl(${sectionHue(b.name)} 60% 50% / .18)`;
+    g.fillRect(x(b.startBeat), 0, x(b.beats), height);
+    g.fillStyle = color("--muted", "#666");
+    g.font = "bold 11px system-ui, sans-serif";
+    g.fillText(b.name, x(b.startBeat) + 4, 12);
+    g.fillStyle = color("--border-strong", "#bbb");
+    g.fillRect(x(b.startBeat), 0, 1, height);
+  });
+  const pitches = notes.map((n) => n.midi);
+  const low = Math.min(...pitches) - 1;
+  const high = Math.max(...pitches) + 1;
+  const y = (midi) => 18 + ((high - midi) / Math.max(1, high - low)) * (height - 28);
+  const clock = state.clock;
+  const playhead = clock ? clock.fromBeat + Math.max(0, (performance.now() - clock.start) / 1000 / clock.secondsPerBeat) : null;
+  const visible = playhead !== null && playhead <= clock.fromBeat + clock.beats;
+  for (const n of notes) {
+    const from = n.start / TICKS_PER_BEAT;
+    const length = n.length / TICKS_PER_BEAT;
+    const lit = visible && playhead >= from && playhead < from + length;
+    g.fillStyle = lit ? color("--primary", "#a85a00") : color("--muted", "#666");
+    g.globalAlpha = visible && !lit ? 0.55 : 1;
+    g.fillRect(x(from), y(n.midi) - (lit ? 4 : 2.5), Math.max(2, x(length) - 1), lit ? 8 : 5);
+  }
+  g.globalAlpha = 1;
+  if (visible) {
+    g.fillStyle = color("--primary", "#a85a00");
+    g.fillRect(x(playhead) - 1, 0, 2, height);
+  }
 }
 
 /** Aplica uma mudança nas partes ({ chords, voice? }), com Desfazer. `select`: o bloco que fica escolhido depois. */
@@ -779,6 +883,49 @@ function renderAll() {
 const ISSUE_ICON = { error: "error", warning: "warning", info: "info" };
 const issueItem = (issue) => h("li", { class: `issue ${issue.level}` }, icon(ISSUE_ICON[issue.level]), h("span", null, issue.message));
 
+/**
+ * O guia do topo: uma linha que diz o próximo passo, conforme o que a música já tem (melodia, harmonia, parte nova
+ * esperando a harmonia, erros), com os botões que levam até lá.
+ */
+function renderGuide() {
+  const p = state.project;
+  const hasVoice = Boolean(String(p.voice || "").trim());
+  const harmony = hasProgression();
+  const errors = (state.report?.issues || []).filter((i) => i.level === "error").length;
+  const next = harmony ? getContinuation() : null;
+  const go = (selector) => () => $(selector).scrollIntoView({ behavior: "smooth", block: "start" });
+  const button = (label, run, primary = false) => h("button", { type: "button", class: `btn small ${primary ? "primary" : "secondary"}`, onclick: run }, label);
+  const sing = () => $("#canto-open").click();
+  let step;
+  let text;
+  let actions;
+  if (errors) {
+    step = "Corrigir";
+    text = errors === 1 ? "Há 1 erro para corrigir antes de gerar o MIDI." : `Há ${errors} erros para corrigir antes de gerar o MIDI.`;
+    actions = [button("Ver o primeiro erro", focusFirstError, true)];
+  } else if (!hasVoice && !harmony) {
+    step = "Passo 1";
+    text = "Comece cantando uma melodia, ou descreva a progressão que você quer.";
+    actions = [button("Cantar uma melodia", sing, true), button("Escrever o pedido", () => { go("#assistant")(); $("#ai-prompt").focus({ preventScroll: true }); })];
+  } else if (hasVoice && !harmony) {
+    step = "Passo 2";
+    text = "A melodia está pronta. Agora peça a harmonia: copie o pedido para a sua IA e abra o link que ela mandar.";
+    actions = [button("Ir para o pedido", go("#assistant"), true), button("Cantar de novo", sing)];
+  } else if (next) {
+    step = `Parte ${next.section}`;
+    text = `A parte ${next.section} já tem melodia; falta a harmonia. No assistente, use “Continuar (parte ${next.section})”.`;
+    actions = [button("Ir para o pedido", () => { assistant?.setMode("continue"); go("#assistant")(); }, true)];
+  } else {
+    step = hasVoice ? "Passo 3" : "Passo 2";
+    text = "Ouça e ajuste. Depois, cante a próxima parte ou gere o MIDI.";
+    actions = [button("Ouvir", () => { state.listen.range = null; if (!state.playing) playAll(); }, true), button(hasVoice ? "Cantar a próxima parte" : "Cantar uma melodia", sing), button("Gerar MIDI", exportMidi)];
+  }
+  $("#guide-step").textContent = step;
+  $("#guide-text").textContent = text;
+  $("#guide-actions").replaceChildren(...actions);
+  $("#guide").hidden = false;
+}
+
 function renderAnalysis() {
   const p = state.project;
   const report = state.report;
@@ -856,6 +1003,7 @@ function renderAnalysis() {
   renderGroove();
   updateSoundPhraseField();
   renderSummary();
+  renderGuide();
   assistant?.refresh();
 }
 
@@ -863,8 +1011,7 @@ function renderAnalysis() {
 function renderPhraseMode() {
   const any = (state.report?.chords || []).some((c) => c.phrase);
   $("#phrase-mode-box").hidden = !any;
-  $("#voice-row").hidden = !state.project.voice; // o interruptor só aparece quando há uma melodia cantada
-  $("#voice-on").checked = state.voiceOn;
+  renderMixer();
   document.querySelectorAll("#phrase-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.phraseMode)));
 }
 
@@ -891,6 +1038,7 @@ function renderSummary() {
 function addChord(extra = {}) {
   const chord = blankChord(extra);
   state.project.chords.push(chord);
+  openChords.add(chord.id); // acorde novo já vem aberto, para escrever as notas
   renderChords();
   validateNow();
   saveDraftSoon();
@@ -950,6 +1098,7 @@ function revoiceChords({ kind = null, pedal = null }, only = null) {
 function duplicateChord(chord) {
   const list = state.project.chords;
   const copy = { ...chord, id: nextId++, section: "" };
+  if (openChords.has(chord.id)) openChords.add(copy.id);
   list.splice(list.indexOf(chord) + 1, 0, copy);
   const entry = state.byId.get(chord.id);
   if (entry) state.byId.set(copy.id, { chord: entry.chord, issues: [] });
@@ -978,9 +1127,10 @@ function removeChord(chord) {
  */
 function previewProject(only = null) {
   const { project } = readProject(toPayload());
-  if (!state.voiceOn) project.voice_events = [];
   const index = only ? state.project.chords.indexOf(only) : -1;
   project.tempo *= state.listen.rate; // andamento de estudo: só na escuta
+  let offset = 0; // quantos acordes ficaram para trás (ao ouvir só um trecho)
+  let fromBeat = 0;
   if (only) {
     project.chords = [project.chords[index]];
     const [chord] = project.chords;
@@ -988,22 +1138,85 @@ function previewProject(only = null) {
     project.drum_bars = []; // um acorde só: sem a bateria
     project.percussion_bars = [];
     project.voice_events = []; // nem a Voz (ela é da música inteira)
+  } else if (state.listen.range) {
+    // só um trecho (uma parte, ou dali até o fim): os acordes dele e a Voz que está em cima
+    const { from, to } = state.listen.range;
+    const ticks = (list) => list.reduce((sum, c) => sum + beatsToTicks(c.duration_beats), 0);
+    const startTick = ticks(project.chords.slice(0, from));
+    const endTick = startTick + ticks(project.chords.slice(from, to));
+    fromBeat = startTick / TICKS_PER_BEAT;
+    project.voice_events = project.voice_events.filter((e) => e.start >= startTick && e.start < endTick).map((e) => ({ ...e, start: e.start - startTick }));
+    project.chords = project.chords.slice(from, to);
+    offset = from;
   }
-  return { project, index };
+  return { project, index, offset, fromBeat };
 }
 
-/** Timbre simples: toca a lista de notas do motor (acordes, levada, strum e frase). */
-function playSimple(project, index, { onEnd }) {
+// ---------------------------------------------------------------- mixer (só para ouvir)
+const MIX_KEY = "harmona-lab:mix";
+const mixOf = (part) => ({ on: true, gain: 1, ...(state.mix[part] || {}) });
+const mixGain = (part) => (mixOf(part).on ? mixOf(part).gain : 0);
+function loadMix() {
+  try { const saved = JSON.parse(localStorage.getItem(MIX_KEY) || "{}"); if (saved && typeof saved === "object") state.mix = saved; } catch { /* fica o padrão */ }
+}
+function saveMix() {
+  try { localStorage.setItem(MIX_KEY, JSON.stringify(state.mix)); } catch { /* sem armazenamento */ }
+}
+
+/** O mixer mostra só as partes que a música tem agora. */
+function renderMixer() {
+  let present = [];
+  try { if (state.report?.ok) present = partsPresent(readProject(toPayload()).project, { phraseMode: state.phraseMode }); } catch { /* projeto com erro */ }
+  const box = $("#mixer");
+  box.hidden = present.length < 2;
+  const off = present.filter((id) => !mixOf(id).on).map((id) => MIDI_PARTS.find((p) => p.id === id).label);
+  $("#mixer-summary").textContent = off.length ? `desligado: ${off.join(", ")}` : "todas as partes ligadas";
+  $("#mixer-rows").replaceChildren(...MIDI_PARTS.filter((p) => present.includes(p.id)).map((p) => {
+    const m = mixOf(p.id);
+    const change = (patch) => {
+      state.mix[p.id] = { ...mixOf(p.id), ...patch };
+      saveMix();
+      if (state.playing) stopPlayback();
+      renderMixer();
+    };
+    return h("div", { class: `mixer-row${m.on ? "" : " off"}`, dataset: { part: p.id } },
+      h("label", null, h("input", { type: "checkbox", checked: m.on, onchange: (e) => change({ on: e.target.checked }) }), h("span", null, p.label)),
+      h("input", { type: "range", min: "0.2", max: "1.5", step: "0.05", value: String(m.gain), disabled: !m.on, "aria-label": `Volume: ${p.label}`, onchange: (e) => change({ gain: Number(e.target.value) }) }));
+  }));
+}
+
+/** Timbre simples: toca a lista de notas do motor (acordes, levada, strum e frase), já com o mixer. */
+function playSimple(project, index, { onEnd, offset = 0, fromBeat = 0 }) {
   const seconds = 60 / project.tempo / TICKS_PER_BEAT;
-  const { notes, starts, end } = noteEvents(project, { phraseMode: state.phraseMode });
+  const { notes: all, starts, end } = noteEvents(project, { phraseMode: state.phraseMode });
+  const notes = all.filter((n) => mixGain(notePart(n)) > 0)
+    .map((n) => ({ ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity * mixGain(notePart(n))))) }));
   player.play(
     notes.map((n) => ({ midi: n.pitch, start: n.start * seconds, length: (n.end - n.start) * seconds, velocity: n.velocity, drum: n.channel === DRUM_CHANNEL, pad: Boolean(n.pad) })),
     {
-      steps: starts.map((tick, i) => ({ time: tick * seconds, index: index >= 0 ? index : i })),
+      steps: starts.map((tick, i) => ({ time: tick * seconds, index: index >= 0 ? index : offset + i })),
       total: end * seconds, onStep: (i) => setPlaying(i), onEnd,
     },
   );
+  if (index < 0) startClock({ secondsPerBeat: 60 / project.tempo, fromBeat, beats: end / TICKS_PER_BEAT, delay: 60 });
   return notes.filter((n) => n.channel !== DRUM_CHANNEL).length;
+}
+
+/** A linha que corre na melodia das partes enquanto a música toca. */
+function startClock({ secondsPerBeat, fromBeat, beats, delay = 0 }) {
+  state.clock = { start: performance.now() + delay, secondsPerBeat, fromBeat, beats };
+  const tick = () => {
+    if (!state.clock) return;
+    drawSongRoll();
+    state.clock.frame = requestAnimationFrame(tick);
+  };
+  tick();
+}
+function stopClock() {
+  if (!state.clock) return;
+  cancelAnimationFrame(state.clock.frame);
+  state.clock = null;
+  drawSongRoll();
 }
 
 function setPlaying(index) {
@@ -1018,6 +1231,7 @@ function renderPlayButton() {
 }
 
 function stopPlayback() {
+  stopClock();
   player.stop();
   soundFont.stop();
   soundTimers.forEach(clearTimeout);
@@ -1039,10 +1253,11 @@ async function playAll() {
 /** Toca a progressão inteira; com "Repetir" ligado, recomeça quando chega ao fim. */
 async function startAll() {
   const onEnd = () => {
-    if (state.playing && state.listen.loop) { soundTimers.forEach(clearTimeout); soundTimers = []; startAll(); } else stopPlayback();
+    if (state.playing && state.listen.loop) { soundTimers.forEach(clearTimeout); soundTimers = []; stopClock(); startAll(); } else stopPlayback();
   };
   if (usingSoundFont() && (await playWithSoundFont(null, onEnd))) return;
-  playSimple(previewProject().project, -1, { onEnd });
+  const { project, offset, fromBeat } = previewProject();
+  playSimple(project, -1, { onEnd, offset, fromBeat });
 }
 
 async function playOne(chord) {
@@ -1201,6 +1416,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
 
 function bindGroove() {
   loadGroove();
+  loadMix();
   $("#listen-loop").addEventListener("change", (e) => { state.listen.loop = e.target.checked; });
   $("#listen-rate").addEventListener("change", (e) => {
     state.listen.rate = Number(e.target.value) || 1;
@@ -1288,9 +1504,12 @@ async function playWithSoundFont(only = null, onEnd = null) {
     toast("Há erros na progressão: por enquanto, ela toca com o timbre simples.");
     return false;
   }
-  const { project, index } = previewProject(only);
-  // o pad não vem dos bancos de sons: quem toca é o timbre de pad do próprio app, junto com o banco
-  const bytes = midiBytes(project, { phraseMode: state.phraseMode, parts: project.pad ? MIDI_PARTS.map((p) => p.id).filter((id) => id !== "pad") : null });
+  const { project, index, offset, fromBeat } = previewProject(only);
+  // o pad não vem dos bancos de sons: quem toca é o timbre de pad do próprio app, junto com o banco. O mixer vale aqui também.
+  const ids = MIDI_PARTS.map((p) => p.id);
+  const bytes = midiBytes(project, {
+    phraseMode: state.phraseMode, parts: ids.filter((id) => id !== "pad" && mixGain(id) > 0), gains: Object.fromEntries(ids.map((id) => [id, mixGain(id)])),
+  });
   const fresh = [state.sound.chords, state.sound.phrase, (project.drum_bars.length || project.percussion_bars.length) ? state.sound.drums : ""]
     .map(parsePatchValue).filter((patch) => patch && patch.bank !== "aparelho");
   const slow = setTimeout(() => toast(fresh.length ? "Baixando o banco de sons (só na primeira vez)…" : "Carregando o banco de sons…"), 500);
@@ -1306,19 +1525,21 @@ async function playWithSoundFont(only = null, onEnd = null) {
     return true;
   }
   clearTimeout(slow);
-  if (project.pad) {
+  if (project.pad && mixGain("pad") > 0) {
     const seconds = 60 / project.tempo / TICKS_PER_BEAT;
     const pads = padNotes(project);
-    player.play(pads.map(([from, to, pitch, velocity]) => ({ midi: pitch, start: from * seconds, length: (to - from) * seconds, velocity, pad: true })),
+    const level = (velocity) => Math.max(1, Math.min(127, Math.round(velocity * mixGain("pad"))));
+    player.play(pads.map(([from, to, pitch, velocity]) => ({ midi: pitch, start: from * seconds, length: (to - from) * seconds, velocity: level(velocity), pad: true })),
       { total: Math.max(0, ...pads.map((n) => n[1])) * seconds + 1.5 });
   }
   // destaca o acorde que está soando (os tempos vêm do próprio projeto, como no arquivo)
   const secondsPerBeat = 60 / project.tempo;
   let start = 0;
   project.chords.forEach((chord, i) => {
-    soundTimers.push(setTimeout(() => setPlaying(only ? index : i), start * secondsPerBeat * 1000));
+    soundTimers.push(setTimeout(() => setPlaying(only ? index : offset + i), start * secondsPerBeat * 1000));
     start += chord.duration_beats;
   });
+  if (!only) startClock({ secondsPerBeat, fromBeat, beats: start });
   return true;
 }
 
@@ -1455,6 +1676,9 @@ function focusFirstError() {
   for (const chord of state.project.chords) {
     const r = refs.get(chord);
     if (r?.card.classList.contains("has-error")) {
+      foldedSections.clear();
+      if (r.card.hidden) { renderChords(); return focusFirstError(); }
+      setChordOpen(chord, true);
       r.card.scrollIntoView({ behavior: "smooth", block: "center" });
       r.card.querySelector('[aria-invalid="true"]')?.focus({ preventScroll: true });
       return;
@@ -1658,7 +1882,7 @@ function bindUi() {
 
   $("#add-chord").addEventListener("click", () => addChord());
   $("#add-rest").addEventListener("click", () => addChord({ symbol: "Pausa" }));
-  $("#play-all").addEventListener("click", playAll);
+  $("#play-all").addEventListener("click", () => { if (!state.playing) state.listen.range = null; playAll(); });
   $("#voicing-all").replaceChildren(...VOICINGS.map((v) => h("button", { type: "button", onclick: () => revoiceChords({ kind: v.id }) }, v.label)));
   $("#pedal-apply").addEventListener("click", () => {
     const pedal = $("#pedal-note").value.trim();
@@ -1667,12 +1891,24 @@ function bindUi() {
   });
   $("#export").addEventListener("click", exportMidi);
   $("#export-go").addEventListener("click", exportChosen);
+  $("#chords-toggle-all").addEventListener("click", () => {
+    const chords = state.project.chords;
+    const open = !chords.every((c) => openChords.has(c.id));
+    foldedSections.clear();
+    for (const c of chords) { if (open) openChords.add(c.id); else openChords.delete(c.id); }
+    renderChords();
+  });
+  $("#song-roll").addEventListener("click", (event) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const blocks = sectionBlocks(state.project.chords);
+    const total = blocks.reduce((sum, b) => sum + b.beats, 0);
+    const beat = ((event.clientX - rect.left) / rect.width) * total;
+    const block = blocks.findLast((b) => beat >= b.startBeat) ?? blocks[0];
+    playRange(block.from, state.project.chords.length);
+  });
+  window.addEventListener("resize", () => drawSongRoll());
   $("#export-all").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = true)); renderExportNote(); });
   $("#export-none").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = false)); renderExportNote(); });
-  $("#voice-on").addEventListener("change", (e) => {
-    state.voiceOn = e.target.checked;
-    if (state.playing) stopPlayback();
-  });
   document.querySelectorAll("#phrase-mode button").forEach((b) => b.addEventListener("click", () => {
     if (!PHRASE_MODES.includes(b.dataset.mode)) return;
     state.phraseMode = b.dataset.mode;

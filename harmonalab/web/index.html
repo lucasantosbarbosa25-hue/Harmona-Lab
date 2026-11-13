@@ -32,6 +32,11 @@
   </header>
 
   <main id="main">
+    <div class="guide" id="guide" role="status" aria-live="polite" hidden>
+      <span class="guide-step" id="guide-step"></span>
+      <p id="guide-text"></p>
+      <div class="guide-actions" id="guide-actions"></div>
+    </div>
     <section class="card assistant" id="assistant" aria-labelledby="assistant-heading">
       <div>
         <h2 id="assistant-heading">Peça a harmonia à sua IA</h2>
@@ -210,13 +215,11 @@
           <button type="button" data-mode="chords" aria-pressed="false">Só acorde</button>
         </div>
       </div>
-      <div class="voice-row" id="voice-row" hidden>
-        <label class="switch" for="voice-on">
-          <input type="checkbox" id="voice-on" role="switch" checked>
-          <span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-text">Voz cantada <small>desligue para ouvir só o solo do app (no MIDI, você escolhe as partes ao gerar)</small></span>
-        </label>
-      </div>
+      <details class="mixer" id="mixer" hidden>
+        <summary>Mixer <small id="mixer-summary"></small></summary>
+        <p class="ai-help">Liga, desliga e acerta o volume de cada parte, só para ouvir. No MIDI, você escolhe as partes ao gerar.</p>
+        <div class="mixer-rows" id="mixer-rows"></div>
+      </details>
       <div class="listen-row" id="listen-row">
         <label class="switch" for="listen-loop">
           <input type="checkbox" id="listen-loop" role="switch">
@@ -266,7 +269,12 @@
       <div class="form-strip" id="form-strip" hidden>
         <span class="label">Partes da música <small>arraste um bloco para mudar a ordem; toque nele para repetir, renomear ou apagar</small></span>
         <div class="form-blocks" id="form-blocks"></div>
+        <canvas class="song-roll" id="song-roll" aria-label="A melodia ao longo das partes; toque para ouvir a partir dali" hidden></canvas>
         <div class="form-actions" id="form-actions" hidden></div>
+      </div>
+      <div class="chords-tools">
+        <span class="ai-help">Cada acorde vem recolhido: toque em “Editar” para mexer nas notas.</span>
+        <button type="button" class="btn ghost small" id="chords-toggle-all">Abrir todos</button>
       </div>
       <ol class="chords" id="chords"></ol>
       <div class="add-row">
@@ -381,6 +389,16 @@
           </select>
         </label>
       </div>
+      <span class="label">Metrônomo</span>
+      <div class="segmented" id="canto-mode" role="group" aria-label="Como ouvir o metrônomo">
+        <button type="button" data-mode="fone" aria-pressed="true">Com fone</button>
+        <button type="button" data-mode="semfone" aria-pressed="false">Sem fone</button>
+        <button type="button" data-mode="contagem" aria-pressed="false">Só a contagem</button>
+      </div>
+      <p class="canto-hint" id="canto-mode-hint"></p>
+      <details class="canto-more" id="canto-more">
+        <summary>Mais opções <small>ritmo, escala, anacruse, tique e volume do clique</small></summary>
+        <div class="canto-more-body">
       <span class="label">Ritmo encaixado em</span>
       <div class="segmented" id="canto-fastest" role="group" aria-label="Figura mais curta do ritmo">
         <button type="button" data-fastest="auto" aria-pressed="true">Automático</button>
@@ -398,13 +416,6 @@
         <span class="switch-track" aria-hidden="true"></span>
         <span class="switch-text">Anacruse <small>a melodia começa antes do tempo 1: a contagem passa a ter 2 compassos e você pode entrar cantando no segundo</small></span>
       </label>
-      <span class="label">Metrônomo</span>
-      <div class="segmented" id="canto-mode" role="group" aria-label="Como ouvir o metrônomo">
-        <button type="button" data-mode="fone" aria-pressed="true">Com fone</button>
-        <button type="button" data-mode="semfone" aria-pressed="false">Sem fone</button>
-        <button type="button" data-mode="contagem" aria-pressed="false">Só a contagem</button>
-      </div>
-      <p class="canto-hint" id="canto-mode-hint"></p>
       <label class="switch" for="canto-eighths">
         <input type="checkbox" id="canto-eighths" role="switch" checked>
         <span class="switch-track" aria-hidden="true"></span>
@@ -414,6 +425,8 @@
         <span class="label">Volume do clique</span>
         <input id="canto-volume" type="range" min="0.05" max="1" step="0.05">
       </label>
+        </div>
+      </details>
       <div class="canto-record-row">
         <button type="button" class="btn primary" id="canto-record">Gravar</button>
         <div class="canto-beats" id="canto-beats" aria-hidden="true"></div>

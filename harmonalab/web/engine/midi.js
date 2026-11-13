@@ -286,14 +286,16 @@ export function partsPresent(project, options = {}) {
 /**
  * Gera o .mid exatamente com as notas, oitavas e durações do projeto. `parts` (opcional): só as partes escolhidas
  * (ids de MIDI_PARTS); a primeira faixa (nome, compasso, andamento e os nomes dos acordes) sai sempre, para a DAW
- * acertar o BPM, mesmo sem as notas dos acordes.
+ * acertar o BPM, mesmo sem as notas dos acordes. `gains` (opcional): volume por parte, só para a escuta.
  */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null } = {}) {
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null, gains = null } = {}) {
   const [num, den] = project.time_signature;
   const all = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   const keep = parts ? new Set(parts) : null;
   const { starts, end: endTick } = all;
-  const notes = keep ? all.notes.filter((n) => keep.has(notePart(n))) : all.notes;
+  let notes = keep ? all.notes.filter((n) => keep.has(notePart(n))) : all.notes;
+  // gains: volume de cada parte só para a escuta do app ({ voz: 0.6, ... }); multiplica a velocity
+  if (gains) notes = notes.map((n) => ({ ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity * (gains[notePart(n)] ?? 1)))) }));
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
   const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
   project.chords.forEach((chord, i) => {

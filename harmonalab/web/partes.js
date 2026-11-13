@@ -35,12 +35,12 @@ export function nextSectionName(chords) {
   return [...LETTERS].find((l) => !used.has(l)) ?? `Parte ${used.size + 1}`;
 }
 
-/** As notas da Voz com o tempo em ticks: [{ name (como escrita), start, length }]. Texto com erro devolve null. */
+/** As notas da Voz com o tempo em ticks: [{ name (como escrita), start, length, midi }]. Texto com erro devolve null. */
 export function voiceNotes(text, middleC = "C4") {
   if (!text || !String(text).trim()) return [];
   const { events, errors } = parsePhrase(text, middleC);
   if (errors.length) return null;
-  return events.filter((e) => e.voice === 0).map((e) => ({ name: e.token.split("*")[0].split("/")[0].split("&")[0], start: e.start, length: e.length }));
+  return events.filter((e) => e.voice === 0).map((e) => ({ name: e.token.split("*")[0].split("/")[0].split("&")[0], start: e.start, length: e.length, midi: e.note.midi }));
 }
 
 /** Notas (em ticks) → texto da Voz, com as pausas. */

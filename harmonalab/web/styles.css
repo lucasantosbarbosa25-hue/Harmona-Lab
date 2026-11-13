@@ -228,7 +228,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 .meta-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
 .meta-chip { padding: 4px 11px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border-strong); font-size: .82rem; font-weight: 600; }
 .meta-chip.key { background: var(--rh-soft); color: var(--rh); border-color: transparent; }
-.chord-pos { display: block; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.chord-pos { display: block; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .ponta-badge {
   flex: none; display: inline-flex; align-items: center; gap: 4px;
@@ -261,21 +261,21 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 }
 .kb-labels { position: relative; height: 16px; margin-top: 3px; }
 .kb-labels span {
-  position: absolute; font-size: .7rem; color: var(--muted); font-family: var(--mono);
+  position: absolute; font-size: .78rem; color: var(--muted); font-family: var(--mono);
   transform: translateX(2px);
 }
 .is-rest .kb { opacity: .4; }
 
 /* Fichas do voicing */
 .chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-.chips-caption { font-size: .75rem; color: var(--muted); margin-right: 2px; }
+.chips-caption { font-size: .8rem; color: var(--muted); margin-right: 2px; }
 .chip {
   display: inline-grid; justify-items: center; min-width: 44px; padding: 3px 8px 2px;
   border-radius: 8px; background: var(--surface-2); border-bottom: 3px solid var(--part, var(--border));
   font-family: var(--mono); line-height: 1.15;
 }
 .chip b { font-size: .95rem; }
-.chip small { font-size: .68rem; color: var(--muted); }
+.chip small { font-size: .78rem; color: var(--muted); }
 .chip.rh { --part: var(--rh); } .chip.lh { --part: var(--lh); }
 .chip.bass { --part: var(--bass); } .chip.free { --part: var(--free); }
 .chip.top { background: var(--rh-soft); outline: 2px solid var(--rh); outline-offset: -2px; }
@@ -306,7 +306,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 .strum .segmented button { white-space: normal; line-height: 1.15; padding: 4px; }
 .strum-delay { display: grid; gap: 6px; }
 .strum-hint { font-size: .82rem; color: var(--muted); line-height: 1.4; }
-.unit-hint { font-size: .75rem; color: var(--muted); }
+.unit-hint { font-size: .8rem; color: var(--muted); }
 
 .with-button { display: flex; gap: 6px; }
 .with-button input { flex: 1; min-width: 0; }
@@ -532,8 +532,18 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .canto-tools, .canto-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .canto-actions { justify-content: flex-end; }
 .canto-warnings:empty { display: none; }
-.voice-row { margin: 0 0 10px; }
-.voice-row[hidden] { display: none; }
+.mixer { margin: 0 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; background: var(--surface); }
+.mixer[hidden] { display: none; }
+.mixer summary { cursor: pointer; font-weight: 700; min-height: 32px; display: flex; align-items: center; gap: 8px; }
+.mixer summary small { font-weight: 400; color: var(--muted); }
+.mixer-rows { display: grid; gap: 4px; margin-top: 6px; }
+.mixer-row { display: grid; grid-template-columns: minmax(110px, 1fr) 2fr; align-items: center; gap: 10px; min-height: 44px; }
+.mixer-row label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.mixer-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary); margin: 0; }
+.mixer-row input[type="range"] { width: 100%; accent-color: var(--primary); }
+.mixer-row.off input[type="range"] { opacity: .35; }
+.song-roll { width: 100%; height: 72px; border-radius: 10px; background: var(--surface-2); cursor: pointer; display: block; }
+.song-roll[hidden] { display: none; }
 .export-body { gap: 8px; }
 .export-hint { margin: 0 12px; color: var(--muted); font-size: .9rem; }
 .export-parts { display: grid; gap: 2px; margin: 0 4px; }
@@ -549,7 +559,7 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
   background: hsl(var(--hue) 60% 50% / .14); color: var(--text); font: inherit; display: grid; gap: 2px; justify-items: center; align-content: center;
   cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .12s, box-shadow .12s; }
 .form-block strong { font-size: 1.25rem; line-height: 1.1; }
-.form-block small { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.form-block small { font-size: .8rem; color: var(--muted); white-space: nowrap; }
 .form-block[aria-pressed="true"] { border-color: hsl(var(--hue) 65% 42%); background: hsl(var(--hue) 65% 50% / .3); box-shadow: 0 0 0 3px hsl(var(--hue) 65% 50% / .25); }
 .form-block.dragging { cursor: grabbing; z-index: 5; box-shadow: 0 8px 20px rgb(0 0 0 / .3); transition: none; opacity: .92; }
 .form-block.drop-target { outline: 3px dashed var(--primary); outline-offset: 2px; }
@@ -557,8 +567,32 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .form-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .form-actions[hidden] { display: none; }
 .form-actions .who { font-weight: 700; margin-right: 4px; }
-.section-divider { --hue: 30; display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-left: 5px solid hsl(var(--hue) 60% 45%);
+.section-divider-row { display: block; }
+.section-divider { --hue: 30; width: 100%; border: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-left: 5px solid hsl(var(--hue) 60% 45%);
   background: hsl(var(--hue) 60% 50% / .12); border-radius: 8px; font-weight: 700; }
 .section-divider small { font-weight: 400; color: var(--muted); }
 #canto-target-box { display: grid; gap: 4px; }
 #canto-target-box[hidden] { display: none; }
+.form-actions .who { display: inline-flex; align-items: center; gap: 6px; }
+.form-rename { width: 7.5em; min-height: 40px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-weight: 700; }
+.chord.collapsed .chord-body { display: none; }
+.chord-body { display: grid; gap: 12px; }
+.chord[hidden] { display: none; }
+.chord-toggle { flex: none; }
+.chords-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+.guide { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 12px; padding: 12px 14px; margin: 0 0 14px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.guide[hidden] { display: none; }
+.guide-step { font-weight: 800; color: var(--primary); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
+.guide p { margin: 0; font-weight: 600; }
+.guide-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
+.guide-actions:empty { display: none; }
+.canto-more { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; }
+.canto-more summary { cursor: pointer; font-weight: 700; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.canto-more summary small { font-weight: 400; color: var(--muted); }
+.canto-more-body { display: grid; gap: 10px; padding: 8px 0 6px; }
+/* dedo: os botões pequenos ganham a altura mínima de toque (44 px) */
+@media (pointer: coarse) {
+  .btn.small { min-height: 44px; padding: 0 12px; }
+  .tag, .chip-button { min-height: 44px; }
+}
