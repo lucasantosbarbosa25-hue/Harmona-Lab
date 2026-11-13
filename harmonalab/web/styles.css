@@ -534,3 +534,11 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .canto-warnings:empty { display: none; }
 .voice-row { margin: 0 0 10px; }
 .voice-row[hidden] { display: none; }
+.export-body { gap: 8px; }
+.export-hint { margin: 0 12px; color: var(--muted); font-size: .9rem; }
+.export-parts { display: grid; gap: 2px; margin: 0 4px; }
+.export-part { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 10px; font-size: 1rem; cursor: pointer; }
+.export-part input { width: 22px; height: 22px; accent-color: var(--primary); margin: 0; }
+.export-part small { color: var(--muted); margin-left: auto; font-size: .8rem; }
+.export-quick, .export-actions { display: flex; gap: 8px; margin: 0 8px; }
+.export-actions { justify-content: flex-end; margin-top: 4px; }

@@ -91,3 +91,22 @@ test("bateria: atraso fino \">\" e \">>\" toca um pouquinho depois do tempo, sem
   assert.deepEqual(mixed.bars[0][0].hits.map((h) => [h.accent, h.start]), [[16, 12], [-40, 480 + 24]]);
   for (const bad of ["K>>>/4", "S>!/4", "K<>/4"]) assert.ok(parseDrums(bad).errors.length, bad);
 });
+
+test("exportar só as partes escolhidas: cada parte sai sozinha e 'todas' é igual ao arquivo de sempre", async () => {
+  const { MIDI_PARTS, midiBytes: bytesOf, partsPresent } = await import("../../harmonalab/web/engine/midi.js");
+  const { loadProject } = await import("../../harmonalab/web/engine/model.js");
+  const { project } = loadProject({
+    title: "t", tempo: 90, time_signature: "4/4", voice: "A4/4 C5/4", drums: "K/4 S/4 K/4 S/4", percussion: "P/4 r/4 P/4 r/4",
+    chords: [{ symbol: "Cmaj7", duration_beats: 4, left_hand: ["C3"], right_hand: ["E4", "G4"], bass: "C2", bass_line: "C2/2 G1/2", phrase: "E5/4 D5/4 C5/2", phrase_scale: "C D E F G A B" }],
+  });
+  const text = (b) => Buffer.from(b).toString("latin1");
+  const present = partsPresent(project);
+  assert.ok(["acordes", "voz", "solo", "bateria"].every((p) => present.includes(p)), present.join());
+  const only = text(bytesOf(project, { parts: ["voz"] }));
+  assert.ok(only.includes("Voz") && only.includes("Cmaj7"));
+  assert.ok(!only.includes("Frase") && !only.includes("Bateria"));
+  const solo = text(bytesOf(project, { parts: ["solo"] }));
+  assert.ok(solo.includes("Frase") && !solo.includes("Voz"));
+  assert.ok(bytesOf(project, { parts: ["solo"] }).length < bytesOf(project).length);
+  assert.equal(text(bytesOf(project)), text(bytesOf(project, { parts: MIDI_PARTS.map((p) => p.id) })));
+});

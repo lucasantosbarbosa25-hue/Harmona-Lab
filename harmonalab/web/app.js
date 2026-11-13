@@ -9,7 +9,7 @@ import { setupCanto } from "./voz.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
-import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents } from "./engine/midi.js";
+import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents, MIDI_PARTS, partsPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
@@ -1312,7 +1312,13 @@ async function saveFile(blob, filename, description, mime, ext) {
   return { name: filename, picked: false };
 }
 
-async function exportMidi() {
+/** Partes que a pessoa DESMARCOU na exportação (guardadas no aparelho; parte nova entra marcada). */
+const EXPORT_OFF_KEY = "harmona-lab:export-off";
+const loadExportOff = () => { try { return new Set(JSON.parse(localStorage.getItem(EXPORT_OFF_KEY) || "[]")); } catch { return new Set(); } };
+const saveExportOff = (off) => { try { localStorage.setItem(EXPORT_OFF_KEY, JSON.stringify([...off])); } catch { /* sem armazenamento */ } };
+
+/** "Gerar MIDI": confere os erros e abre a lista das partes (só as que existem no projeto). */
+function exportMidi() {
   validateNow();
   if (!state.report?.ok) {
     const n = state.report.issues.filter((i) => i.level === "error").length;
@@ -1321,9 +1327,39 @@ async function exportMidi() {
     return;
   }
   const { project } = readProject(toPayload());
-  if (!state.voiceOn) project.voice_events = [];
-  const bytes = midiBytes(project, { phraseMode: state.phraseMode });
-  const filename = `${slugify(state.project.title)}.mid`;
+  const present = partsPresent(project, { phraseMode: state.phraseMode });
+  const off = loadExportOff();
+  $("#export-parts").replaceChildren(...MIDI_PARTS.filter((p) => present.includes(p.id)).map((p) => h("label", { class: "export-part" },
+    h("input", { type: "checkbox", value: p.id, checked: !off.has(p.id), onchange: renderExportNote }),
+    h("span", null, p.label))));
+  renderExportNote();
+  $("#export-dialog").showModal();
+}
+
+const exportChoice = () => [...document.querySelectorAll("#export-parts input")].filter((i) => i.checked).map((i) => i.value);
+
+function renderExportNote() {
+  const chosen = exportChoice();
+  const note = $("#export-note");
+  note.hidden = chosen.length > 0;
+  note.textContent = "Marque pelo menos uma parte.";
+  $("#export-go").disabled = chosen.length === 0;
+}
+
+/** Gera o .mid só com as partes marcadas. */
+async function exportChosen() {
+  const boxes = [...document.querySelectorAll("#export-parts input")];
+  const parts = exportChoice();
+  if (!parts.length) return;
+  const off = loadExportOff();
+  for (const b of boxes) (b.checked ? off.delete(b.value) : off.add(b.value));
+  saveExportOff(off);
+  $("#export-dialog").close();
+  const { project } = readProject(toPayload());
+  const every = boxes.length === parts.length;
+  const bytes = midiBytes(project, { phraseMode: state.phraseMode, parts: every ? null : parts });
+  const suffix = every ? "" : `-${parts.join("-")}`;
+  const filename = `${slugify(state.project.title)}${suffix}.mid`;
   const saved = await saveFile(new Blob([bytes], { type: "audio/midi" }), filename, "Arquivo MIDI", "audio/midi", ".mid");
   if (!saved) return;
   if (saved.picked) {
@@ -1454,6 +1490,9 @@ function bindUi() {
     revoiceChords({ pedal });
   });
   $("#export").addEventListener("click", exportMidi);
+  $("#export-go").addEventListener("click", exportChosen);
+  $("#export-all").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = true)); renderExportNote(); });
+  $("#export-none").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = false)); renderExportNote(); });
   $("#voice-on").addEventListener("change", (e) => {
     state.voiceOn = e.target.checked;
     if (state.playing) stopPlayback();

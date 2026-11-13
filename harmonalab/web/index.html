@@ -206,7 +206,7 @@
         <label class="switch" for="voice-on">
           <input type="checkbox" id="voice-on" role="switch" checked>
           <span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-text">Voz cantada <small>desligue para ouvir (e exportar) só o solo do app</small></span>
+          <span class="switch-text">Voz cantada <small>desligue para ouvir só o solo do app (no MIDI, você escolhe as partes ao gerar)</small></span>
         </label>
       </div>
       <div class="listen-row" id="listen-row">
@@ -288,6 +288,23 @@
       </div>
     </div>
   </footer>
+
+  <dialog id="export-dialog" class="sheet" aria-labelledby="export-title">
+    <form method="dialog" class="sheet-body export-body">
+      <p class="sheet-title" id="export-title">O que vai no MIDI</p>
+      <p class="export-hint">Marque as partes. Cada uma sai numa faixa própria; o BPM, o compasso e os nomes dos acordes vão sempre.</p>
+      <div class="export-parts" id="export-parts"></div>
+      <div class="export-quick">
+        <button type="button" class="btn secondary small" id="export-all">Todas</button>
+        <button type="button" class="btn secondary small" id="export-none">Nenhuma</button>
+      </div>
+      <p class="export-hint" id="export-note" hidden></p>
+      <div class="export-actions">
+        <button type="submit" class="btn secondary" value="cancel">Cancelar</button>
+        <button type="button" class="btn primary" id="export-go">Gerar MIDI</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="menu" class="sheet" aria-label="Menu do projeto">
     <form method="dialog" class="sheet-body">

@@ -207,10 +207,43 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
   return { notes, starts, end: tick };
 }
 
-/** Gera o .mid exatamente com as notas, oitavas e durações do projeto. */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true } = {}) {
+/** As partes que dá para escolher na exportação, na ordem das faixas. */
+export const MIDI_PARTS = [
+  { id: "acordes", label: "Acordes" },
+  { id: "voz", label: "Voz cantada" },
+  { id: "solo", label: "Solo (frases)" },
+  { id: "baixo", label: "Baixo" },
+  { id: "bateria", label: "Bateria" },
+  { id: "percussao", label: "Percussão" },
+];
+
+/** A que parte pertence uma nota de noteEvents. */
+export function notePart(n) {
+  if (n.voice) return "voz";
+  if (n.percussion) return "percussao";
+  if (n.channel === DRUM_CHANNEL) return "bateria";
+  if (n.channel === BASS_CHANNEL) return "baixo";
+  if (n.channel === PHRASE_CHANNEL) return "solo";
+  return "acordes";
+}
+
+/** As partes que têm notas neste projeto (para a lista de exportação mostrar só o que existe). */
+export function partsPresent(project, options = {}) {
+  const found = new Set(noteEvents(project, options).notes.map(notePart));
+  return MIDI_PARTS.map((p) => p.id).filter((id) => found.has(id));
+}
+
+/**
+ * Gera o .mid exatamente com as notas, oitavas e durações do projeto. `parts` (opcional): só as partes escolhidas
+ * (ids de MIDI_PARTS); a primeira faixa (nome, compasso, andamento e os nomes dos acordes) sai sempre, para a DAW
+ * acertar o BPM, mesmo sem as notas dos acordes.
+ */
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null } = {}) {
   const [num, den] = project.time_signature;
-  const { notes, starts, end: endTick } = noteEvents(project, { ticksPerBeat, phraseMode, drums });
+  const all = noteEvents(project, { ticksPerBeat, phraseMode, drums });
+  const keep = parts ? new Set(parts) : null;
+  const { starts, end: endTick } = all;
+  const notes = keep ? all.notes.filter((n) => keep.has(notePart(n))) : all.notes;
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
   const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
   project.chords.forEach((chord, i) => {
