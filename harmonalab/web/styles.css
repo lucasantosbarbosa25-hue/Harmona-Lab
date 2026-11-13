@@ -532,3 +532,5 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .canto-tools, .canto-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .canto-actions { justify-content: flex-end; }
 .canto-warnings:empty { display: none; }
+.voice-row { margin: 0 0 10px; }
+.voice-row[hidden] { display: none; }

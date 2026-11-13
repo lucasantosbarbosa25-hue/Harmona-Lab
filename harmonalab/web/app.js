@@ -99,6 +99,7 @@ const state = {
   report: null, // última análise do servidor
   byId: new Map(), // id do acorde → { chord, issues }
   playing: false,
+  voiceOn: true, // a Voz cantada entra ao ouvir e exportar? (desligada, só o solo do app aparece)
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
   sound: { chords: SIMPLE, phrase: SAME, drums: builtinValue("sonor3007") }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
   groove: { style: STYLES[0].id, variation: 0, drumVariation: 0 }, // estilo do ritmo e das frases, e as variações das frases e das viradas
@@ -703,6 +704,8 @@ function renderAnalysis() {
 function renderPhraseMode() {
   const any = (state.report?.chords || []).some((c) => c.phrase);
   $("#phrase-mode-box").hidden = !any;
+  $("#voice-row").hidden = !state.project.voice; // o interruptor só aparece quando há uma melodia cantada
+  $("#voice-on").checked = state.voiceOn;
   document.querySelectorAll("#phrase-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.phraseMode)));
 }
 
@@ -813,6 +816,7 @@ function removeChord(chord) {
  */
 function previewProject(only = null) {
   const { project } = readProject(toPayload());
+  if (!state.voiceOn) project.voice_events = [];
   const index = only ? state.project.chords.indexOf(only) : -1;
   project.tempo *= state.listen.rate; // andamento de estudo: só na escuta
   if (only) {
@@ -1317,6 +1321,7 @@ async function exportMidi() {
     return;
   }
   const { project } = readProject(toPayload());
+  if (!state.voiceOn) project.voice_events = [];
   const bytes = midiBytes(project, { phraseMode: state.phraseMode });
   const filename = `${slugify(state.project.title)}.mid`;
   const saved = await saveFile(new Blob([bytes], { type: "audio/midi" }), filename, "Arquivo MIDI", "audio/midi", ".mid");
@@ -1449,6 +1454,10 @@ function bindUi() {
     revoiceChords({ pedal });
   });
   $("#export").addEventListener("click", exportMidi);
+  $("#voice-on").addEventListener("change", (e) => {
+    state.voiceOn = e.target.checked;
+    if (state.playing) stopPlayback();
+  });
   document.querySelectorAll("#phrase-mode button").forEach((b) => b.addEventListener("click", () => {
     if (!PHRASE_MODES.includes(b.dataset.mode)) return;
     state.phraseMode = b.dataset.mode;
