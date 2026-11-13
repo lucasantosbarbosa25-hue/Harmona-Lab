@@ -41,6 +41,7 @@ test("dueto: nota longa fora do acorde procura uma nota do acorde; no estilo 'ap
 test("contracanto: cabe na música, fica abaixo da Voz, e não repete a rítmica dela", () => {
   for (const style of STYLES) {
     assert.ok(SECOND_VOICE_STYLES[style.id], `o estilo ${style.id} tem o seu jeito de segunda voz`);
+    if (SECOND_VOICE_STYLES[style.id].counter === "gemeas") continue; // rock e metal: guitarras gêmeas (teste próprio, abaixo)
     for (const variation of [0, 1, 2]) {
       const { text } = generateSecondVoice(song(), { mode: "contracanto", style, variation });
       const { project, issues } = events(song(), text);
@@ -74,4 +75,28 @@ test("sem a Voz não há segunda voz; em compassos sem acorde, o contracanto res
   const contra = generateSecondVoice(data, { mode: "contracanto", style: { id: "bossa" } });
   const { project } = events(data, contra.text);
   assert.ok(project.voice2_events.every((e) => e.start < 1920), contra.text);
+});
+
+test("guitarras gêmeas (rock e metal): dobra a Voz nota por nota, em terças da escala", () => {
+  const scale = new Set([0, 2, 4, 5, 7, 9, 11]);
+  for (const id of ["rock", "metal"]) {
+    const data = song();
+    const expected = [[3, 4, 5], [-3, -4, -5], [7, 8, 9, -3, -4, -5]]; // terça acima (ou quarta, no apoio), terça abaixo, sexta acima (ou quinta, no apoio; ou uma oitava abaixo)
+    [0, 1, 2].forEach((variation) => {
+      const { text } = generateSecondVoice(data, { mode: "contracanto", style: { id }, variation });
+      const { project, issues } = events(data, text);
+      assert.deepEqual(issues.filter((i) => i.level === "error").map((i) => i.message), [], `${id}: ${text}`);
+      const voice = project.voice_events;
+      const second = project.voice2_events;
+      assert.equal(second.length, voice.length, `${id} v${variation}: uma nota para cada nota da Voz (${text})`);
+      second.forEach((e, i) => {
+        assert.equal(e.start, voice[i].start, `${id} v${variation}: mesma rítmica`);
+        assert.equal(e.length, voice[i].length, `${id} v${variation}: mesma duração`);
+        assert.ok(scale.has(((e.note.midi % 12) + 12) % 12), `${id} v${variation}: nota fora da escala (${e.token})`);
+        assert.ok(expected[variation].includes(e.note.midi - voice[i].note.midi), `${id} v${variation}: intervalo de ${e.note.midi - voice[i].note.midi} semitons em ${e.token} (${text})`);
+      });
+    });
+    // a variação seguinte volta ao começo
+    assert.equal(generateSecondVoice(data, { mode: "contracanto", style: { id }, variation: 3 }).text, generateSecondVoice(data, { mode: "contracanto", style: { id }, variation: 0 }).text);
+  }
 });

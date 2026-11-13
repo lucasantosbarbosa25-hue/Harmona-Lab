@@ -15,7 +15,7 @@ import {
 import { buildPdf, drawDiagramPages } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { FILL_FREEDOMS, FILL_FREQUENCIES, INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
-import { SECOND_VOICE_MODES, generateSecondVoice } from "./engine/segunda.js";
+import { SECOND_VOICE_MODES, generateSecondVoice, twinGuitars, twinLabel } from "./engine/segunda.js";
 import { riffOptions, riffSound } from "./engine/riff.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, beatsToTicks, midiBytes, noteEvents, notePart, MIDI_PARTS, PERCUSSION_INSTRUMENTS, padNotes, partsPresent, percussionPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
@@ -1460,6 +1460,7 @@ function renderGroove() {
   $("#groove-voice2-again").hidden = second !== "contracanto";
   $("#groove-voice2-hint").textContent = second === "dueto"
     ? `Acompanha a Voz uma sexta abaixo, no jeito do estilo (${style.label}). Sai no MIDI na faixa “Voz 2”.`
+    : second === "contracanto" && twinGuitars(style) ? `Guitarras gêmeas: dobra a Voz nota por nota, uma ${twinLabel(fills.voice2Variation || 0)} (“Outra” troca o intervalo). Sai no MIDI na faixa “Voz 2”.`
     : second === "contracanto" ? `Segura as notas-guia e responde quando a Voz descansa, no jeito do estilo (${style.label}). Sai no MIDI na faixa “Voz 2”.` : "";
 
   $("#groove-pad").checked = Boolean(state.project.pad);
@@ -1639,7 +1640,7 @@ function bindGroove() {
     stopPlayback();
     refreshSecondVoice();
     renderAll();
-    toast(`Outro contracanto (${state.project.groove.voice2Variation + 1}).`, { action: { label: "Desfazer", run: undo } });
+    toast(twinGuitars(grooveStyle()) ? `Guitarras gêmeas: ${twinLabel(state.project.groove.voice2Variation)}.` : `Outro contracanto (${state.project.groove.voice2Variation + 1}).`, { action: { label: "Desfazer", run: undo } });
   });
   $("#groove-pad").addEventListener("change", (e) => {
     state.project.pad = e.target.checked;

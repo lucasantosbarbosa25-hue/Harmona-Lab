@@ -106,3 +106,38 @@ test("compasso 3/4 e 6/8: o riff se ajusta ao tamanho do compasso", () => {
     }
   }
 });
+
+test("riffs de rock e metal progressivo: acentos deslocados, uníssono, pedal com melodia, terças e arpejo de teclado", async () => {
+  const { STYLES: all } = await import("../../harmonalab/web/kb/estilos.js");
+  const { loadProject: read } = await import("../../harmonalab/web/engine/model.js");
+  const { parsePhrase: parse } = await import("../../harmonalab/web/engine/phrase.js");
+  const { generateRiff: make, riffOptions: options } = await import("../../harmonalab/web/engine/riff.js");
+  const data = { tempo: 120, time_signature: "4/4", chords: [
+    { symbol: "Em", duration_beats: 4, left_hand: ["E2"], right_hand: ["G3", "B3", "E4"], phrase_scale: "E F# G A B C D" },
+    { symbol: "C", duration_beats: 4, left_hand: ["C3"], right_hand: ["E3", "G3", "C4"], phrase_scale: "C D E F# G A B" },
+    { symbol: "D", duration_beats: 4, left_hand: ["D3"], right_hand: ["F#3", "A3", "D4"], phrase_scale: "D E F# G A B C" },
+    { symbol: "Em", duration_beats: 4, left_hand: ["E2"], right_hand: ["G3", "B3", "E4"], phrase_scale: "E F# G A B C D" },
+  ] };
+  const { project } = read(data);
+  const scale = new Set([4, 6, 7, 9, 11, 0, 2]);
+  for (const id of ["rock", "metal"]) {
+    const style = all.find((s) => s.id === id);
+    const ids = options(style).map((o) => o.id);
+    for (const family of ["deslocado", "unissono", "pedalmelodico", "gemeas", "teclado"]) {
+      assert.ok(ids.includes(family), `${id} tem o riff ${family}`);
+      const seen = new Set();
+      for (const variation of [0, 1, 2, 3, 4, 5]) {
+        const riffs = make(project, { style, family, variation });
+        seen.add(riffs.join("|"));
+        riffs.forEach((text, i) => {
+          const { events, errors } = parse(text, "C4");
+          assert.deepEqual(errors, [], `${id}/${family}: ${text}`);
+          assert.equal(events.filter((e) => e.voice === 0).reduce((n, e) => Math.max(n, e.start + e.length), 0) <= 4 * 480, true, `${id}/${family} cabe no compasso`);
+          for (const e of events) assert.ok(scale.has(((e.note.midi % 12) + 12) % 12), `${id}/${family}: ${e.token} fora da escala (acorde ${i + 1})`);
+          if (family === "gemeas") assert.ok(events.some((e) => e.voice > 0), `${id}/gemeas: duas notas juntas (${text})`);
+        });
+      }
+      assert.ok(seen.size >= 3, `${id}/${family}: as variações mudam o riff (${seen.size} diferentes em 6)`);
+    }
+  }
+});

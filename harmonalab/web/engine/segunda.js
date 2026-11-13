@@ -20,6 +20,7 @@ export const SECOND_VOICE_MODES = [
 /**
  * O jeito de cada estilo. duet: "todas" (acompanha todas as notas) ou "apoio" (só as de meio tempo ou mais; nas rápidas,
  * segura a nota anterior). counter: enquanto a Voz canta, "segura" as notas-guia ou "cala" (pergunta e resposta);
+ * counter "gemeas" (rock e metal): guitarras gêmeas, que dobram a Voz em terças, nota por nota.
  * unit: a figura da resposta (em tempos); notes: quantas notas, no máximo, tem a resposta.
  */
 export const SECOND_VOICE_STYLES = {
@@ -33,11 +34,11 @@ export const SECOND_VOICE_STYLES = {
   salsa: { duet: "todas", counter: "cala", unit: 0.5, notes: 4 },
   samba: { duet: "todas", counter: "cala", unit: 0.5, notes: 4 },
   bossa: { duet: "todas", counter: "segura", unit: 1, notes: 3 },
-  rock: { duet: "todas", counter: "cala", unit: 0.5, notes: 4 },
+  rock: { duet: "todas", counter: "gemeas", unit: 0.5, notes: 4 },
   ska: { duet: "todas", counter: "cala", unit: 0.5, notes: 3 },
   worship: { duet: "todas", counter: "segura", unit: 1, notes: 3 },
   balada: { duet: "todas", counter: "segura", unit: 1, notes: 3 },
-  metal: { duet: "todas", counter: "cala", unit: 0.5, notes: 4 },
+  metal: { duet: "todas", counter: "gemeas", unit: 0.5, notes: 4 },
   disco: { duet: "todas", counter: "cala", unit: 0.5, notes: 3 },
 };
 const DEFAULT_STYLE = { duet: "todas", counter: "segura", unit: 0.5, notes: 4 };
@@ -134,6 +135,39 @@ function guideTone(seg, near, ceiling) {
   return pool.sort((a, b) => Math.abs(a - near) - Math.abs(b - near))[0] ?? null;
 }
 
+/** Os jeitos das guitarras gêmeas: quantos graus da escala acima (ou abaixo) da Voz a segunda guitarra toca. */
+export const TWIN_INTERVALS = [
+  { steps: 2, label: "terça acima" },
+  { steps: -2, label: "terça abaixo" },
+  { steps: 5, label: "sexta acima" },
+];
+const TWIN_HIGH = 91; // Sol 6: a guitarra de cima pode passar da Voz
+
+/**
+ * Guitarras gêmeas (o contracanto do rock e do metal, à Iron Maiden): a segunda voz dobra a Voz nota por nota, com a
+ * mesma rítmica, uma terça da escala acima (ou abaixo, ou uma sexta acima: `variation` escolhe). Nas notas de repouso (dois
+ * tempos ou mais), se a terça não for nota do acorde e a quarta for, vale a quarta (na sexta, a quinta): é o ajuste que as duas guitarras fazem.
+ */
+function twin(project, segments, variation) {
+  const { steps } = TWIN_INTERVALS[((variation % TWIN_INTERVALS.length) + TWIN_INTERVALS.length) % TWIN_INTERVALS.length];
+  const out = [];
+  for (const e of project.voice_events) {
+    const seg = segmentAt(segments, e.start);
+    const midi = e.note.midi;
+    let pitch = scaleMove(seg.scale, midi, steps);
+    if (e.length >= 2 * TICKS_PER_BEAT && seg.chordPcs.size && !seg.chordPcs.has(mod12(pitch))) {
+      // a terça vira quarta; a sexta vira quinta
+      const other = scaleMove(seg.scale, midi, Math.abs(steps) === 2 ? steps + Math.sign(steps) : steps - Math.sign(steps));
+      if (seg.chordPcs.has(mod12(other))) pitch = other;
+    }
+    if (pitch === midi) pitch = scaleMove(seg.scale, midi, steps + Math.sign(steps));
+    while (pitch > TWIN_HIGH) pitch -= 12; // aguda demais: desce uma oitava (a terça acima vira sexta abaixo)
+    while (pitch < LOW) pitch += 12;
+    out.push({ start: e.start, length: e.length, midi: pitch });
+  }
+  return out;
+}
+
 function counter(project, segments, config, rng) {
   const voice = project.voice_events;
   const total = segments.at(-1)?.end ?? 0;
@@ -225,7 +259,9 @@ export function generateSecondVoice(data, { mode = "dueto", style = null, variat
   const segments = timeline(project);
   const total = segments.at(-1).end;
   const notes = [];
-  let events = mode === "contracanto"
+  let events = mode === "contracanto" && config.counter === "gemeas"
+    ? twin(project, segments, variation)
+    : mode === "contracanto"
     ? counter(project, segments, config, makeRng(`${style?.id ?? ""}|segunda|${variation}`))
     : duet(project, segments, config);
   events = events.filter((e) => e.start < total).map((e) => ({ ...e, length: Math.min(e.length, total - e.start) })).sort((a, b) => a.start - b.start);
@@ -244,3 +280,7 @@ export function generateSecondVoice(data, { mode = "dueto", style = null, variat
   }
   return { text: tokens.join(" "), notes };
 }
+
+/** O contracanto deste estilo é o das guitarras gêmeas? E qual é o intervalo da variação. */
+export const twinGuitars = (style) => (SECOND_VOICE_STYLES[style?.id]?.counter === "gemeas");
+export const twinLabel = (variation = 0) => TWIN_INTERVALS[((variation % TWIN_INTERVALS.length) + TWIN_INTERVALS.length) % TWIN_INTERVALS.length].label;

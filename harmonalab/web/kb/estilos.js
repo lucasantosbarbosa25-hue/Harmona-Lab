@@ -399,9 +399,9 @@ export const STYLES = [
   },
   {
     id: "rock", label: "Rock",
-    riffs: ["power", "abafado", "ostinato", { id: "pontuado", label: "Guitarra limpa arpejada" }],
-    influences: ["Led Zeppelin", "Aerosmith", "Slash", "Jon Lord"],
-    summary: "Power chords e riffs de guitarra, colcheias retas, pentatônica menor com blue note, licks curtos e repetidos. Harmonia diatônica.",
+    riffs: ["power", "abafado", "ostinato", { id: "pontuado", label: "Guitarra limpa arpejada" }, "deslocado", "unissono", "pedalmelodico", "gemeas", "teclado"],
+    influences: ["Led Zeppelin", "Aerosmith", "Slash", "Jon Lord", "Dream Theater (Jordan Rudess)", "Iron Maiden"],
+    summary: "Power chords e riffs de guitarra, colcheias retas, pentatônica menor com blue note, licks curtos e repetidos. Do rock progressivo: escalas em terças, grupos de 5 e de 6 notas que cruzam o tempo, pedal point, arpejos largos de teclado e acentos deslocados dentro do 4/4. Harmonia diatônica.",
     comps: [
       { id: "colcheias", label: "Colcheias retas", pattern: "T/8 T?/8 T/8 T?/8 T/8 T?/8 T/8 T?/8" },
       { id: "baixo", label: "Baixo pulsando e acordes longos", pattern: "B/8 B?/8 B/8 B?/8 B/8 B?/8 B/8 B?/8 ; D/2 D/4. D/8" },
@@ -426,9 +426,9 @@ export const STYLES = [
       { id: "galope", label: "Galope", pattern: "1/8 1/16 1/16 1/8 1/16 1/16 1/8 1/16 1/16 1/8 x/16 x/16" },
     ],
     bassFill: { chance: 0.45, figure: "16", beats: 2, high: 14, shapes: ["subida", "descida", "chegada"] },
-    cells: ["8 8 8 8", "8 8 4", "4 8 8", "r8 8 8 8", "4 4", "8 8 r4", "16 16 8 4", "2", "r4 8 8", "8. 16 4"],
-    fast: ["16 16 16 16 16 16 16 16", "8t 8t 8t 8t 8t 8t"],
-    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.5, leap: 0.25, rest: 0.25, motif: 0.8, pentatonic: true, sequence: true, minNotes: 4, duet: { octave: 0.2, sixth: 0.05, triad: 0 } },
+    cells: ["8 8 8 8", "8 8 4", "4 8 8", "r8 8 8 8", "4 4", "8 8 r4", "16 16 8 4", "2", "r4 8 8", "8. 16 4", "8. 8. 8", "16 16 16 16 8 8"],
+    fast: ["16 16 16 16 16 16 16 16", "8t 8t 8t 8t 8t 8t", "16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t", "16 16 16 16 16 16 8"],
+    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.4, leap: 0.25, rest: 0.25, motif: 0.8, pentatonic: true, sequence: true, prog: 0.4, minNotes: 4, duet: { octave: 0.2, sixth: 0.05, triad: 0 } },
   },
   {
     id: "ska", label: "Ska",
@@ -533,9 +533,9 @@ export const STYLES = [
   },
   {
     id: "metal", label: "Metal",
-    riffs: ["galope", "abafado", "power", { id: "arpejador", label: "Arpejo de guitarra (sweep)", sound: "ms-guitarra-distorcida", rhythms: ["16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t"] }],
-    influences: ["Kiko Loureiro", "Iron Maiden", "Metallica", "Eric Johnson"],
-    summary: "Riffs em galope e pedal abafado na corda grave, power chords, bumbo duplo, solos com sequências de pentatônica e arpejos largos. Harmonia diatônica (menor natural e frígio).",
+    riffs: ["galope", "abafado", "power", { id: "arpejador", label: "Arpejo de guitarra (sweep)", sound: "ms-guitarra-distorcida", rhythms: ["16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t"] }, "gemeas", "pedalmelodico", "deslocado", "unissono", "teclado"],
+    influences: ["Kiko Loureiro", "Iron Maiden", "Metallica", "Eric Johnson", "Dream Theater (Jordan Rudess)"],
+    summary: "Riffs em galope e pedal abafado na corda grave, power chords, bumbo duplo, guitarras gêmeas em terças. Solos com sequências, escalas em terças, grupos de 5 e de 6 notas, pedal point e arpejos de duas oitavas (teclado e guitarra de metal progressivo), tudo dentro do 4/4. Harmonia diatônica (menor natural e frígio).",
     comps: [
       { id: "longos", label: "Acordes longos", pattern: "T/1" },
       { id: "colcheias", label: "Colcheias retas", pattern: "T/8 T?/8 T/8 T?/8 T/8 T?/8 T/8 T?/8" },
@@ -561,9 +561,9 @@ export const STYLES = [
       { id: "semicolcheias", label: "Semicolcheias", pattern: "1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16" },
     ],
     bassFill: { chance: 0.3, figure: "16", beats: 1, high: 12, shapes: ["chegada", "descida"] },
-    cells: ["8 8 8 8", "4 4", "8 8 4", "16 16 16 16 4", "2", "r8 8 8 8", "8. 16 4", "4 8 8", "8 8 r4"],
-    fast: ["16 16 16 16 16 16 16 16", "16t 16t 16t 16t 16t 16t 4", "16 16 16 16 4"],
-    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.15, leap: 0.3, rest: 0.2, motif: 0.75, pentatonic: true, sequence: true, minNotes: 4, duet: { octave: 0.15, sixth: 0, triad: 0 } },
+    cells: ["8 8 8 8", "4 4", "8 8 4", "16 16 16 16 4", "2", "r8 8 8 8", "8. 16 4", "4 8 8", "8 8 r4", "8. 8. 8", "16 16 16 16 8 8"],
+    fast: ["16 16 16 16 16 16 16 16", "16t 16t 16t 16t 16t 16t 4", "16 16 16 16 4", "16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t", "16q 16q 16q 16q 16q 16q 16q 16q 16q 16q", "16 16 16 16 16 16 8"],
+    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.2, motif: 0.75, pentatonic: false, sequence: true, prog: 0.55, minNotes: 4, duet: { octave: 0.15, sixth: 0, triad: 0 } },
   },
   {
     id: "disco", label: "Disco / pop",

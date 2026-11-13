@@ -277,6 +277,16 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   acorde (notação da frase, com notas juntas: `E2&B2&E3/8`), sai no MIDI na faixa **"Riff"** (canal 7), tem som próprio
   (automático pelo tipo: guitarra distorcida, limpa, abafada, piano, synth, metais) e entra no mixer e na lista de partes.
 
+  **Rock e metal progressivo (teclado à Jordan Rudess, sem mudar o compasso).** No rock e no metal, a linha entre duas
+  chegadas da frase pode usar quatro desenhos novos (`progPath`, em `engine/groove.js`; a chance é o `phrase.prog` do
+  estilo: 0,4 no rock, 0,55 no metal): a escala **em terças** (1-3, 2-4, 3-5), **grupos de 4, 5 ou 6 notas** que andam um
+  grau por vez (os de 5 e de 6 cruzam o tempo e soam "ímpares" dentro do 4/4), **pedal point** (uma nota fixa alternando com
+  uma linha que caminha) e o **arpejo do acorde** correndo até duas oitavas. Nenhum salto passa de uma quinta entre notas
+  seguidas. O metal passou a usar a escala inteira (não só a pentatônica) e ganhou sextinas e quiálteras de 5; os dois
+  ganharam a célula 3+3+2. Riffs novos nos dois estilos: **Acentos deslocados** (3+3+2, 5+5+6, 3+3+3+3+4 em pedal abafado),
+  **Linha em uníssono** (sequências de escala), **Pedal com melodia**, **Melodia em terças (guitarras gêmeas)** e **Arpejo
+  largo de teclado** (add9 em sextinas ou quiálteras). Os outros estilos não mudaram.
+
   **Worship, Balada, Metal, Disco / pop e Rock refeito.** Cinco estilos com levadas, baterias (aro e crescendo no worship,
   bumbo duplo, galope e thrash no metal, quatro no chão no disco), baixos, viradas e riffs próprios. O fraseado deles **não
   usa o Weimar**: há dois perfis novos em `kb/fraseado.js`, "Rock e metal (guitarra)" (chegada na fundamental, na quinta
@@ -298,8 +308,11 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   ou mais, procura uma nota do acorde); ou **Contracanto**, uma linha própria que segura as notas-guia do acorde (3ª e 7ª)
   enquanto a Voz se mexe e responde, por graus conjuntos, quando a Voz segura uma nota longa ou respira, sempre abaixo dela.
   Cada estilo tem o seu jeito (`SECOND_VOICE_STYLES`): no swing, fusion e lo-fi o dueto não articula as notas rápidas; no
-  funk, blues, samba, salsa, rock e ska o contracanto cala enquanto a Voz canta (pergunta e resposta); a figura e o tamanho
-  da resposta mudam (semínimas na bossa e no lo-fi, semicolcheias no funk). "Outro contracanto" sorteia outro desenho. A
+  funk, blues, samba, salsa e ska o contracanto cala enquanto a Voz canta (pergunta e resposta); a figura e o tamanho
+  da resposta mudam (semínimas na bossa e no lo-fi, semicolcheias no funk). "Outro contracanto" sorteia outro desenho. No
+  **rock e no metal** o contracanto é o das **guitarras gêmeas** (à Iron Maiden): a segunda voz dobra a Voz nota por nota,
+  com a mesma rítmica, uma terça da escala acima; nas notas de repouso (dois tempos ou mais), se a terça não for nota do acorde e a quarta for,
+  vale a quarta. "Outra" troca o intervalo: terça acima, terça abaixo, sexta acima. A
   segunda voz é reescrita quando a Voz, a harmonia, as partes ou o estilo mudam; fica no campo `voice2` e sai no MIDI na
   faixa **"Voz 2"** (canal 6), um pouco mais leve que a Voz. Entra no mixer e na lista de partes do MIDI.
 

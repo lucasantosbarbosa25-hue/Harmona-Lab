@@ -685,6 +685,9 @@ function chordContext(chord, { style, color, scales, profile }) {
     bluesThird: profile.tercaBlue === true, // o blue note b3 -> 3 não depende do cromatismo geral
     tensionDegrees: new Set([...ALTERED_DEGREES, ...NATURAL_DEGREES].filter((d) => scalePcs.has(mod12(root + d)))),
     linePool: range(palette.set, LOW - 5, HIGH + 5),
+    // para os desenhos de rock progressivo: a escala inteira do acorde (sem as evitadas) e o arpejo dele
+    scalePool: range(new Set([...scalePcs].filter((pc) => !avoid.has(pc) || chordPcs.has(pc))), LOW - 5, HIGH + 5),
+    arpPool: range(chordPcs, LOW - 5, HIGH + 5),
     strongWeights: weightOf(true), weakWeights: weightOf(false),
     chromatic: color === "dentro" ? 0 : loud ? (tense ? 0.75 : 0.4) : params.chromatic * factor,
     enclosure: color === "dentro" ? 0 : loud ? (tense ? 0.4 : 0.2) : params.enclosure * factor,
@@ -730,7 +733,92 @@ function legMoves(delta, n, rng) {
   return out;
 }
 
-function stepPath(pool, a, b, count, rng, { waves = false, sequence = false } = {}) {
+/**
+ * Desenhos do rock e do metal progressivo (teclado e guitarra solo): em vez do caminho grau a grau, a linha entre duas
+ * chegadas pode ser
+ *   tercas   a escala em terças ("1-3, 2-4, 3-5...");
+ *   grupo    grupos de 4, 5 ou 6 notas que andam um grau de cada vez (o de 5 e o de 6 cruzam o tempo: soa "ímpar"
+ *            sem mudar o compasso);
+ *   pedal    uma nota fixa alternando com uma linha que caminha (pedal point);
+ *   arpejo   o arpejo do acorde correndo até duas oitavas e voltando.
+ * Devolve as `count` alturas, ou null se o desenho não couber (aí vale o caminho de sempre).
+ */
+function progPath(kind, { scalePool, arpPool, a, b, count, rng }) {
+  const moves = count + 1;
+  const walk = (pool, from, list) => {
+    const path = [];
+    let index = from;
+    for (let i = 0; i < count; i++) {
+      index += list[i] ?? 0;
+      if (index < 0 || index >= pool.length) return null;
+      path.push(pool[index]);
+    }
+    return path;
+  };
+  let path = null;
+  if (kind === "arpejo") {
+    if (arpPool.length < 6) return null;
+    const ia = arpPool.indexOf(nearest(arpPool, a));
+    const ib = arpPool.indexOf(nearest(arpPool, b));
+    const room = (w) => (w > 0 ? arpPool.length - 1 - ia : ia);
+    let way = rng.chance(0.5) ? 1 : -1;
+    if (room(way) < 4 && room(-way) > room(way)) way = -way;
+    const reach = Math.min(room(way), rng.pick([4, 5, 6, 7, 8]), moves - 1);
+    if (reach < 3) return null;
+    const apex = ia + way * reach;
+    const back = Math.abs(apex - ib);
+    const out = Math.max(Math.ceil(reach / 2), Math.min(reach, moves - Math.max(1, back)));
+    if (moves - out < Math.max(1, Math.ceil(back / 2))) return null;
+    path = walk(arpPool, ia, [...legMoves(way * reach, out, rng), ...legMoves(ib - apex, moves - out, rng)]);
+  } else {
+    const pool = scalePool;
+    if (pool.length < 8) return null;
+    const ia = pool.indexOf(nearest(pool, a));
+    const ib = pool.indexOf(nearest(pool, b));
+    const d = ib - ia;
+    const s = d > 0 ? 1 : d < 0 ? -1 : pool[ia] > 78 ? -1 : pool[ia] < 66 ? 1 : rng.chance(0.5) ? 1 : -1;
+    if (kind === "pedal") {
+      // a nota de partida fica de pedal; a linha começa uma terça adiante e caminha para a chegada
+      const line = Math.ceil(count / 2);
+      const first = ia + 2 * s;
+      const last = d * s > 3 ? ib - s : first + s * Math.max(1, Math.min(line - 1, 4));
+      path = [];
+      for (let k = 0; k < count; k++) {
+        if (k % 2) { path.push(pool[ia]); continue; }
+        const j = k / 2;
+        let index = line > 1 ? Math.round(first + ((last - first) * j) / (line - 1)) : first;
+        if (index === ia) index += s;
+        if (index < 0 || index >= pool.length) return null;
+        path.push(pool[index]);
+      }
+    } else {
+      // célula que anda um grau por vez: terças (2 notas) ou grupos de 4, 5 ou 6 notas
+      const cell = kind === "tercas" ? [2, -1] : rng.pick([[1, 1, 1, -2], [1, 1, 2, -3], [1, 1, 1, 1, -3], [1, 1, 1, 1, 1, -4]]);
+      const groups = Math.max(1, Math.min(Math.floor(moves / cell.length), Math.abs(d) + 4));
+      const rest = moves - groups * cell.length;
+      const after = d - s * groups;
+      if (rest < Math.ceil(Math.abs(after) / 2)) return null;
+      const list = [];
+      for (let g = 0; g < groups; g++) list.push(...cell.map((m) => s * m));
+      list.push(...legMoves(after, rest, rng));
+      path = walk(pool, ia, list);
+    }
+  }
+  if (!path || path.length !== count) return null;
+  // sem nota repetida em seguida (nem com a chegada de antes, nem com a de depois) e dentro da tessitura
+  const all = [a, ...path, b];
+  // ... e sem salto maior que uma quinta: em velocidade, ninguém toca isso com clareza
+  for (let i = 1; i < all.length; i++) if (all[i] === all[i - 1] || Math.abs(all[i] - all[i - 1]) > 7) return null;
+  if (path.some((m) => m < LOW - 5 || m > HIGH + 5)) return null;
+  return path;
+}
+
+function stepPath(pool, a, b, count, rng, { waves = false, sequence = false, prog = 0, scalePool = null, arpPool = null } = {}) {
+  if (prog && count >= 4 && scalePool && arpPool && rng.chance(prog)) {
+    const kind = rng.pick(count >= 7 ? ["arpejo", "arpejo", "grupo", "grupo", "tercas", "pedal"] : ["tercas", "pedal", "grupo", "arpejo"]);
+    const made = progPath(kind, { scalePool, arpPool, a, b, count, rng });
+    if (made) return made;
+  }
   const ia = pool.indexOf(nearest(pool, a));
   const ib = pool.indexOf(nearest(pool, b));
   const moves = count + 1;
@@ -827,7 +915,7 @@ function stepPath(pool, a, b, count, rng, { waves = false, sequence = false } = 
  * Compõe as frases de todos os acordes de uma vez (a linha atravessa os acordes). items: [{ ctx, slots }] por acorde
  * (slots null = acorde sem frase). Escreve midi e role em cada slot.
  */
-function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado", sequence = false }) {
+function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado", sequence = false, prog = 0 }) {
   const secondsPerTick = 60 / (tempo || 100) / TICKS_PER_BEAT;
   const halfBar = barTicks % (2 * TICKS_PER_BEAT) === 0 && barTicks >= 4 * TICKS_PER_BEAT ? barTicks / 2 : barTicks;
   const line = [];
@@ -954,7 +1042,7 @@ function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado", seque
     const group = notes.slice(notes.indexOf(a) + 1, notes.indexOf(b));
     if (!group.length || group.some((n) => n.outside)) continue;
     const ctx = group[0].ctx;
-    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng, { waves: level === "virtuoso", sequence });
+    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng, { waves: level === "virtuoso", sequence, prog, scalePool: ctx.scalePool, arpPool: ctx.arpPool });
     group.forEach((n, k) => {
       n.midi = path[k];
       n.role = ctx.palette.blue.has(mod12(n.midi)) ? "blue" : "";
@@ -1152,7 +1240,7 @@ export function generateGroove(data, {
       const slots = (color === "outside" && length >= 3 * TICKS_PER_BEAT ? planner.takeOutside(length, { toNext }) : null) ?? planner.take(length);
       return { ctx, slots, length };
     });
-    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks, level: intensity, sequence: Boolean(style.phrase.sequence) });
+    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks, level: intensity, sequence: Boolean(style.phrase.sequence), prog: Number(style.phrase.prog) || 0 });
     project.chords.forEach((chord, i) => {
       const { ctx, slots, length } = items[i];
       if (!ctx) { out[i].phrase = ""; return; }

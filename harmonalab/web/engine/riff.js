@@ -21,7 +21,7 @@ const mod12 = (n) => ((n % 12) + 12) % 12;
  * As famílias de riff. material: "arpejo" (notas do acorde), "cor" (fundamental, quinta, nona e terça: o som de add9),
  * "escala" (a escala do acorde), "power" (fundamental + quinta + oitava, juntas), "pedal" (a fundamental grave abafada,
  * com acentos em power chord), "oitava" (fundamental e oitava), "acorde" (ataques com três notas do acorde juntas) ou
- * "guia" (terça e sétima juntas). low: a nota mais grave da região. shapes: os desenhos possíveis. sound: o som sugerido
+ * "guia" (terça e sétima juntas) ou "tercas" (a escala do acorde, cada nota com a terça da escala acima: duas guitarras). low: a nota mais grave da região. shapes: os desenhos possíveis. sound: o som sugerido
  * (id em kb/sons.js). Ritmo: durações separadas por espaço; "r" na frente = pausa; "!" no fim = acento (nas famílias de
  * pedal, o acento vira power chord).
  */
@@ -65,6 +65,34 @@ export const RIFF_FAMILIES = {
   guia: {
     label: "Notas-guia", material: "guia", low: 55, sound: "ms-piano-eletrico", shapes: ["fixo"],
     rhythms: ["4t 8t r4 r4t 8t r4", "r4 4 r4 4", "r4t 8t+4 r2", "4 r4 r4t 8t r4", "r8 8+4 r4 4", "4. 8 r2"],
+  },
+  // ---- rock e metal progressivo
+  unissono: {
+    label: "Linha em uníssono (prog)", material: "escala", low: 52, sound: "ms-guitarra-distorcida", shapes: ["sequencia3", "sequencia4", "tercas", "vaievolta"],
+    rhythms: ["16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "16 16 16 16 16 16 8 16 16 16 16 16 16 8", "8 16 16 8 16 16 16 16 16 16 8 8", "16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 4 4", "8 8 16 16 16 16 8 8 16 16 16 16"],
+  },
+  deslocado: {
+    label: "Acentos deslocados (3+3+2, 5+5+6)", material: "pedal", low: 40, sound: "ms-guitarra-abafada", shapes: ["fixo"],
+    rhythms: [
+      "16! 16 16 16! 16 16 16! 16 16 16! 16 16 16! 16 16 16", // 3+3+3+3+4
+      "16! 16 16 16 16 16! 16 16 16 16 16! 16 16 16 16 16", // 5+5+6
+      "16! 16 16 16! 16 16 16! 16 16! 16 16! 16 16 16! 16 16", // 3+3+2+2+3+3
+      "8! 8 8 8! 8 8 8! 8", // 3+3+2 em colcheias
+      "16! 16 16 16 16 16 16! 16 16 16 16 16 16! 16 16 16", // 6+6+4
+      "16! 16 16 16! 16 16 16 16! 16 16 16! 16 16 16! 16 16", // 3+4+3+3+3
+    ],
+  },
+  pedalmelodico: {
+    label: "Pedal com melodia (pedal point)", material: "escala", low: 45, sound: "ms-guitarra-distorcida", shapes: ["pedalmelodia"],
+    rhythms: ["16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "8 8 8 8 8 8 8 8", "8 16 16 8 16 16 8 16 16 8 16 16", "16 16 8 16 16 8 16 16 8 16 16 8"],
+  },
+  gemeas: {
+    label: "Melodia em terças (guitarras gêmeas)", material: "tercas", low: 64, sound: "ms-guitarra-distorcida", shapes: ["motivo", "sequencia3", "vaievolta"],
+    rhythms: ["8 16 16 8 16 16 4 4", "8 8 8 8 4 4", "4 8 8 4 8 8", "8. 16 8 8 4 4", "8 16 16 8 8 8 16 16 4", "4. 8 8 8 4"],
+  },
+  teclado: {
+    label: "Arpejo largo de teclado", material: "cor", low: 60, sound: "ms-synth-serra", shapes: ["sobe", "vaievolta", "quebrado", "desce"],
+    rhythms: ["16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t 16t", "16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q 16q", "8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t"],
   },
   montuno: {
     label: "Montuno", material: "arpejo", low: 60, sound: "ms-piano", shapes: ["quebrado", "vaievolta", "pedal"],
@@ -135,6 +163,10 @@ function drawShape(shape, count, rng) {
     else if (shape === "quebrado") out.push([0, 2, 1, 3, 2, 4, 3, 1][i % 8] % (width + 1));
     else if (shape === "pedal") out.push(i % 2 ? k + (Math.floor(i / 2) % (width - 1)) : 0);
     else if (shape === "alterna") out.push(i % 2);
+    else if (shape === "sequencia3") out.push((Math.floor(i / 3) + (i % 3)) % 8); // 1-2-3, 2-3-4, 3-4-5...
+    else if (shape === "sequencia4") out.push((Math.floor(i / 4) + (i % 4)) % 9); // 1-2-3-4, 2-3-4-5...
+    else if (shape === "tercas") out.push((Math.floor(i / 2) + (i % 2 ? 2 : 0)) % 9); // 1-3, 2-4, 3-5...
+    else if (shape === "pedalmelodia") out.push(i % 2 ? 0 : [4, 5, 6, 5, 7, 6, 5, 4, 2, 4, 5, 4][(Math.floor(i / 2) + k * 3) % 12]); // a melodia alterna com o pedal
     else out.push(0); // fixo
   }
   return out;
@@ -159,6 +191,12 @@ function ladderOf(material, chord, low) {
   const two = (list) => [...list.map((i) => [base + i]), ...list.map((i) => [base + 12 + i])];
   if (material === "arpejo") return two(above(chordPcs));
   if (material === "escala") return two(above(scalePcs));
+  if (material === "tercas") {
+    // cada degrau: a nota da escala e a terça da escala acima (dois graus adiante)
+    const steps = above(scalePcs);
+    const rungs = [...steps.map((i) => base + i), ...steps.map((i) => base + 12 + i), ...steps.map((i) => base + 24 + i)];
+    return rungs.slice(0, steps.length * 2).map((m, i) => [m, rungs[i + 2]]);
+  }
   if (material === "cor") {
     const ninth = scalePcs.includes(mod12(root + 2)) ? 14 : 12;
     return [[base], [base + fifth], [base + ninth], ...(third !== null ? [[base + 12 + third]] : []), [base + 12 + fifth], [base + 24]];
