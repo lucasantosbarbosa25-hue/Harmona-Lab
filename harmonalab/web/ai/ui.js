@@ -26,7 +26,7 @@ const loadResearch = () => { try { return localStorage.getItem(RESEARCH_KEY) ===
 const saveResearch = (on) => { try { localStorage.setItem(RESEARCH_KEY, on ? "1" : "0"); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
-  const { $, h, icon, toast, getProjectJson, hasProgression, applyGenerated } = api;
+  const { $, h, icon, toast, getProjectJson, getVoice, hasProgression, applyGenerated } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
     mic: $("#ai-mic"), mode: $("#ai-mode"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
@@ -89,7 +89,7 @@ export function initAssistant(api) {
     savePrompt(request);
     const adjust = mode === "adjust" && hasProgression();
     const text = buildChatPrompt({
-      request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null, appUrl: appUrl(), research: els.research.checked,
+      request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null, appUrl: appUrl(), research: els.research.checked, voice: getVoice?.() ?? null,
     });
     chatRequest = request;
     els.chatPrompt.hidden = true;

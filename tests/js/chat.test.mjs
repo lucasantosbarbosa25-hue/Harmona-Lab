@@ -66,3 +66,16 @@ test("a IA só faz harmonia: o pedido não fala de escrever frases e o interrupt
   assert.ok(!researched.includes("Não pesquise na internet"));
   assert.ok(Math.abs(researched.length - fast.length) < 200); // é só uma linha de diferença
 });
+
+test("a melodia cantada entra no pedido, com compasso, tempo e duração de cada nota", () => {
+  const voice = { text: "r/4 A4/4 C5/8 D5/8 E5/2 A4/4", tempo: 80, timeSignature: "4/4" };
+  const text = buildChatPrompt({ request: "x", mode: "new", voice });
+  assert.match(text, /MELODIA CANTADA/);
+  assert.match(text, /compasso 1, tempo 2: A4 \(dura 1 tempos\)/);
+  assert.match(text, /compasso 1, tempo 3: C5 \(dura 0\.5 tempos\)/);
+  assert.match(text, /compasso 1, tempo 4: E5 \(dura 2 tempos\)/);
+  assert.match(text, /dura 6 tempos \(2 compassos\)/);
+  assert.match(text, /80 BPM, compasso 4\/4/);
+  assert.doesNotMatch(buildChatPrompt({ request: "x", mode: "new" }), /MELODIA CANTADA/);
+  assert.match(buildChatPrompt({ request: "x", mode: "adjust", currentProject: { chords: [] }, voice }), /MELODIA CANTADA[\s\S]*PROGRESSÃO ATUAL/);
+});

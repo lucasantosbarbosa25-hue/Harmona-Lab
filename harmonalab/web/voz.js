@@ -288,13 +288,22 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
       const w = Math.max(3, x(e.beat + e.beats) - left - 2);
       const top = y(e.midi) - 5;
       const lit = i === playing;
+      const chosen = playing < 0 && i === state.selected; // só UMA nota fica escolhida: maior, com contorno e o nome em destaque
       g.globalAlpha = playing >= 0 && !lit ? 0.45 : 1; // ao ouvir, as outras notas apagam um pouco
-      g.fillStyle = lit || (playing < 0 && i === state.selected) ? color("--primary", "#a85a00") : color("--muted", "#666");
-      if (lit) g.fillRect(left - 1, top - 3, w + 2, 16); // a nota que soa acende e cresce
+      g.fillStyle = lit || chosen ? color("--primary", "#a85a00") : color("--muted", "#666");
+      if (lit || chosen) g.fillRect(left - 1, top - 3, w + 2, 16); // a nota que soa (ou a escolhida) cresce
       else g.fillRect(left, top, w, 10);
+      if (chosen) { g.strokeStyle = color("--text", "#111"); g.lineWidth = 2; g.strokeRect(left - 1, top - 3, w + 2, 16); }
       if (i === state.selected && playing >= 0) { g.strokeStyle = color("--primary", "#a85a00"); g.lineWidth = 2; g.strokeRect(left, top, w, 10); }
       g.globalAlpha = 1;
-      if (w > 22 || i === state.selected || lit) { g.fillStyle = color("--text", "#111"); g.fillText(spell(e.midi), left, top - 3 > 10 ? top - 3 : top + 22); }
+      if (w > 22 || chosen || lit) {
+        const strong = chosen || lit;
+        g.font = strong ? "bold 12px system-ui, sans-serif" : "11px system-ui, sans-serif";
+        g.fillStyle = strong ? color("--text", "#111") : color("--muted", "#666"); // os nomes das outras ficam discretos: não parecem escolhidas
+        g.globalAlpha = strong ? 1 : 0.7;
+        g.fillText(spell(e.midi), left, top - 6 > 10 ? top - 6 : top + 24);
+        g.globalAlpha = 1;
+      }
     });
     if (state.listen) {
       // a linha que corre junto com o som

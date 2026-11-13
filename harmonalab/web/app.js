@@ -1555,6 +1555,9 @@ function currentProjectJson() {
   return state.report?.ok ? state.report.project : toPayload();
 }
 
+/** A melodia cantada (a Voz) do projeto, para o pedido à IA. */
+const getVoice = () => (state.project.voice ? { text: state.project.voice, tempo: state.project.tempo, timeSignature: state.project.time_signature } : null);
+
 const hasProgression = () => Boolean(state.report?.chords?.some((c) => !c.is_rest));
 
 /** Carrega a progressão gerada. A IA escreve em C4 = dó central; convertemos para a convenção escolhida aqui. */
@@ -1562,7 +1565,9 @@ function applyGenerated(data, { comment, message }) {
   const project = { ...data, comment, middle_c: "C4" };
   if (!("strum" in project)) project.strum = state.project.strum; // pedido que não fala de strum mantém o seu
   const mc = state.project.middle_c;
-  loadProject(mc === "C4" ? project : renameProjectNotes(project, mc), message);
+  const converted = mc === "C4" ? project : renameProjectNotes(project, mc);
+  if (!converted.voice && state.project.voice) converted.voice = state.project.voice; // a Voz cantada (já na convenção daqui) continua no projeto
+  loadProject(converted, message);
   $("#progression-heading").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1607,7 +1612,7 @@ async function init() {
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, hasProgression, applyGenerated,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, hasProgression, applyGenerated,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);

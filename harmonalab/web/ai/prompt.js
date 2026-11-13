@@ -3,6 +3,9 @@
 // A IA cuida só da harmonia (acordes, escalas e a explicação). O ritmo e as frases melódicas são escritos pelo próprio app,
 // a partir da base de conhecimento (kb/estilos.js), então o pedido fica leve e a resposta, rápida.
 
+import { TICKS_PER_BEAT, parsePhrase } from "../engine/phrase.js";
+import { noteName } from "../engine/pitch.js";
+
 export const DEFAULT_APP_URL = "https://harmona-lab.pages.dev/";
 
 /** Exemplo do formato. Fica nas instruções e é conferido por teste: precisa passar na validação do app sem avisos. */
@@ -111,9 +114,45 @@ Responda com um único bloco de código JSON no formato ${FENCE}json {"explicaca
 export const CHAT_INSTRUCTIONS = instructions();
 export const PERMANENT_INSTRUCTIONS = (appUrl = DEFAULT_APP_URL) => instructions(appUrl, { research: "any" });
 
+/**
+ * A melodia cantada (a Voz) em palavras para a IA: cada nota com compasso, tempo e duração, mais o total. Sem Voz, devolve "".
+ * voice: { text, tempo, timeSignature }. As notas saem em C4 = dó central, como a IA escreve.
+ */
+export function describeVoice(voice) {
+  const { text, tempo, timeSignature = "4/4" } = voice ?? {};
+  if (!text || !String(text).trim()) return "";
+  const { events, ticks, errors } = parsePhrase(text, "C4");
+  if (errors.length || !events.length) return "";
+  const [num, den] = String(timeSignature).split("/").map(Number);
+  const perBar = num && den ? (num * 4) / den : 4;
+  const round = (n) => Math.round(n * 100) / 100;
+  const lines = events.filter((e) => e.voice === 0).map((e) => {
+    const beat = e.start / TICKS_PER_BEAT;
+    const bar = Math.floor(beat / perBar + 1e-9) + 1;
+    const inBar = round((beat % perBar) + 1);
+    return `- compasso ${bar}, tempo ${inBar}: ${noteName(e.note, "C4")} (dura ${round(e.length / TICKS_PER_BEAT)} tempos)`;
+  });
+  const beats = ticks / TICKS_PER_BEAT;
+  const bars = Math.ceil(beats / perBar - 1e-9);
+  return [
+    "MELODIA CANTADA (a Voz). A pessoa cantou esta melodia e ela já está no projeto: o Harmona Lab a mantém e a toca por cima dos acordes. "
+    + `Harmonize-a: crie os acordes que a sustentam (a melodia é o "assunto"; os acordes dão a cor), trocando de acorde onde a melodia pede.`,
+    `Andamento ${tempo ? `${tempo} BPM` : "o do pedido"}, compasso ${timeSignature}. A melodia dura ${round(beats)} tempos (${bars} compasso${bars === 1 ? "" : "s"}): `
+    + "a progressão deve cobrir pelo menos isso, com duration_beats somando quantos tempos forem necessários (acorde de 1 compasso = "
+    + `${perBar} tempos). Mantenha o BPM e o compasso informados.`,
+    "Notas (C4 = dó central; nas pausas a melodia silencia):",
+    ...lines,
+    "Regras da harmonização: as notas da melodia que caem nos tempos fortes (e as longas) devem ser notas do acorde ou tensões da escala dele; "
+    + "as de passagem podem ser de fora. Não escreva a melodia no JSON (não use \"voice\" nem \"phrase\"): o app já a tem. "
+    + "A ponta (top_note) pode ser a própria melodia ou ficar abaixo dela, mas nunca competir com ela.",
+  ].join("\n");
+}
+
 /** A mensagem do pedido. O pedido fica entre aspas triplas para ficar claramente separado das instruções. */
-export function buildUserMessage({ request, mode, currentProject }) {
+export function buildUserMessage({ request, mode, currentProject, voice }) {
   const parts = [`PEDIDO (pode ter sido ditado por voz):\n"""\n${request.trim()}\n"""`];
+  const sung = describeVoice(voice);
+  if (sung) parts.push(sung);
   if (mode === "adjust" && currentProject) {
     parts.push(
       "PROGRESSÃO ATUAL (JSON do Harmona Lab). Ajuste-a conforme o pedido e devolva o projeto COMPLETO:\n"
