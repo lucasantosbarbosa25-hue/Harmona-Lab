@@ -362,8 +362,14 @@ export const INTENSITIES = [
   { id: "equilibrado", label: "Equilibrado" },
   { id: "virtuoso", label: "Virtuoso" },
 ];
-const INTENSITY_NPS = [2.2, 3.4, 5, 6.5]; // notas por segundo de cada intensidade (0 calmo ... 3 virtuoso)
-const LEVEL_CURVE = { contido: [-0.6, 1.7], equilibrado: [0.1, 2.3], virtuoso: [1.0, 2.2] }; // [base, altura do arco]
+const INTENSITY_NPS = [2.2, 3.4, 5, 6.5, 10]; // notas por segundo de cada intensidade (0 calmo ... 3 rápido, 4 corrida de virtuose)
+const LEVEL_CURVE = { contido: [-0.6, 1.7], equilibrado: [0.1, 2.3], virtuoso: [1.9, 2.4] }; // [base, altura do arco]
+// As corridas do virtuoso são escolhidas pelo ANDAMENTO: a figura que der a velocidade certa em notas por segundo. A 60 BPM
+// são fusas e sextinas de fusa; a 100, sextinas de semicolcheia; a 160, semicolcheias; a 200, tercinas de colcheia.
+// [figura, notas por tempo]
+const RUN_FIGURES = [["8", 2], ["8t", 3], ["16", 4], ["16q", 5], ["16t", 6], ["32", 8], ["32t", 12]];
+const RUN_SPEED = { 3: [5.6, 8.4], 4: [8, 12.6] }; // notas por segundo de cada nível (o teto é o que a mão toca com clareza)
+const MAX_INTENSITY = { contido: 3, equilibrado: 3, virtuoso: 4 };
 const DUET_MIN_SECONDS = 0.35; // nota mais curta que ganha oitava ou sexta (vozes só em notas longas)
 const TRIAD_MIN_SECONDS = 0.45; // e tríade
 
@@ -385,8 +391,31 @@ function makePlanner({ style, cellTexts, fastTexts = [], rng, level, tempo, tota
   const fast = [...new Set(fastTexts)].map(makeCell).filter((c) => c.ticks > 0 && c.sounds);
   const allTokens = cells.flatMap((c) => c.tokens);
   const triplets = allTokens.filter((t) => /t/.test(t.dur)).length > 0.4 * allTokens.length;
+  /** As corridas do virtuoso para um nível: notas seguidas de 1 ou 2 tempos na figura que dá a velocidade certa neste BPM. */
+  const runs = (intensity) => {
+    const perSecond = (perBeat) => (perBeat * (tempo || 100)) / 60;
+    const [low, high] = RUN_SPEED[intensity];
+    let figures = RUN_FIGURES.filter(([, perBeat]) => perSecond(perBeat) >= low && perSecond(perBeat) <= high);
+    if (!figures.length) {
+      // nenhuma figura cai na faixa: vale a mais próxima dela, sem passar do teto
+      const playable = RUN_FIGURES.filter(([, perBeat]) => perSecond(perBeat) <= RUN_SPEED[4][1]);
+      const mid = Math.sqrt(low * high);
+      figures = playable.sort((a, b) => Math.abs(Math.log(perSecond(a[1]) / mid)) - Math.abs(Math.log(perSecond(b[1]) / mid))).slice(0, 1);
+    }
+    // estilo de tercinas (swing, blues): as figuras de tercina vêm primeiro, se houver
+    const own = figures.filter(([f]) => /t/.test(f) === triplets);
+    if (own.length) figures = own;
+    return figures.flatMap(([f, perBeat]) => [1, 2].map((beats) => makeCell(Array(perBeat * beats).fill(f).join(" "))));
+  };
   const vocabulary = (intensity) => {
-    const pool = intensity >= 2 && fast.length ? [...cells, ...fast] : cells;
+    let pool = intensity >= 2 && fast.length ? [...cells, ...fast] : cells;
+    if (level === "virtuoso") {
+      if (intensity >= 3) pool = [...pool, ...runs(intensity)];
+      // o teto vale também para as células do estilo: uma sextina que é ótima a 90 BPM não se toca a 170
+      const shortest = 1 / RUN_SPEED[4][1];
+      const playable = pool.filter((c) => c.tokens.every((t) => t.rest || t.ticks * secondsPerTick >= shortest - 1e-9));
+      if (playable.length) pool = playable;
+    }
     const target = INTENSITY_NPS[intensity];
     const scored = pool.map((c) => ({ c, score: Math.abs(Math.log(nps(c) / target)) })).sort((x, y) => x.score - y.score);
     return scored.filter((x) => x.score <= scored[0].score + 0.4).slice(0, 6).map((x) => x.c);
@@ -401,7 +430,8 @@ function makePlanner({ style, cellTexts, fastTexts = [], rng, level, tempo, tota
     const p = totalTicks ? Math.min(1, at / totalTicks) : 0;
     const curve = p < 0.7 ? p / 0.7 : 1 - ((p - 0.7) / 0.3) * 0.55;
     // style.phrase.shift: estilos mais calmos (lo-fi) ficam um ou mais níveis abaixo da intensidade pedida
-    let intensity = Math.max(0, Math.min(3, Math.round(base + height * curve + (rng.next() - 0.5) * 0.9) + (style.phrase.shift ?? 0)));
+    const top = MAX_INTENSITY[level] ?? 3;
+    let intensity = Math.max(0, Math.min(top, Math.round(base + height * curve + (rng.next() - 0.5) * 0.9) + (style.phrase.shift ?? 0)));
     // vozes do trecho (oitava, sexta, tríade): só as notas longas ganham; com tríades, o trecho fica mais calmo
     const r = rng.next();
     const o = duet.octave ?? 0;
@@ -657,7 +687,7 @@ function chordContext(chord, { style, color, scales, profile }) {
  * O caminho de `a` até `b` em `count` notas, grau a grau na lista `pool` (alturas em ordem): direto, em arco (passa e
  * volta) ou com um mergulho antes (vai para o outro lado e volta). Nunca repete nota seguida.
  */
-function stepPath(pool, a, b, count, rng) {
+function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
   const ia = pool.indexOf(nearest(pool, a));
   const ib = pool.indexOf(nearest(pool, b));
   const moves = count + 1;
@@ -683,15 +713,35 @@ function stepPath(pool, a, b, count, rng) {
       else { direct.push(sign); spare -= 1; }
     }
     const extra = spare / 2;
+    if (waves && extra > 4) {
+      // corrida longa (virtuoso): em vez de um trinado de duas notas, ou de um arco que varre o teclado inteiro, ondas de
+      // 4 a 7 graus (sobe e desce, ou desce e sobe), como uma escala que vai e volta; o caminho direto fecha a corrida
+      let left = extra;
+      let way = rng.chance(0.5) ? sign : -sign;
+      while (left > 0) {
+        const half = Math.min(left, rng.pick([4, 5, 6, 7]));
+        list.push(...Array(half).fill(way), ...Array(half).fill(-way));
+        left -= half;
+        if (rng.chance(0.35)) way = -way;
+      }
+      list.push(...direct);
+    } else {
     const shape = rng.pick(["arco", "mergulho", "volta"]);
     if (shape === "arco") list.push(...Array(extra).fill(sign), ...direct, ...Array(extra).fill(-sign));
     else if (shape === "mergulho") list.push(...Array(extra).fill(-sign), ...Array(extra).fill(sign), ...direct);
     else { for (let i = 0; i < extra; i++) list.push(sign, -sign); list.push(...direct); }
+    }
   }
   const path = [];
   let index = ia;
+  // nas corridas do virtuoso a linha fica entre o Lá 3 e o Sol 6: ao chegar na beirada, ela volta em vez de insistir
+  const floor = waves ? Math.max(0, pool.findIndex((m) => m >= LOW - 3)) : 0;
+  const lastInside = waves ? pool.findLastIndex((m) => m <= HIGH + 3) : -1;
+  const ceiling = lastInside >= floor ? lastInside : pool.length - 1;
   for (let i = 0; i < count; i++) {
-    index = Math.max(0, Math.min(pool.length - 1, index + (list[i] || sign)));
+    let move = list[i] || sign;
+    if (waves && (index + move < floor || index + move > ceiling) && index - move >= floor && index - move <= ceiling) move = -move;
+    index = Math.max(0, Math.min(pool.length - 1, index + move));
     path.push(pool[index]);
   }
   return path;
@@ -701,7 +751,7 @@ function stepPath(pool, a, b, count, rng) {
  * Compõe as frases de todos os acordes de uma vez (a linha atravessa os acordes). items: [{ ctx, slots }] por acorde
  * (slots null = acorde sem frase). Escreve midi e role em cada slot.
  */
-function composeSolo(items, { rng, tempo, barTicks }) {
+function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado" }) {
   const secondsPerTick = 60 / (tempo || 100) / TICKS_PER_BEAT;
   const halfBar = barTicks % (2 * TICKS_PER_BEAT) === 0 && barTicks >= 4 * TICKS_PER_BEAT ? barTicks / 2 : barTicks;
   const line = [];
@@ -828,7 +878,7 @@ function composeSolo(items, { rng, tempo, barTicks }) {
     const group = notes.slice(notes.indexOf(a) + 1, notes.indexOf(b));
     if (!group.length || group.some((n) => n.outside)) continue;
     const ctx = group[0].ctx;
-    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng);
+    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng, { waves: level === "virtuoso" });
     group.forEach((n, k) => {
       n.midi = path[k];
       n.role = ctx.palette.blue.has(mod12(n.midi)) ? "blue" : "";
@@ -1025,7 +1075,7 @@ export function generateGroove(data, {
       const slots = (color === "outside" && length >= 3 * TICKS_PER_BEAT ? planner.takeOutside(length, { toNext }) : null) ?? planner.take(length);
       return { ctx, slots, length };
     });
-    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks });
+    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks, level: intensity });
     project.chords.forEach((chord, i) => {
       const { ctx, slots, length } = items[i];
       if (!ctx) { out[i].phrase = ""; return; }

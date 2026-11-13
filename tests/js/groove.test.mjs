@@ -8,7 +8,7 @@ import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
 import { INTENSITIES, SOURCE_SCALES, percussionFor, percussionOptions, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
 import { DRUM_CHANNEL, MAX_PERCUSSION_TRACKS, PERCUSSION_INSTRUMENTS, chordNotes, drumNotes, midiBytes, noteEvents, percussionPresent, percussionTracks } from "../../harmonalab/web/engine/midi.js";
 import { loadProject, sounding } from "../../harmonalab/web/engine/model.js";
-import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
+import { DRUM_PIECES, durationTicks, parseComp, parseDrums, parsePhrase as parsePhraseText } from "../../harmonalab/web/engine/phrase.js";
 import { COLORS, SOURCES, STYLES, findStyle, styleByLabel } from "../../harmonalab/web/kb/estilos.js";
 import { PERFIL_ATIVO, PERFIL_POR_ESTILO, PERFIS, perfilDoEstilo } from "../../harmonalab/web/kb/fraseado.js";
 
@@ -635,9 +635,10 @@ test("outside: a tensão sempre volta no tempo, perto da última nota de fora; o
     }
   }
   assert.ok(episodes > 100, `${episodes} trechos outside`);
-  // ritmo: só figuras do estilo (bossa, samba e salsa nunca em fusas)
+  // ritmo: só figuras do estilo (bossa, samba e salsa nunca em fusas). No virtuoso, as corridas seguem o andamento
+  // (teste próprio, mais abaixo).
   for (const id of ["bossa", "samba", "salsa"]) {
-    for (const intensity of ["contido", "equilibrado", "virtuoso"]) {
+    for (const intensity of ["contido", "equilibrado"]) {
       for (let variation = 0; variation < 6; variation++) {
         for (const chord of generateGroove(structuredClone(VARIED), { style: findStyle(id), phrases: true, variation, intensity }).chords) {
           assert.ok(!/\/32/.test(chord.phrase), `${id}/${intensity}: sem fusas: ${chord.phrase}`);
@@ -836,4 +837,53 @@ test("controles das viradas: a frequência e a liberdade mudam a bateria e o bai
   const wild = run({ frequency: "muitas", freedom: "solto" }, {});
   const { project } = loadProject({ ...data, chords: chords.map((c, i) => ({ ...c, bass_line: wild.chords[i].bass_line })) });
   assert.ok(project.chords.every((c) => c.bass_events.every((e) => e.note.midi >= 28)), "nenhuma nota abaixo do E1");
+});
+
+test("virtuoso: as corridas seguem o andamento (fusas a 60 BPM, semicolcheias a 160), sem passar do que a mão toca", () => {
+  const song = { ...structuredClone(VARIED), chords: [...structuredClone(VARIED).chords, ...structuredClone(VARIED).chords] };
+  const measure = (style, tempo, intensity, variation) => {
+    const out = generateGroove({ ...structuredClone(song), tempo }, { style, phrases: true, variation, intensity });
+    const beat = 60 / tempo;
+    const onsets = [];
+    let at = 0;
+    let shortest = 9;
+    let jumps = 0;
+    let fast = 0;
+    let previous = null;
+    out.chords.forEach((made, i) => {
+      for (const e of parsePhraseText(made.phrase || "", "C4").events) {
+        if (e.voice !== 0) continue;
+        const seconds = (e.length / 480) * beat;
+        onsets.push(at + (e.start / 480) * beat);
+        shortest = Math.min(shortest, seconds);
+        if (seconds <= 0.14 && previous?.quick) { fast += 1; if (Math.abs(e.note.midi - previous.midi) > 7) jumps += 1; }
+        previous = { midi: e.note.midi, quick: seconds <= 0.14 };
+        assert.ok(e.note.midi >= 52 && e.note.midi <= 96, `${style.id} ${tempo}: nota fora do alcance (${e.token})`);
+      }
+      at += song.chords[i].duration_beats * beat;
+    });
+    let peak = 0;
+    for (let t = 0; t + 1 <= at; t += 0.25) peak = Math.max(peak, onsets.filter((o) => o >= t && o < t + 1).length);
+    return { mean: onsets.length / at, peak, shortest, jumps, fast, text: out.chords.map((c) => c.phrase).join(" ") };
+  };
+  for (const style of STYLES) {
+    if (style.phrase.shift) continue; // o lo-fi é calmo de propósito
+    for (const tempo of [60, 80, 100, 130, 170]) {
+      const runs = [0, 1, 2].map((variation) => measure(style, tempo, "virtuoso", variation));
+      const calm = [0, 1, 2].map((variation) => measure(style, tempo, "equilibrado", variation));
+      const mean = (list) => list.reduce((n, r) => n + r.mean, 0) / list.length;
+      const peak = Math.max(...runs.map((r) => r.peak));
+      assert.ok(peak >= 8, `${style.id} a ${tempo} BPM: o pico do virtuoso é de ${peak} notas por segundo`);
+      assert.ok(mean(runs) > mean(calm) * 1.25, `${style.id} a ${tempo} BPM: virtuoso ${mean(runs).toFixed(1)} x equilibrado ${mean(calm).toFixed(1)} notas por segundo`);
+      // o teto: nenhuma nota mais curta que ~1/13 de segundo (acima disso ninguém toca com clareza)
+      for (const r of runs) assert.ok(r.shortest >= 1 / 13.5, `${style.id} a ${tempo} BPM: nota de ${(r.shortest * 1000).toFixed(0)} ms`);
+      const jumps = runs.reduce((n, r) => n + r.jumps, 0);
+      const fast = runs.reduce((n, r) => n + r.fast, 0);
+      assert.ok(jumps <= fast * 0.02, `${style.id} a ${tempo} BPM: ${jumps} saltos grandes em ${fast} notas de corrida`);
+    }
+  }
+  const slow = measure(findStyle("gospel"), 60, "virtuoso", 0).text;
+  const quick = measure(findStyle("gospel"), 170, "virtuoso", 0).text;
+  assert.ok(/\/32/.test(slow), "a 60 BPM o virtuoso usa fusas");
+  assert.ok(!/\/32/.test(quick) && !/\/16t/.test(quick), "a 170 BPM, nada de fusas nem sextinas");
 });

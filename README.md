@@ -221,6 +221,14 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   jeito seguro: um toque escolhe, e só a nota escolhida anda, só para os lados (a altura fica nos botões). Quem quiser o
   jeito completo no toque liga "Edição completa no toque", em "Mais opções".
 
+  **Virtuoso de verdade, em qualquer andamento.** No nível Virtuoso, as corridas são escolhidas pelo **BPM**: o gerador usa
+  a figura que dá a velocidade real de uma corrida, de 8 a 12 notas por segundo (fusas e sextinas de fusa a 60 BPM, sextinas
+  de semicolcheia a 100, semicolcheias a 160, tercinas de colcheia a 200), nunca mais rápido do que a mão toca com clareza
+  (o teto vale também para as células do próprio estilo). O arco do solo sobe mais e passa de 30% a 50% do tempo em corrida,
+  com as chegadas e as respirações de sempre. As corridas longas andam em ondas de escala (sobem e descem 4 a 7 graus), sem
+  trinados mecânicos nem saltos, entre o Lá 3 e o Sol 6. Contido e Equilibrado não mudaram (conferido contra a versão
+  anterior em todos os estilos e andamentos).
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e
