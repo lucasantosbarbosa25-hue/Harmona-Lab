@@ -47,6 +47,18 @@
         <div class="ai-parts-list" id="ai-parts-list" role="group" aria-labelledby="ai-parts-label"></div>
       </div>
       <p class="ai-task" id="ai-task" hidden></p>
+      <div class="ai-key" id="ai-key" hidden>
+        <label class="field ai-shift-field" for="ai-shift">
+          <span class="label">Modular (semitons)</span>
+          <input type="number" id="ai-shift" inputmode="numeric" min="-11" max="11" step="1" value="0">
+        </label>
+        <p class="ai-key-text" id="ai-key-text" aria-live="polite"></p>
+        <label class="switch" for="ai-key-auto" id="ai-key-auto-box" hidden>
+          <input type="checkbox" id="ai-key-auto" role="switch">
+          <span class="switch-track" aria-hidden="true"></span>
+          <span class="switch-text">A IA decide o tom <small>ela pode ficar no tom da música ou modular</small></span>
+        </label>
+      </div>
       <div class="ai-input">
         <label class="sr-only" for="ai-prompt">Pedido</label>
         <textarea id="ai-prompt" rows="4" maxlength="4000" placeholder="Ex.: 8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E"></textarea>
@@ -315,10 +327,6 @@
         <button type="button" class="btn ghost small" id="chords-toggle-all">Abrir todos</button>
       </div>
       <ol class="chords" id="chords"></ol>
-      <div class="add-row">
-        <button class="btn outline" id="add-chord"></button>
-        <button class="btn ghost" id="add-rest"></button>
-      </div>
     </section>
 
     <details class="card help">
@@ -410,9 +418,17 @@
         <span class="label">Onde esta melodia entra</span>
         <div class="segmented" id="canto-target" role="group" aria-label="Onde a melodia entra">
           <button type="button" data-target="nova" aria-pressed="true">Parte nova</button>
+          <button type="button" data-target="parte" aria-pressed="false" hidden>Nesta parte</button>
           <button type="button" data-target="toda" aria-pressed="false">Música toda</button>
         </div>
         <p class="canto-hint" id="canto-target-hint"></p>
+        <div class="canto-shift-row" id="canto-shift-box" hidden>
+          <label class="field" for="canto-shift">
+            <span class="label">Modular (semitons)</span>
+            <input type="number" id="canto-shift" inputmode="numeric" min="-11" max="11" step="1" value="0">
+          </label>
+          <p class="canto-key-text" id="canto-key-text" aria-live="polite"></p>
+        </div>
       </div>
       <div class="canto-settings">
         <label class="field">

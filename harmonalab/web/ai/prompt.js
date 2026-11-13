@@ -191,6 +191,46 @@ const APP_LAYERS = "O ritmo dos acordes, as frases, o baixo, a bateria e a melod
  * A IA devolve SÓ os acordes novos (os retocados do fim da parte anterior, se houver, e os da parte nova): a resposta fica
  * curta, cabe no link, e o resto da música não corre risco.
  */
+/**
+ * O contexto da música para o pedido de uma parte, sempre como ela está AGORA: o mapa das partes (na ordem atual, com o
+ * tom e o pedido de cada uma), o ponto de ligação (os acordes vizinhos) e o tom da parte. Tudo opcional: sem os dados,
+ * a linha não aparece.
+ */
+export function describeContext(c) {
+  if (!c) return "";
+  const lines = [];
+  const quote = (text) => `"${String(text).replace(/\s+/g, " ").trim().slice(0, 300)}"`;
+  if (Array.isArray(c.map) && c.map.length) {
+    lines.push(`MAPA DA MÚSICA (as partes na ordem atual${c.songKey ? `; tom da música: ${c.songKey}` : ""}):`);
+    for (const part of c.map) {
+      const mine = part.name === c.section;
+      const size = `${part.bars} compasso${part.bars === 1 ? "" : "s"}`;
+      const state = mine ? (c.kind === "adjust" ? "É A PARTE DESTE PEDIDO (ajustar)" : `É A PARTE DESTE PEDIDO (criar${c.fixed === false ? "; o tamanho é você quem decide" : ""})`)
+        : part.empty ? (part.melody ? "só a melodia, ainda sem harmonia" : "ainda vazia") : "harmonia pronta";
+      const bits = [mine && c.fixed === false ? null : size, part.key || null, state].filter(Boolean).join(", ");
+      lines.push(`- Parte "${part.name}": ${bits}.${part.request ? ` Pedido que a criou: ${quote(part.request)}.` : ""}`);
+    }
+  }
+  const link = c.link || {};
+  const joins = [];
+  if (link.before?.length) joins.push(`a parte "${link.beforeName}" termina em ${link.before.join(" | ")}, e a parte "${c.section}" começa logo depois`);
+  if (link.after) joins.push(`depois da parte "${c.section}" vem a parte "${link.afterName}", que começa em ${link.after}`);
+  if (joins.length) lines.push(`PONTO DE LIGAÇÃO: ${joins.join("; ")}. Faça a parte ligar bem com esses acordes.`);
+  if (c.auto) {
+    lines.push(`TOM DA PARTE "${c.section}": você decide (o tom da música${c.songKey ? `, ${c.songKey},` : ""} ou uma modulação). Diga na explicação qual tom escolheu.`);
+  } else if (c.key) {
+    const n = Math.abs(c.shift || 0);
+    const where = c.shift ? ` (${n} semitom${n > 1 ? "s" : ""} ${c.shift > 0 ? "acima" : "abaixo"} do tom da música, ${c.songKey})`.replace("semitoms", "semitons") : " (o tom da música)";
+    lines.push(`TOM DA PARTE "${c.section}": ${c.key}${where}. Use predominantemente a escala desse tom (harmonia diatônica; empréstimos, dominantes secundários e outras saídas só se o pedido pedir).`
+      + (c.shift && c.kind !== "adjust" && link.before?.length ? ` Prepare a modulação nos últimos acordes da parte "${link.beforeName}" (o retoque existe para isso).` : ""));
+  }
+  return lines.join("\n");
+}
+
+/** A harmonia que vai no pedido é a versão atual: vale mais do que a memória da conversa. */
+export const AUTHORITY = "ATENÇÃO: a harmonia abaixo é a versão ATUAL da música e vale mais do que qualquer coisa dita antes nesta conversa. "
+  + "Se algo aqui for diferente do que você lembra (acordes, ordem das partes, tom), vale o que está aqui.";
+
 export function describeContinuation(c, appUrl = DEFAULT_APP_URL) {
   if (!c) return "";
   const bars = c.toBar - c.fromBar + 1;
@@ -246,7 +286,9 @@ export function buildUserMessage({ request, mode, currentProject, voice, continu
   if (sung) parts.push(sung);
   if (mode === "continue" && currentProject && continuation) {
     parts.push(describeContinuation(continuation, appUrl));
-    parts.push("HARMONIA ATUAL (JSON resumido do Harmona Lab):\n" + JSON.stringify(harmonyOnly(currentProject)));
+    const context = describeContext(continuation);
+    if (context) parts.push(context);
+    parts.push(AUTHORITY + "\nHARMONIA ATUAL (JSON resumido do Harmona Lab):\n" + JSON.stringify(harmonyOnly(currentProject)));
   } else if (mode === "adjust" && currentProject) {
     parts.push(
       "PROGRESSÃO ATUAL (JSON resumido do Harmona Lab: só a harmonia). Ajuste-a conforme o pedido e devolva a progressão COMPLETA. "

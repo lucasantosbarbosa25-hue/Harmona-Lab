@@ -635,3 +635,9 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .ai-part[aria-pressed="true"] { border-color: hsl(var(--hue) 65% 42%); background: hsl(var(--hue) 65% 50% / .3); box-shadow: 0 0 0 3px hsl(var(--hue) 65% 50% / .25); }
 .ai-part.add { border-style: dashed; border-color: var(--border); background: transparent; color: var(--muted); }
 .ai-task { margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .92rem; }
+.ai-key { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ai-shift-field { flex: 0 0 auto; margin: 0; }
+.ai-shift-field input, .canto-shift-row input { width: 5.5rem; text-align: center; }
+.ai-key-text { flex: 1 1 12rem; margin: 0; font-size: .95rem; font-weight: 600; }
+.ai-key .switch { flex-basis: 100%; }
+.beats-input[readonly] { background: var(--surface-2); color: var(--muted); }

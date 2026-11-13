@@ -193,6 +193,30 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   (pede confirmação). A progressão de exemplo, que abre na primeira vez, é a exceção: o primeiro pedido cria a sua música
   no lugar dela.
 
+  **O tom de cada parte.** O tom da música é o da parte A. Em cada parte há um campo **Modular (semitons)**: você digita
+  só o número (`2`, `-3`; o sinal de menos modula para baixo) e o app escreve o tom por extenso ("Lá menor → Si menor (2
+  semitons acima)"). A distância é sempre contada a partir do tom da música, então "+2" quer dizer a mesma coisa em
+  qualquer ordem dos blocos. O que o número faz depende da parte:
+  - **parte a criar:** o tom vai para o pedido (a IA usa predominantemente a escala dele e prepara a modulação no fim da
+    parte anterior) e, ao cantar a parte nova, as notas cantadas ficam presas à escala desse tom;
+  - **parte pronta:** o próprio app **transpõe** a parte na hora (acordes, frases, baixo, riff e a melodia dela), com
+    Desfazer. Transpor a parte A muda o tom da música; as outras partes ficam onde estavam;
+  - **"A IA decide o tom"** (só em parte criada pelo pedido): a IA escolhe, e o app descobre pelas notas qual foi.
+
+  **Cantar por cima da harmonia.** Numa parte que já tem acordes e ainda não tem melodia, a janela de cantar oferece **Na
+  parte X**: a harmonia da parte toca enquanto você canta (use fone, para ela não vazar no microfone), a gravação para
+  sozinha no fim da parte e as notas ficam na escala do tom dela. A harmonia não muda.
+
+  **Os acordes não mudam de lugar nem de tamanho.** Não há mais mover, duplicar, remover ou acrescentar acorde, e a
+  duração de cada acorde é fixa: a melodia cantada depende dela. Continuam editáveis as notas, o voicing, a ponta, o
+  ritmo e as frases. Para mudar a estrutura, crie ou ajuste a parte pelo pedido, ou mexa nos blocos (que levam a melodia
+  junto).
+
+  O pedido de uma parte é **completo toda vez** (dá para colar na mesma conversa ou numa conversa nova): além da tarefa,
+  leva o **mapa da música** (as partes na ordem atual, com o tamanho, o tom e o pedido que criou cada uma), o **ponto de
+  ligação** (os dois últimos acordes da parte anterior e o primeiro da seguinte), o **tom da parte** e o aviso de que a
+  harmonia enviada é a versão atual e vale mais do que a memória da conversa.
+
   O pedido de uma parte leva só a **harmonia** da música (sem frases, levadas, baixo, bateria nem voz, que são do app), a
   melodia com as notas da parte marcadas (quando há) e a tarefa. A IA devolve **só os acordes novos**, por link
   (`#cont=B&ret=1&p=...`: `ret` = quantos acordes do fim da parte anterior foram reescritos) ou em JSON
@@ -409,9 +433,8 @@ Outras coisas na tela:
 | **Strum** | Em vez de todas as notas juntas, cada nota entra uma após a outra: **grave → agudo** ou **agudo → grave**, com **10, 20 ou 30 ms** (ou outro valor, de 1 a 250) entre elas. A 1ª nota entra no tempo e o acorde termina no mesmo instante, então nada se desloca. Fica **desligado** por padrão: assim o MIDI sai exatamente como digitado. Vale para o projeto todo, e cada acorde pode trocar em **Mais → Strum deste acorde**. A pré‑escuta (**▶**) usa os mesmos atrasos. |
 | **Mais: baixo/pedal, notas sem mão** | Notas extras que soam junto (ex.: pedal de `E1` sob o acorde, ou notas sem mão definida). |
 | **Notas omitidas / comentário** | Só anotação (não vão para o MIDI). |
-| **+ Pausa** | Compasso de silêncio (útil para comparar ideias). |
-| **Duplicar / mover / remover** | Remover e trocar de projeto têm **Desfazer**. |
-| **Menu ⋯** | Abrir/salvar projeto `.json`, **colar JSON** (ex.: resposta do ChatGPT), exemplo, projeto novo. |
+| **Estrutura fixa** | Os acordes não mudam de lugar nem de duração (a melodia depende deles). A estrutura muda pelas partes: criar, ajustar, repetir, mover ou apagar um bloco. Trocar de projeto tem **Desfazer**. |
+| **Menu ⋯** | Abrir/salvar projeto `.json`, **colar JSON** (ex.: resposta do ChatGPT), exemplo, **Começar outra música**. |
 
 O trabalho fica salvo automaticamente no aparelho (rascunho); para guardar de verdade ou levar para outro aparelho,
 use **Salvar projeto**.

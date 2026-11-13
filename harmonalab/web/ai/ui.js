@@ -26,7 +26,7 @@ const loadResearch = () => { try { return localStorage.getItem(RESEARCH_KEY) ===
 const saveResearch = (on) => { try { localStorage.setItem(RESEARCH_KEY, on ? "1" : "0"); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
-  const { $, h, icon, toast, getProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation } = api;
+  const { $, h, icon, toast, getProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, setPartShift, describeNewSection, hasProgression, applyGenerated, applyContinuation } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
     mic: $("#ai-mic"), parts: $("#ai-parts"), partsList: $("#ai-parts-list"), task: $("#ai-task"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
@@ -34,6 +34,7 @@ export function initAssistant(api) {
     research: $("#ai-research"),
   };
   const basePlaceholder = els.prompt.placeholder;
+  let chips = ""; // as partes que estão desenhadas nos botões do assistente
   let shown = ""; // a parte cujo pedido está na caixa (para não trocar o texto enquanto a pessoa escreve)
   let asked = -1; // a parte para a qual o último pedido foi copiado (a resposta entra nela)
   let chatRequest = ""; // o pedido que foi copiado (vai para as notas do projeto)
@@ -52,6 +53,16 @@ export function initAssistant(api) {
   $("#ai-chat-links").replaceChildren(...CHATS.map((c) => h("a", { class: "btn secondary small", href: c.url, target: "_blank", rel: "noopener noreferrer" }, c.name)));
   els.generate.addEventListener("click", copyForChat);
   $("#ai-load-answer").addEventListener("click", loadAnswer);
+  // o tom da parte: a pessoa digita só o número; o nome do tom é o app que escreve
+  const shiftInput = $("#ai-shift");
+  const autoKey = $("#ai-key-auto");
+  shiftInput.addEventListener("change", () => {
+    const t = getTarget();
+    if (!t) return;
+    setPartShift(t.index, shiftInput.value);
+    shiftInput.value = String(getTarget()?.shift ?? 0); // o campo mostra o que ficou valendo (a parte A, transposta, volta a 0: ela é o tom da música)
+  });
+  autoKey.addEventListener("change", () => { const t = getTarget(); if (t) setPartShift(t.index, autoKey.checked ? "ia" : shiftInput.value); });
 
   const bars = (t) => { const n = t.toBar - t.fromBar + 1; return `${n} compasso${n === 1 ? "" : "s"}`; };
   /** O que o assistente vai fazer na parte escolhida, em uma frase. */
@@ -70,14 +81,32 @@ export function initAssistant(api) {
     if (fresh && t?.example) els.task.textContent = "O que está na tela é um exemplo. O seu pedido cria a sua música no lugar dele.";
     els.examples.hidden = !fresh;
     if (!fresh) {
-      els.partsList.replaceChildren(
-        ...parts.map((p) => h("button", {
-          type: "button", class: "ai-part", style: `--hue:${p.hue}`, "aria-pressed": String(p.index === t.index),
-          "aria-label": `Parte ${p.name}${p.empty ? ", sem harmonia" : ""}`, onclick: () => selectPart(p.index),
-        }, h("strong", null, p.name), p.empty ? h("small", null, "vazia") : null)),
-        h("button", { type: "button", class: "ai-part add", "aria-label": "Criar uma parte nova pelo pedido", onclick: () => describeNewSection() }, h("strong", null, "+"), h("small", null, "nova")),
-      );
+      // os botões das partes só são refeitos quando as partes mudam: refazer no meio de um toque perderia o toque
+      const signature = parts.map((p) => `${p.name}:${p.empty ? 0 : 1}:${p.hue}`).join("|");
+      if (signature !== chips) {
+        chips = signature;
+        els.partsList.replaceChildren(
+          ...parts.map((p) => h("button", {
+            type: "button", class: "ai-part", style: `--hue:${p.hue}`, dataset: { index: p.index },
+            "aria-label": `Parte ${p.name}${p.empty ? ", sem harmonia" : ""}`, onclick: () => selectPart(p.index),
+          }, h("strong", null, p.name), p.empty ? h("small", null, "vazia") : null)),
+          h("button", { type: "button", class: "ai-part add", "aria-label": "Criar uma parte nova pelo pedido", onclick: () => describeNewSection() }, h("strong", null, "+"), h("small", null, "nova")),
+        );
+      }
+      els.partsList.querySelectorAll(".ai-part[data-index]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.index) === t.index)));
       els.task.textContent = taskText(t);
+    }
+    // o tom: aparece quando a música tem tom; numa parte pronta, mudar o número transpõe a parte na hora
+    const keyed = !fresh && Boolean(t.songKey);
+    $("#ai-key").hidden = !keyed;
+    if (keyed) {
+      const free = t.kind === "create" && !t.melody; // só parte criada pelo pedido pode deixar o tom com a IA
+      $("#ai-key-auto-box").hidden = !free;
+      autoKey.checked = free && t.auto;
+      shiftInput.disabled = free && t.auto;
+      if (document.activeElement !== shiftInput) shiftInput.value = String(t.shift);
+      $("#ai-key-text").textContent = free && t.auto ? `Tom da parte ${t.name}: a IA decide (a música está em ${t.songKey.long}).`
+        : `Tom da parte ${t.name}: ${t.keyText}.${t.kind === "adjust" ? " Mudar o número transpõe a parte (acordes e melodia)." : ""}`;
     }
     // o texto da caixa só troca quando a parte muda
     const key = fresh ? "new" : `${t.index}:${t.name}`;
@@ -111,6 +140,7 @@ export function initAssistant(api) {
   async function copyForChat() {
     const request = els.prompt.value.trim();
     const t = getTarget();
+    const parts = getParts();
     const part = t && t.kind !== "new" ? t : null;
     if (!request && (!part || part.kind === "adjust")) {
       setStatus("error", part ? `Escreva o que você quer mudar na parte ${part.name}.` : "Escreva ou dite o que você quer, por exemplo: “6 acordes, 72 BPM, estilo Jesús Molina”.");
@@ -122,6 +152,10 @@ export function initAssistant(api) {
     const continuation = part ? {
       kind: part.kind, section: part.name, previous: part.kind === "create" ? part.previous : null, fromBar: part.fromBar, toBar: part.toBar,
       beats: part.beats, fixed: part.fixed, hasNext: part.hasNext,
+      // o contexto, sempre da música como está agora (ordem atual dos blocos)
+      songKey: part.songKey?.long ?? "", key: part.auto ? null : part.key?.long ?? "", shift: part.shift, auto: part.auto,
+      map: parts.map((x) => ({ name: x.name, bars: x.toBar - x.fromBar + 1, key: x.empty && x.auto ? "" : x.key?.long ?? "", empty: x.empty, melody: x.melody, request: x.index === part.index ? "" : x.request })),
+      link: { before: parts[part.index - 1]?.lastSymbols ?? [], beforeName: parts[part.index - 1]?.name ?? "", after: parts[part.index + 1]?.firstSymbol ?? "", afterName: parts[part.index + 1]?.name ?? "" },
     } : null;
     const text = buildChatPrompt({
       request, mode: part ? "continue" : "new", currentProject: part ? getProjectJson() : null,
@@ -148,11 +182,11 @@ export function initAssistant(api) {
   }
 
   function showResult(title, explanation, warnings) {
-    els.result.replaceChildren(
+    els.result.replaceChildren(...[
       h("p", { class: "ai-result-title" }, icon("check"), `Pronta: ${title}`),
       ...(explanation || "").split(/\n{2,}/).filter(Boolean).map((p) => h("p", { class: "ai-explanation" }, p)),
       warnings.length ? h("ul", { class: "issues" }, ...warnings.map((w) => h("li", { class: "issue warning" }, icon("warning"), h("span", null, w)))) : null,
-    );
+    ].filter(Boolean));
     els.result.hidden = false;
   }
 

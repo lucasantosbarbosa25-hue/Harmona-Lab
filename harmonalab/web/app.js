@@ -6,6 +6,8 @@ import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
+import { estimateKey } from "./engine/canto.js";
+import { addPitchWeights, bestShift, describeShift, makeKey, parseKey, readShift, shiftKey, transposeChord, transposeNotes, wrapShift } from "./tom.js";
 import {
   appendSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
   sectionBlocks, splitSection, voiceNotes, voiceTextOf,
@@ -152,7 +154,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", request: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", request: "", shift: 0, ...extra,
   };
 }
 
@@ -198,6 +200,7 @@ function toEditable(data) {
       comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
       section: text(c.section).trim(),
       request: text(c.request),
+      shift: c.shift === "ia" ? "ia" : readShift(c.shift), // a modulação da parte, em semitons a partir do tom da música ("ia": a IA decide)
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -229,8 +232,8 @@ function toEditable(data) {
 function toPayload(project = state.project, { draft = false } = {}) {
   const { chords, example, ...rest } = project;
   if (draft && example) rest.example = true;
-  // "request" (o pedido de cada parte) é só do app: fica no rascunho, não vai para o JSON nem para a análise
-  return { ...rest, chords: chords.map(({ id, request, ...chord }) => (draft && request ? { ...chord, request } : chord)) };
+  // "request" (o pedido de cada parte) e "shift" (a modulação dela) são só do app: fica no rascunho, não vai para o JSON nem para a análise
+  return { ...rest, chords: chords.map(({ id, request, shift, ...chord }) => (draft ? { ...chord, ...(request ? { request } : {}), ...(shift ? { shift } : {}) } : chord)) };
 }
 
 // ---------------------------------------------------------------- análise (motor local)
@@ -464,27 +467,18 @@ function chordCard(chord, index, total) {
       VOICINGS.map((v) => h("button", { type: "button", onclick: () => revoiceChords({ kind: v.id }, chord) }, v.label))));
 
   // Duração
-  r.segments = [0.5, 1, 2].map((factor) => h("button", {
-    type: "button", "aria-pressed": "false",
-    onclick: () => {
-      chord.duration_beats = beatsPerBar() * factor;
-      r.beats.value = chord.duration_beats;
-      updateDuration(chord);
-      scheduleValidate();
-    },
-  }, factor === 0.5 ? "½ comp." : `${factor} comp.`));
-  r.segments.forEach((b, i) => { b.dataset.factor = [0.5, 1, 2][i]; });
+// a duração é fixa: a melodia e as partes dependem dela (para outro tamanho, crie ou ajuste a parte pelo pedido)
+  r.segments = [];
   r.beats = h("input", {
-    type: "number", class: "beats-input", inputmode: "decimal", min: "0", step: "any",
-    value: chord.duration_beats, "aria-label": "Duração em tempos de semínima", title: "Tempos de semínima",
-    oninput: (e) => { chord.duration_beats = e.target.value; updateDuration(chord); scheduleValidate(); },
+    type: "number", class: "beats-input", value: chord.duration_beats, readonly: "", tabindex: "-1",
+    "aria-label": "Duração em tempos de semínima (fixa)", title: "A duração é fixa",
   });
   r.inputs.duration_beats = r.beats;
   r.durHint = h("span", { class: "unit-hint" });
   r.msgs.duration_beats = h("span", { class: "field-msg" });
   const duration = h("div", { class: "field duration" },
-    h("span", { class: "label" }, "Duração"),
-    h("div", { class: "duration-row" }, h("div", { class: "segmented", role: "group", "aria-label": "Duração em compassos" }, r.segments), r.beats),
+    h("span", { class: "label" }, "Duração (fixa)"),
+    h("div", { class: "duration-row" }, r.beats),
     r.durHint, r.msgs.duration_beats);
 
   // Velocity
@@ -566,15 +560,10 @@ function chordCard(chord, index, total) {
   r.issues = h("ul", { class: "issues" });
 
   const actions = h("div", { class: "chord-actions" },
-    h("button", { type: "button", class: "btn ghost small icon-only", "aria-label": `Mover acorde ${n} para cima`, title: "Mover para cima", disabled: index === 0, onclick: () => moveChord(chord, -1) }, icon("up")),
-    h("button", { type: "button", class: "btn ghost small icon-only", "aria-label": `Mover acorde ${n} para baixo`, title: "Mover para baixo", disabled: index === total - 1, onclick: () => moveChord(chord, 1) }, icon("down")),
-    h("span", { class: "spacer" }),
     index > 0 && !String(chord.section || "").trim() ? h("button", {
       type: "button", class: "btn ghost small", title: "Começar uma parte nova da música neste acorde",
       onclick: () => { const next = splitSection(state.project.chords, state.project.chords.indexOf(chord)); changeSections(next && { chords: next }, "Parte nova começando neste acorde."); },
     }, "Nova parte aqui") : null,
-    h("button", { type: "button", class: "btn ghost small", onclick: () => duplicateChord(chord) }, icon("copy"), "Duplicar"),
-    h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
   );
 
   // O cartão vem recolhido (nome, função, teclado e frase); "Editar" abre as notas, o voicing e o resto.
@@ -639,7 +628,7 @@ function updateDuration(chord) {
   const bpb = beatsPerBar();
   r.segments.forEach((b) => b.setAttribute("aria-pressed", String(Math.abs(beats - bpb * Number(b.dataset.factor)) < 1e-9)));
   const bars = barsText(beats);
-  r.durHint.textContent = bars ? `em tempos de semínima · = ${bars}` : "em tempos de semínima";
+  r.durHint.textContent = `${bars ? `tempos de semínima · = ${bars}` : "tempos de semínima"} · a melodia depende dela`;
 }
 
 function updateLock(chord) {
@@ -2142,13 +2131,9 @@ function newProject() {
 // ---------------------------------------------------------------- início
 function bindUi() {
   $("#menu-button").append(icon("dots"));
-  $("#add-chord").append(icon("plus"), "Acorde");
-  $("#add-rest").append(icon("plus"), "Pausa");
   renderPlayButton();
   document.querySelectorAll(".menu-item[data-icon]").forEach((b) => b.prepend(icon(b.dataset.icon)));
 
-  $("#add-chord").addEventListener("click", () => addChord());
-  $("#add-rest").addEventListener("click", () => addChord({ symbol: "Pausa" }));
   $("#play-all").addEventListener("click", () => { if (!state.playing) state.listen.range = null; playAll(); });
   $("#voicing-all").replaceChildren(...VOICINGS.map((v) => h("button", { type: "button", onclick: () => revoiceChords({ kind: v.id }) }, v.label)));
   $("#pedal-apply").addEventListener("click", () => {
@@ -2225,6 +2210,7 @@ function bindUi() {
       // dá para acrescentar uma parte quando já existe música (acordes de verdade ou uma Voz)
       canAppend: hasProgression() || Boolean(String(state.project.voice || "").trim()),
       hasVoice: Boolean(String(state.project.voice || "").trim()), nextSection: nextSectionName(state.project.chords),
+      song: songKey(), overPart: singOverPart(),
       voiceText: state.project.voice || "", totalBeats: state.project.chords.reduce((n, c) => n + (toNumber(c.duration_beats) || 0), 0),
     }),
     onUse: useVoice,
@@ -2241,16 +2227,28 @@ function bindUi() {
  * O fim da música (os últimos `bars` compassos: acordes, baixo e Voz, sem bateria) como notas em segundos, no andamento
  * do canto, para tocar na contagem antes de a pessoa cantar a parte seguinte. O tempo 0 é o primeiro clique da contagem.
  */
-function prerollNotes({ bpm, bars }) {
+/** A parte em que dá para cantar por cima da harmonia: tem acordes e ainda não tem melodia (a do assistente, se servir). */
+function singOverPart() {
+  const fits = (part) => part && !part.empty && !part.melody && part.kind !== "new";
+  const parts = getParts();
+  const part = fits(parts[assistTarget]) ? parts[assistTarget] : parts.find(fits);
+  return part ? { index: part.index, name: part.name, beats: part.beats, startBeat: part.startBeat, bars: part.toBar - part.fromBar + 1, key: part.key } : null;
+}
+
+function prerollNotes({ bpm, bars, part = null }) {
   try {
     const { project } = readProject(toPayload());
     const { notes, end } = noteEvents(project, { phraseMode: "chords", drums: false });
-    const span = Math.min(end, Math.round(bars * beatsPerBar() * TICKS_PER_BEAT));
-    const from = end - span;
+    // parte nova: toca o fim da música na contagem. Por cima de uma parte: o trecho antes dela na contagem e depois ela inteira.
+    const anchor = part ? Math.round(part.startBeat * TICKS_PER_BEAT) : end; // onde o canto começa
+    const until = part ? Math.round((part.startBeat + part.beats) * TICKS_PER_BEAT) : end;
+    const count = Math.round(bars * beatsPerBar() * TICKS_PER_BEAT);
+    const span = Math.min(anchor, count);
+    const from = anchor - span;
     const seconds = 60 / bpm / TICKS_PER_BEAT;
-    const lead = (bars * beatsPerBar() * TICKS_PER_BEAT - span) * seconds; // música mais curta que a contagem: entra depois
-    return notes.filter((n) => n.end > from && !n.pad)
-      .map((n) => ({ midi: n.pitch, start: lead + (Math.max(n.start, from) - from) * seconds, length: (n.end - Math.max(n.start, from)) * seconds, velocity: n.velocity }));
+    const lead = (count - span) * seconds; // música mais curta que a contagem: entra depois
+    return notes.filter((n) => n.end > from && n.start < until && !n.pad)
+      .map((n) => ({ midi: n.pitch, start: lead + (Math.max(n.start, from) - from) * seconds, length: (Math.min(n.end, until) - Math.max(n.start, from)) * seconds, velocity: n.velocity }));
   } catch {
     return []; // projeto com erro: só a contagem
   }
@@ -2261,7 +2259,7 @@ function prerollNotes({ bpm, bars }) {
  * dela, e compassos vazios no fim se não couber. target "nova": vira uma parte nova, no fim (o BPM e o compasso do projeto
  * não mudam; a anacruse entra por cima do fim da parte anterior).
  */
-function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [], pickup = 0, spell = null }) {
+function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [], pickup = 0, spell = null, part = -1, keyShift = 0 }) {
   const undo = snapshot();
   stopPlayback();
   const p = state.project;
@@ -2276,6 +2274,26 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     toast("Melodia atualizada.", { action: { label: "Desfazer", run: undo } });
     return;
   }
+  if (target === "parte") {
+    // cantada por cima da harmonia de uma parte: as notas entram no lugar dela, e o resto da melodia fica
+    const block = sectionBlocks(p.chords)[part];
+    const old = voiceNotes(p.voice, p.middle_c);
+    if (!block || old === null) { toast("Não deu para pôr a melodia na parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }
+    const from = Math.round(block.startBeat * TICKS_PER_BEAT);
+    const to = Math.round((block.startBeat + block.beats) * TICKS_PER_BEAT);
+    const fresh = events.filter((e) => e.beat < block.beats - 1e-9).map((e) => {
+      const start = from + Math.round(e.beat * TICKS_PER_BEAT);
+      return { name: spell(e.midi), start, length: Math.min(Math.round(e.beats * TICKS_PER_BEAT), to - start) };
+    }).filter((n) => n.length > 0);
+    p.voice = voiceTextOf([...old.filter((n) => n.start < from || n.start >= to).map((n) => (n.start < from ? { ...n, length: Math.min(n.length, from - n.start) } : n)), ...fresh]);
+    refreshSecondVoice();
+    formSelected = part;
+    renderAll();
+    validateNow();
+    saveDraftSoon();
+    toast(`Melodia na parte ${block.name}: ${fresh.length} nota${fresh.length === 1 ? "" : "s"}. A harmonia não mudou.`, { action: { label: "Desfazer", run: undo }, timeout: 7000 });
+    return;
+  }
   if (target === "nova") {
     const result = appendSection(p, { events, pickup, beatsPerBar: beatsPerBar(), spell, blankChord });
     if (!result) { toast("Não deu para acrescentar a parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }
@@ -2283,6 +2301,7 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     p.voice = result.voice;
     refreshSecondVoice();
     formSelected = sectionBlocks(p.chords).length - 1;
+    p.chords[sectionBlocks(p.chords).at(-1).from].shift = readShift(keyShift); // o tom em que a parte foi cantada
     renderAll();
     validateNow();
     saveDraftSoon();
@@ -2358,11 +2377,16 @@ function getParts() {
   const bpb = beatsPerBar();
   const notes = voiceNotes(state.project.voice, state.project.middle_c) || [];
   const harmony = hasProgression();
+  const song = songKey();
   return blocks.map((b, index) => {
     const empty = chords.slice(b.from, b.to).every((c) => report?.chords?.[chords.indexOf(c)]?.is_rest ?? true);
     const from = Math.round(b.startBeat * TICKS_PER_BEAT);
     const to = Math.round((b.startBeat + b.beats) * TICKS_PER_BEAT);
     const melody = notes.some((n) => n.start >= from && n.start < to);
+    const first = chords[b.from] || {};
+    const auto = first.shift === "ia";
+    const shift = auto ? 0 : readShift(first.shift);
+    const names = chords.slice(b.from, b.to).filter((c) => !(report?.chords?.[chords.indexOf(c)]?.is_rest ?? true)).map((c) => String(c.symbol || "").trim()).filter(Boolean);
     // "new": a música ainda não tem harmonia nenhuma e só tem uma parte (ou é o exemplo): o pedido cria a música inteira
     const kind = state.project.example || (empty && !harmony && blocks.length === 1) ? "new" : empty ? "create" : "adjust";
     return {
@@ -2372,6 +2396,10 @@ function getParts() {
       // o tamanho é livre só numa parte vazia e sem melodia (criada pelo pedido); com melodia ou com acordes, é fixo
       fixed: !(empty && !melody),
       request: String(chords[b.from]?.request || ""),
+      startBeat: b.startBeat,
+      // o tom: o da música mais a modulação da parte (auto: a IA decide; só em parte criada pelo pedido)
+      shift, auto: auto && empty && !melody, key: song ? shiftKey(song, shift) : null, keyText: song ? describeShift(song, shift) : "", songKey: song,
+      firstSymbol: names[0] || "", lastSymbols: names.slice(-2),
     };
   });
 }
@@ -2392,6 +2420,79 @@ function selectPart(index, { focus = false } = {}) {
     $("#assistant").scrollIntoView({ behavior: "smooth", block: "start" });
     $("#ai-prompt").focus({ preventScroll: true });
   }
+}
+
+/** O tom da música: o que está escrito no projeto; sem ele, o das notas da parte A (acordes e melodia). */
+function songKey() {
+  const p = state.project;
+  const typed = parseKey(p.key);
+  if (typed) return typed;
+  const block = sectionBlocks(p.chords)[0];
+  if (!block) return null;
+  const weights = new Array(12).fill(0);
+  for (const c of p.chords.slice(block.from, block.to)) {
+    for (const field of ["bass", "left_hand", "right_hand", "notes"]) addPitchWeights(weights, c[field], toNumber(c.duration_beats) || 1);
+  }
+  const until = Math.round(block.beats * TICKS_PER_BEAT);
+  for (const n of voiceNotes(p.voice, p.middle_c) || []) if (n.start < until) addPitchWeights(weights, n.name, n.length / TICKS_PER_BEAT);
+  if (!weights.some((w) => w > 0)) return null;
+  const guess = estimateKey(weights.map((w, pc) => ({ midi: 60 + pc, start: 0, end: w })).filter((n) => n.end > 0));
+  return makeKey(guess.tonic, guess.mode);
+}
+
+/**
+ * A modulação de uma parte (semitons a partir do tom da música, ou "ia": a IA decide). Numa parte vazia, só fica guardada
+ * (vai para o pedido e para o canto). Numa parte que já tem harmonia, o app transpõe na hora os acordes e a melodia dela.
+ */
+function setPartShift(index, value) {
+  const part = getParts()[index];
+  if (!part) return;
+  const chord = state.project.chords[part.from];
+  if (value === "ia" || part.empty) {
+    chord.shift = value === "ia" ? "ia" : readShift(value);
+    saveDraftSoon();
+    assistant?.refresh();
+    return;
+  }
+  const delta = readShift(value) - part.shift;
+  if (delta) transposePart(index, delta);
+  else assistant?.refresh();
+}
+
+/** Transpõe uma parte pronta `delta` semitons: os acordes (com frases, baixo e riff) e a melodia que está em cima dela. */
+function transposePart(index, delta) {
+  const parts = getParts();
+  const part = parts[index];
+  if (!part || !delta) return;
+  const undo = snapshot();
+  stopPlayback();
+  const p = state.project;
+  const song = part.songKey;
+  const target = song ? shiftKey(song, part.shift + delta) : null;
+  const flats = target?.flats ?? false;
+  p.chords = p.chords.map((c, i) => (i >= part.from && i < part.to ? transposeChord(c, delta, flats) : c));
+  const notes = voiceNotes(p.voice, p.middle_c);
+  if (notes?.length) {
+    const from = Math.round(part.startBeat * TICKS_PER_BEAT);
+    const to = part.hasNext ? Math.round((part.startBeat + part.beats) * TICKS_PER_BEAT) : Infinity;
+    p.voice = voiceTextOf(notes.map((n) => (n.start >= from && n.start < to ? { ...n, name: transposeNotes(n.name, delta, flats) } : n)));
+  }
+  if (index === 0 && song) {
+    // a parte A dá o tom da música: ele muda, e as outras partes ficam onde estavam (a distância delas é que muda)
+    p.key = target.name;
+    for (const other of parts) if (other.index > 0 && p.chords[other.from].shift !== "ia") p.chords[other.from].shift = wrapShift(other.shift - delta);
+    p.chords[part.from].shift = 0;
+  } else {
+    p.chords[part.from].shift = wrapShift(part.shift + delta);
+  }
+  p.example = false;
+  refreshSecondVoice();
+  renderAll();
+  validateNow();
+  saveDraftSoon();
+  const n = Math.abs(delta);
+  toast(`Parte ${part.name} transposta ${n} semitom${n > 1 ? "s" : ""} ${delta > 0 ? "acima" : "abaixo"}${song ? `: agora em ${target.long}` : ""} (acordes e melodia).`.replace("semitoms", "semitons"),
+    { action: { label: "Desfazer", run: undo }, timeout: 8000 });
 }
 
 /** O pedido de cada parte fica guardado no primeiro acorde dela (campo "request", só do app). */
@@ -2445,9 +2546,15 @@ function applyContinuation(data, { explanation = "", request = "", index: asked 
   const undo = snapshot();
   stopPlayback();
   // as marcas das partes ficam onde estavam: a do começo da parte anterior (se o 1º acorde dela foi reescrito) e a desta
-  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; c.request = i === 0 ? String(replaced[0]?.request || "") : ""; });
+  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; c.request = i === 0 ? String(replaced[0]?.request || "") : ""; c.shift = i === 0 ? replaced[0]?.shift ?? 0 : 0; });
   fresh.forEach((c, i) => { c.section = i === 0 ? target.name : ""; });
   fresh[0].request = request || target.request;
+  // o tom da parte continua guardado nela; se a IA decidiu, o app descobre qual foi pelas notas
+  if (target.auto && target.songKey) {
+    const weights = new Array(12).fill(0);
+    for (const c of fresh) for (const field of ["bass", "left_hand", "right_hand", "notes"]) addPitchWeights(weights, c[field], toNumber(c.duration_beats) || 1);
+    fresh[0].shift = wrapShift(bestShift(target.songKey, weights));
+  } else fresh[0].shift = target.auto ? 0 : target.shift;
   const start = target.from - count;
   const after = p.chords.slice(target.to);
   // parte criada só pelo pedido: se o tamanho mudou, a melodia das partes seguintes se desloca junto
@@ -2541,7 +2648,7 @@ async function init() {
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, setPartShift, describeNewSection, hasProgression, applyGenerated, applyContinuation,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);

@@ -517,7 +517,7 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
  * altura: ele soa entre dois semitons (CLICK_MIDI), onde nenhuma nota cantada afinada cai.
  * Devolve { events, text, key, tuning, leak, latency, shift, notes (brutas), warnings }.
  */
-export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, measureBeats = countInBeats, pickupBeats = Infinity, music = false, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true } = {}) {
+export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, measureBeats = countInBeats, pickupBeats = Infinity, music = false, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true, key: forcedKey = null } = {}) {
   const warnings = [];
   // measureBeats: os cliques da contagem em que ninguém canta (com anacruse, só o primeiro compasso), usados para medir o atraso
   const countIn = clickTimes.slice(0, Math.min(measureBeats, countInBeats));
@@ -548,7 +548,8 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   }
   const tuning = estimateTuning(notes);
   const offsets = trackTuning(notes);
-  const key = estimateKey(notes.map((n, i) => ({ ...n, midi: n.midi - offsets[i] })));
+  // o tom: o que o app mandar (o tom da parte); sem ele, o provável pelas notas cantadas
+  const key = forcedKey ?? estimateKey(notes.map((n, i) => ({ ...n, midi: n.midi - offsets[i] })));
   let adjusted = 0;
   notes.forEach((n, i) => {
     n.note = snapPitch(n.midi, offsets[i], key.scale, { diatonic });

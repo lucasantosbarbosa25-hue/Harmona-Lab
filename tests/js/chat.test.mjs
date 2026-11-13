@@ -132,3 +132,36 @@ test("pedido por parte: ajustar mantém o tamanho; parte criada por texto tem ta
   const empty = buildChatPrompt({ request: "", mode: "continue", currentProject: project, continuation: { kind: "create", section: "B", previous: "A", fromBar: 2, toBar: 5, beats: 16, fixed: false, hasNext: false }, appUrl: "https://x.test/" });
   assert.match(empty, /Crie a parte nova da música\./);
 });
+
+test("pedido por parte: mapa da música, ponto de ligação, tom e a frase de autoridade", () => {
+  const project = { title: "T", tempo: 90, time_signature: "4/4", chords: [
+    { symbol: "Am7", duration_beats: 4, left_hand: ["A2"], right_hand: ["C4", "E4"], section: "A" },
+    { symbol: "E7", duration_beats: 4, left_hand: ["E2"], right_hand: ["D4", "G#4"] },
+    { symbol: "", duration_beats: 16, section: "B" },
+    { symbol: "Fmaj7", duration_beats: 4, left_hand: ["F2"], right_hand: ["A3", "E4"], section: "C" },
+  ] };
+  const continuation = {
+    kind: "create", section: "B", previous: "A", fromBar: 3, toBar: 6, beats: 16, fixed: false, hasNext: true,
+    songKey: "Lá menor", key: "Si menor", shift: 2, auto: false,
+    map: [
+      { name: "A", bars: 2, key: "Lá menor", empty: false, melody: true, request: "balada   triste\nem lá menor" },
+      { name: "B", bars: 4, key: "Si menor", empty: true, melody: false, request: "" },
+      { name: "C", bars: 1, key: "Lá menor", empty: false, melody: false, request: "" },
+    ],
+    link: { before: ["Am7", "E7"], beforeName: "A", after: "Fmaj7", afterName: "C" },
+  };
+  const text = buildChatPrompt({ request: "refrão", mode: "continue", currentProject: project, continuation, appUrl: "https://x.test/" });
+  assert.match(text, /MAPA DA MÚSICA \(as partes na ordem atual; tom da música: Lá menor\):/);
+  assert.match(text, /- Parte "A": 2 compassos, Lá menor, harmonia pronta\. Pedido que a criou: "balada triste em lá menor"\./);
+  assert.match(text, /- Parte "B": Si menor, É A PARTE DESTE PEDIDO \(criar; o tamanho é você quem decide\)\./);
+  assert.match(text, /PONTO DE LIGAÇÃO: a parte "A" termina em Am7 \| E7, e a parte "B" começa logo depois; depois da parte "B" vem a parte "C", que começa em Fmaj7\./);
+  assert.match(text, /TOM DA PARTE "B": Si menor \(2 semitons acima do tom da música, Lá menor\)\. Use predominantemente a escala desse tom/);
+  assert.match(text, /Prepare a modulação nos últimos acordes da parte "A"/);
+  assert.match(text, /vale mais do que qualquer coisa dita antes nesta conversa/);
+  assert.ok(text.indexOf("MAPA DA MÚSICA") < text.indexOf("HARMONIA ATUAL"), "o mapa vem antes do JSON");
+  const auto = buildChatPrompt({ request: "", mode: "continue", currentProject: project, continuation: { ...continuation, key: null, shift: 0, auto: true }, appUrl: "https://x.test/" });
+  assert.match(auto, /TOM DA PARTE "B": você decide/);
+  const same = buildChatPrompt({ request: "x", mode: "continue", currentProject: project, continuation: { ...continuation, kind: "adjust", fixed: true, key: "Lá menor", shift: 0 }, appUrl: "https://x.test/" });
+  assert.match(same, /TOM DA PARTE "B": Lá menor \(o tom da música\)/);
+  assert.doesNotMatch(same, /Prepare a modulação/);
+});
