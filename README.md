@@ -232,6 +232,25 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   voltam para a chegada (13% das corridas cobrem duas oitavas; nos solos reais, 5%). Tudo entre o Lá 3 e o Sol 6. Contido
   e Equilibrado não mudaram (conferido contra a versão anterior em todos os estilos e andamentos).
 
+  **Riff / ostinato (em todos os estilos).** Uma camada nova, escrita pelo app como as frases (`web/engine/riff.js`): um
+  motivo curto que se repete em todos os acordes e acompanha cada um. Ele nasce de três sorteios dentro de uma **família**:
+  o ritmo (uma célula de um compasso), o desenho (sobe, desce, vai e volta, quebrado, pedal, motivo melódico) e o material
+  (o arpejo do acorde, a escala dele, power chords, oitavas, ataques do acorde, notas-guia). O motivo é sorteado uma vez por
+  música e reaplicado em cada acorde; a cada 4 compassos o fim varia; "Outro riff" sorteia outro. Tudo diatônico: só notas
+  do acorde e da escala dele. Famílias: Dedilhado, Guitarra com delay (colcheia pontuada), Power chords, Pedal abafado com
+  acentos, Galope, Oitavas, Arpejador de synth, Ataques sincopados, Ostinato melódico, Notas-guia e Montuno; cada estilo
+  oferece as dele (campo `riffs` em `kb/estilos.js`, que pode trocar ritmos e som). O riff fica no campo `riff` de cada
+  acorde (notação da frase, com notas juntas: `E2&B2&E3/8`), sai no MIDI na faixa **"Riff"** (canal 7), tem som próprio
+  (automático pelo tipo: guitarra distorcida, limpa, abafada, piano, synth, metais) e entra no mixer e na lista de partes.
+
+  **Worship, Balada, Metal, Disco / pop e Rock refeito.** Cinco estilos com levadas, baterias (aro e crescendo no worship,
+  bumbo duplo, galope e thrash no metal, quatro no chão no disco), baixos, viradas e riffs próprios. O fraseado deles **não
+  usa o Weimar**: há dois perfis novos em `kb/fraseado.js`, "Rock e metal (guitarra)" (chegada na fundamental, na quinta
+  e na terça; pentatônica; blue notes só no rock) e "Pop, worship e balada" (terça, quinta, fundamental, com nona e quarta
+  como cor). Sem cromatismo nem outside por padrão; no rock, no metal e no worship as frases usam **sequências** (grupos de
+  3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
+  diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e
@@ -476,6 +495,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].comment` | não (a IA sempre preenche) | A frase de função do acorde: o que ele faz ali e por quê. Aparece sob o nome do acorde. |
 | `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto, `+` ligadura, como em `8+4`); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. Dueto: duas notas ligadas por `&` soam juntas (`C5&A4/8`). |
 | `chords[].phrase_scale` | não (a IA sempre preenche) | Notas da escala do acorde, sem oitava (`"B C D Eb F G A"`): o app escreve e confere as frases com ela, e avisa se ela não contém as notas do acorde. |
+| `chords[].riff` | não | O **riff** ou ostinato do acorde, na notação da frase, com notas juntas ligadas por `&` (ex.: `"E2&B2/8 E2/8 G3/4"`). Não pode durar mais que o acorde. Sai no MIDI na faixa "Riff" (canal 7). O app o escreve sozinho. |
 | `chords[].section` | não | Começa aqui uma **parte** da música com este nome (`"A"`, `"B"`, `"Refrão"`); vale até a próxima marca. Só o primeiro acorde de cada parte leva. |
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |

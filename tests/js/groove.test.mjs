@@ -723,7 +723,7 @@ test("perfil weimar: nos dominantes alterados o solo repousa nas tensões caract
 
 test("rollback: o perfil anterior guarda os pesos de antes do Weimar, e o perfil ativo é um dos dois", () => {
   assert.ok(["anterior", "weimar"].includes(PERFIL_ATIVO));
-  assert.deepEqual(Object.keys(PERFIS).sort(), ["anterior", "lofi", "weimar"]);
+  assert.deepEqual(Object.keys(PERFIS).sort(), ["anterior", "lofi", "pop", "rock", "weimar"]);
   const a = PERFIS.anterior;
   assert.equal(a.tensoes.alterada, 1);
   assert.equal(a.repousoNaTensao, 1);
@@ -755,7 +755,8 @@ test("lo-fi: estilo calmo, com duetos, motivos rítmicos e bateria atrasada que 
     return { perSecond: notes / seconds, duets: duets / notes };
   };
   const calm = profile(lofi);
-  for (const other of STYLES.filter((s) => s.id !== "lofi")) assert.ok(calm.perSecond < profile(other).perSecond, `lo-fi mais calmo que ${other.id}`);
+  // (a balada também é calma de propósito: fica fora da comparação)
+  for (const other of STYLES.filter((s) => s.id !== "lofi" && !s.phrase.shift)) assert.ok(calm.perSecond < profile(other).perSecond, `lo-fi mais calmo que ${other.id}`);
   assert.ok(calm.duets >= 0.4, `duetos em ${(calm.duets * 100).toFixed(0)}% das notas`);
   // motivos rítmicos: o ritmo de um trecho volta logo em seguida (mais que na média dos outros estilos)
   const returns = (style) => {
@@ -796,7 +797,10 @@ test("lo-fi e o rollback do Weimar: o lo-fi tem perfil próprio e não muda com 
   assert.equal(perfilDoEstilo("lofi"), PERFIS.lofi);
   assert.equal(perfilDoEstilo("lofi", undefined), PERFIS.lofi);
   // os outros estilos seguem o perfil ativo (e podem ser forçados, para testes)
-  for (const style of STYLES.filter((s) => s.id !== "lofi")) {
+  // rock, metal, worship, balada e disco também têm perfil próprio (guitarra e pop): nada do Weimar entra neles
+  assert.deepEqual(PERFIL_POR_ESTILO, { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop" });
+  for (const [id, perfil] of Object.entries(PERFIL_POR_ESTILO)) assert.equal(perfilDoEstilo(id), PERFIS[perfil]);
+  for (const style of STYLES.filter((s) => !PERFIL_POR_ESTILO[s.id])) {
     assert.equal(perfilDoEstilo(style.id), PERFIS[PERFIL_ATIVO]);
     assert.equal(perfilDoEstilo(style.id, "anterior"), PERFIS.anterior);
   }

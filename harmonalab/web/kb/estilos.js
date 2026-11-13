@@ -57,6 +57,7 @@ const SWING_CELLS = [
 export const STYLES = [
   {
     id: "swing", label: "Jazz swing",
+    riffs: ["guia", "ostinato", "dedilhado"],
     influences: ["Charlie Parker", "Oscar Peterson", "Bill Evans", "Barry Harris", "Jesús Molina"],
     summary: "Colcheias balançadas (tercina), alvos nos tempos, aproximações cromáticas e envolventes do bebop.",
     comps: [
@@ -89,6 +90,7 @@ export const STYLES = [
   },
   {
     id: "blues", label: "Blues",
+    riffs: ["ostinato", "guia", "power"],
     influences: ["B.B. King", "Ray Charles", "Dr. John"],
     summary: "Shuffle em tercinas, pergunta e resposta, pentatônica com blue notes e frases curtas que respiram.",
     comps: [
@@ -121,6 +123,7 @@ export const STYLES = [
   },
   {
     id: "fusion", label: "Jazz fusion",
+    riffs: ["ostinato", "arpejador", "ataques"],
     influences: ["Scott Henderson", "Chick Corea", "Herbie Hancock", "Frank Zappa", "Jesús Molina"],
     summary: "Linhas rápidas de semicolcheias, grupos irregulares (3+3+2), quiálteras e cromatismo; aceita bem o outside.",
     comps: [
@@ -156,6 +159,7 @@ export const STYLES = [
   },
   {
     id: "neosoul", label: "Neo-soul",
+    riffs: ["dedilhado", "ostinato", "ataques"],
     influences: ["Robert Glasper", "D'Angelo", "Domi & JD Beck", "Ed Motta", "Joshua Domfeh"],
     summary: "Pouca nota e muito espaço: semicolcheias sincopadas, entradas depois do tempo e notas longas.",
     comps: [
@@ -188,6 +192,7 @@ export const STYLES = [
   },
   {
     id: "lofi", label: "Lo-fi",
+    riffs: ["dedilhado", "ostinato"],
     influences: ["Nujabes", "J Dilla", "Tomppabeats", "Idealism", "Jinsang"],
     summary: "Hip hop lento e relaxado (70 a 90 BPM): Rhodes com acordes de sétima e nona, bateria um pouco atrasada e com swing, melodias simples e repetidas, muitas vezes em oitavas ou sextas.",
     comps: [
@@ -228,6 +233,7 @@ export const STYLES = [
   },
   {
     id: "gospel", label: "Gospel americano",
+    riffs: ["ataques", "dedilhado", "ostinato"],
     influences: ["Cory Henry", "Kirk Franklin", "Jesús Molina", "Joshua Domfeh", "Shaun Martin", "Aaron Lindsey", "Kevin Bond", "Tye Tribbett", "Israel Houghton", "Fred Hammond"],
     summary: "Corridas rápidas que pousam no tempo, pentatônica com blue notes, fills entre os acordes e síncopes marcadas.",
     comps: [
@@ -263,6 +269,7 @@ export const STYLES = [
   },
   {
     id: "funk", label: "Funk (16 avos)",
+    riffs: ["ataques", "oitavas", "ostinato", { id: "abafado", label: "Guitarra abafada em semicolcheias", sound: "ms-guitarra-abafada", rhythms: ["16! 16 16 16 16 16! 16 16 16 16! 16 16 16! 16 16 16", "16 16! 16 16 16! 16 16 16 16 16! 16 16 16 16 16! 16"] }],
     influences: ["Stevie Wonder", "Bernie Worrell", "Jesús Molina", "Ed Motta"],
     summary: "Semicolcheias curtas e secas, pausas marcantes e síncopes no “e” e no “a” do tempo.",
     comps: [
@@ -295,6 +302,7 @@ export const STYLES = [
   },
   {
     id: "salsa", label: "Salsa",
+    riffs: ["montuno", "ostinato", "ataques"],
     influences: ["Eddie Palmieri", "Papo Lucca"],
     summary: "Montuno em colcheias sincopadas sobre a clave 2-3, com antecipações e baixo de tumbao.",
     comps: [
@@ -327,6 +335,7 @@ export const STYLES = [
   },
   {
     id: "samba", label: "Samba",
+    riffs: [{ id: "dedilhado", label: "Violão dedilhado", sound: "ms-violao" }, "ostinato", "ataques"],
     influences: ["Cartola", "César Camargo Mariano", "Salomão Soares", "João Donato", "Ed Motta"],
     summary: "Semicolcheias contínuas com a síncope do tamborim (teleco-teco) e baixo de surdo antecipando o tempo.",
     comps: [
@@ -358,6 +367,7 @@ export const STYLES = [
   },
   {
     id: "bossa", label: "Bossa nova",
+    riffs: [{ id: "dedilhado", label: "Violão dedilhado", sound: "ms-violao" }, "guia", "ostinato"],
     influences: ["Tom Jobim", "João Donato", "César Camargo Mariano", "Salomão Soares", "Ed Motta"],
     summary: "Colcheias suaves e esparsas, antecipando o tempo, com notas longas na chegada e muito espaço.",
     comps: [
@@ -389,8 +399,9 @@ export const STYLES = [
   },
   {
     id: "rock", label: "Rock",
-    influences: ["Jon Lord", "Ray Manzarek"],
-    summary: "Colcheias retas, pentatônica menor com blue note, riffs curtos e repetidos.",
+    riffs: ["power", "abafado", "ostinato", { id: "pontuado", label: "Guitarra limpa arpejada" }],
+    influences: ["Led Zeppelin", "Aerosmith", "Slash", "Jon Lord"],
+    summary: "Power chords e riffs de guitarra, colcheias retas, pentatônica menor com blue note, licks curtos e repetidos. Harmonia diatônica.",
     comps: [
       { id: "colcheias", label: "Colcheias retas", pattern: "T/8 T?/8 T/8 T?/8 T/8 T?/8 T/8 T?/8" },
       { id: "baixo", label: "Baixo pulsando e acordes longos", pattern: "B/8 B?/8 B/8 B?/8 B/8 B?/8 B/8 B?/8 ; D/2 D/4. D/8" },
@@ -417,10 +428,11 @@ export const STYLES = [
     bassFill: { chance: 0.45, figure: "16", beats: 2, high: 14, shapes: ["subida", "descida", "chegada"] },
     cells: ["8 8 8 8", "8 8 4", "4 8 8", "r8 8 8 8", "4 4", "8 8 r4", "16 16 8 4", "2", "r4 8 8", "8. 16 4"],
     fast: ["16 16 16 16 16 16 16 16", "8t 8t 8t 8t 8t 8t"],
-    phrase: { chromatic: 0.1, enclosure: 0, blue: 0.5, leap: 0.25, rest: 0.2, motif: 0.75, pentatonic: true, minNotes: 4 , duet: { octave: 0.25, sixth: 0.1, triad: 0.1 } },
+    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.5, leap: 0.25, rest: 0.25, motif: 0.8, pentatonic: true, sequence: true, minNotes: 4, duet: { octave: 0.2, sixth: 0.05, triad: 0 } },
   },
   {
     id: "ska", label: "Ska",
+    riffs: [{ id: "ataques", label: "Guitarra no contratempo", sound: "ms-guitarra-limpa", rhythms: ["r8 8 r8 8 r8 8 r8 8", "r8 8 r8 8 r8 8 r8 16 16"] }, "ostinato", "oitavas"],
     influences: ["The Skatalites"],
     summary: "Acordes secos no contratempo e frases de naipe, curtas, que também caem no “e” do tempo.",
     comps: [
@@ -449,6 +461,144 @@ export const STYLES = [
     cells: ["r8 8 r8 8", "r8 8 8 8", "8 8 r8 8", "r8 8 4", "4 r8 8", "r8 8 r4", "8 8 8 8", "r8 8+4", "4 4"],
     fast: ["16 16 8 8 8", "16 16 16 16 4"],
     phrase: { chromatic: 0.05, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.2, motif: 0.7, pentatonic: false, minNotes: 3 , duet: { octave: 0.3, sixth: 0.2, triad: 0.15 } },
+  },
+  {
+    id: "worship", label: "Worship",
+    riffs: ["pontuado", "dedilhado", "ostinato", { id: "power", label: "Guitarra em acordes abertos", sound: "ms-guitarra-overdrive", rhythms: ["8 8 8 8 8 8 8 8", "2 2", "4. 8+2"] }],
+    influences: ["Hillsong", "Elevation Worship", "Bethel Music"],
+    summary: "Andamento médio, guitarra com colcheia pontuada (delay), piano em arpejos, acordes com nona e quarta, crescendo do verso ao refrão. Harmonia diatônica, sem modulação.",
+    comps: [
+      { id: "longos", label: "Acordes longos (pad)", pattern: "T/1" },
+      { id: "piano", label: "Piano em mínimas", pattern: "E/2 E/2 ; D/4. D/8+2" },
+      { id: "colcheias", label: "Colcheias pulsando", pattern: "T/8 T?/8 T/8 T?/8 T/8 T?/8 T/8 T?/8" },
+      { id: "baixo", bass: "colcheias", label: "Baixo em colcheias e acordes longos", pattern: "B/8 B?/8 B/8 B?/8 B/8 B?/8 B/8 B?/8 ; D/2. D/4" },
+      { id: "semicolcheias", label: "Semicolcheias (crescendo)", pattern: "T?/16 T??/16 T?/16 T/16 T?/16 T??/16 T?/16 T/16 T?/16 T??/16 T?/16 T/16 T/16 T/16 T!/16 T!/16" },
+      { id: "ostinato9", kind: "ostinato", label: "Ostinato com a nona", pattern: "S1/8 S5/8 S8/8 S5/8 S9/8 S5/8 S8/8 S5/8 ; D/1" },
+      { id: "ostinatopontuado", kind: "ostinato", label: "Ostinato pontuado", pattern: "M1/8. M2/8. M3/8 M2/8. M1/8. M3/8 ; E/1" },
+    ],
+    beats: [
+      { id: "verso", label: "Verso (aro)", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 r/2 ; r/4 X/4 r/4 X/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 r/4 r/8 K/8 ; r/4 X/4 r/4 X/4"] },
+      { id: "refrao", label: "Refrão (caixa cheia)", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/8 K/8 K/4 r/4 ; r/4 S!/4 r/4 S!/4", "H/16 H??/16 H/16 H??/16 H/16 H??/16 H/16 H??/16 H/16 H??/16 H/16 H??/16 H/8 O!/8 ; K/4 r/8 K/8 K/4 r/8 K/8 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "tons", label: "Tons (preparação)", bars: ["F/8 F?/8 F/8 F?/8 F/8 F?/8 F/8 F?/8 ; K/4 K/4 K/4 K/4 ; r/2. S!/4", "F/8 F?/8 F/8 F?/8 M/8 M?/8 T/8 T!/8 ; K/4 K/4 K/4 K/4 ; r/2 r/4 S!/8 S!/8"] },
+      { id: "meio", label: "Meio tempo", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4. K/8 r/2 ; r/2 S!/2", "R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4. K/8 r/4 r/8 K/8 ; r/2 S!/2"] },
+    ],
+    percussion: [
+      { id: "shaker", label: "Shaker em semicolcheias", bars: ["Q?/16 Q??/16 Q/16 Q??/16 Q?/16 Q??/16 Q/16 Q??/16 Q?/16 Q??/16 Q/16 Q??/16 Q?/16 Q??/16 Q/16 Q??/16"] },
+      { id: "pandeirola", label: "Pandeirola no 2 e no 4", bars: ["r/4 A!/4 r/4 A!/4"] },
+    ],
+    fills: ["S??/16 S?/16 S/16 S!/16 ; K/8 r/8", "S/16 T?/16 M/16 F!/16 ; K/8 K/8", "S!/16 S??/16 S?/16 S!/16 T!/16 T?/16 M!/16 M?/16 ; K/8 r/8 K/8 r/8", "T!/16 T?/16 T/16 M!/16 M?/16 M/16 F!/16 F/16 ; K/4 K/4", "T/8 M/8 F/8 F!/8 ; K/4 K/4"],
+    bass: [
+      { id: "inteiras", label: "Notas longas", pattern: "1/1" },
+      { id: "colcheias", label: "Colcheias na fundamental", pattern: "1/8 1/8 1/8 1/8 1/8 1/8 1/8 1/8" },
+      { id: "pontuado", label: "Pontuado", pattern: "1/4. 1/8 r/4 1/8 5/8" },
+    ],
+    bassFill: { chance: 0.25, figure: "8", beats: 1, high: 10, shapes: ["chegada"] },
+    cells: ["4 4", "2", "8 8 4", "4. 8", "r4 4", "4 8 8", "8. 16 4", "r8 8 4", "4 4 2"],
+    fast: ["8 8 8 8", "16 16 8 4", "8 8 8 8 8 8"],
+    phrase: { chromatic: 0, enclosure: 0, blue: 0, leap: 0.2, rest: 0.4, motif: 0.85, pentatonic: true, sequence: true, minNotes: 3, duet: { octave: 0.15, sixth: 0.2, triad: 0 } },
+  },
+  {
+    id: "balada", label: "Balada",
+    riffs: ["dedilhado", "ostinato", "pontuado"],
+    influences: ["Elton John", "Aerosmith (baladas)", "Adele"],
+    summary: "Andamento lento, piano arpejado, bateria com aro e meio tempo, frases cantadas com muito espaço. Harmonia diatônica, sem modulação.",
+    comps: [
+      { id: "inteiros", label: "Acordes inteiros", pattern: "T/1" },
+      { id: "minimas", label: "Mínimas", pattern: "T/2 T?/2" },
+      { id: "esquerda", label: "Mão esquerda e resposta", pattern: "E/2 E/2 ; r/4 D/4 r/4 D/4" },
+      { id: "colcheias", label: "Direita em colcheias", pattern: "E/1 ; D/8 D?/8 D/8 D?/8 D/8 D?/8 D/8 D?/8" },
+      { id: "sincopado", label: "Sincopado suave", pattern: "E/4. E/8+2 ; r/4 D/4. D/8+4" },
+      { id: "arpejo8", kind: "ostinato", label: "Arpejo em colcheias", pattern: "S1/8 S5/8 S8/8 M1/8 M2/8 M1/8 S8/8 S5/8" },
+      { id: "arpejo16", kind: "ostinato", label: "Arpejo em semicolcheias", pattern: "S1/16 S5/16 S8/16 M1/16 M2/16 M1/16 S8/16 S5/16 S1/16 S5/16 S8/16 M1/16 M3/16 M2/16 M1/16 S8/16" },
+    ],
+    beats: [
+      { id: "aro", label: "Aro, meio tempo", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 r/2 ; r/2 X/2", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4. K/8 r/4 K/4 ; r/2 X/2"] },
+      { id: "caixa", label: "Caixa no 2 e no 4", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/4 K/8 K/8 r/4 ; r/4 S/4 r/4 S/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 O/8 ; K/4 r/4 K/8 K/8 r/8 K/8 ; r/4 S/4 r/4 S/4"] },
+      { id: "conducao", label: "Condução, refrão", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/4 r/8 K/8 K/4 r/4 ; r/4 S!/4 r/4 S!/4", "R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 E/8 ; K/4 r/8 K/8 K/4 r/8 K/8 ; r/4 S!/4 r/4 S!/4"] },
+    ],
+    percussion: [
+      { id: "shaker", label: "Shaker em colcheias", bars: ["Q?/8 Q/8 Q?/8 Q/8 Q?/8 Q/8 Q?/8 Q/8"] },
+      { id: "pandeirola", label: "Pandeirola no 2 e no 4", bars: ["r/4 A/4 r/4 A/4"] },
+    ],
+    fills: ["S??/16 S?/16 S/16 S!/16 ; K/8 r/8", "T/8 M/8 F/8 F!/8 ; K/4 K/4", "S?/8 S/8 T/8 F!/8 ; K/4 r/4", "S??/16 S?/16 S?/16 S/16 T/8 F!/8 ; K/4 K/4"],
+    bass: [
+      { id: "inteiras", label: "Notas longas", pattern: "1/1" },
+      { id: "minimas", label: "Fundamental e quinta", pattern: "1/2. 5/4" },
+      { id: "pontuado", label: "Pontuado", pattern: "1/4. 1/8+2" },
+    ],
+    bassFill: { chance: 0.2, figure: "8", beats: 1, high: 8, shapes: ["chegada"] },
+    cells: ["2", "4 4", "4. 8", "8 8 4", "r4 4", "4 8 8", "r8 8 4", "4 4 2", "2 4 4"],
+    fast: ["8 8 8 8", "8 8 4", "16 16 8 4"],
+    phrase: { chromatic: 0, enclosure: 0, blue: 0, leap: 0.2, rest: 0.45, motif: 0.8, pentatonic: false, minNotes: 3, shift: -1, duet: { octave: 0.1, sixth: 0.3, triad: 0 } },
+  },
+  {
+    id: "metal", label: "Metal",
+    riffs: ["galope", "abafado", "power", { id: "arpejador", label: "Arpejo de guitarra (sweep)", sound: "ms-guitarra-distorcida", rhythms: ["16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t 8t"] }],
+    influences: ["Kiko Loureiro", "Iron Maiden", "Metallica", "Eric Johnson"],
+    summary: "Riffs em galope e pedal abafado na corda grave, power chords, bumbo duplo, solos com sequências de pentatônica e arpejos largos. Harmonia diatônica (menor natural e frígio).",
+    comps: [
+      { id: "longos", label: "Acordes longos", pattern: "T/1" },
+      { id: "colcheias", label: "Colcheias retas", pattern: "T/8 T?/8 T/8 T?/8 T/8 T?/8 T/8 T?/8" },
+      { id: "ataques", label: "Ataques", pattern: "T!/4 r/8 T/8+4 T/4" },
+      { id: "galope", bass: "galope", label: "Galope", pattern: "T/8 T?/16 T?/16 T/8 T?/16 T?/16 T/8 T?/16 T?/16 T/8 T?/16 T?/16" },
+      { id: "riffpedal", kind: "ostinato", label: "Riff com pedal na fundamental", pattern: "S1/8 S1/8 S3/8 S1/8 S4/8 S1/8 S5/8 S4/8 ; D/1" },
+      { id: "riffgalope", kind: "ostinato", bass: "galope", label: "Riff em galope", pattern: "S1/8 S1/16 S1/16 S5/8 S1/16 S1/16 S7/8 S1/16 S1/16 S5/8 S8/8 ; D/1" },
+    ],
+    beats: [
+      { id: "galope", label: "Galope", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/8 K/16 K/16 K/8 K/16 K/16 K/8 K/16 K/16 K/8 K/16 K/16 ; r/4 S!/4 r/4 S!/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 O!/8 ; K/8 K/16 K/16 K/8 K/16 K/16 K/8 K/16 K/16 K/8 K/16 K/16 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "duplo", label: "Bumbo duplo", bars: ["R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 R?/8 ; K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 ; r/4 S!/4 r/4 S!/4", "R/8 R?/8 R/8 R?/8 R/8 R?/8 R/8 E/8 ; K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16 ; r/4 S!/4 r/4 S!/8 S/8"] },
+      { id: "thrash", label: "Thrash (caixa no contratempo)", bars: ["H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/8 r/8 K/8 r/8 K/8 r/8 K/8 r/8 ; r/8 S!/8 r/8 S!/8 r/8 S!/8 r/8 S!/8", "H/8 H/8 H/8 H/8 H/8 H/8 H/8 O!/8 ; K/8 r/8 K/8 r/8 K/8 r/8 K/8 K/8 ; r/8 S!/8 r/8 S!/8 r/8 S!/8 r/8 S!/8"] },
+      { id: "meio", label: "Meio tempo pesado", bars: ["R!/8 R?/8 R/8 R?/8 R!/8 R?/8 R/8 R??/8 ; K/8 K/8 r/4 K/8 K/8 r/4 ; r/2 S!!/2", "R!/8 R?/8 R/8 R?/8 R!/8 R?/8 R/8 R??/8 ; K/8 K/8 r/4 K/8 K/16 K/16 r/4 ; r/2 S!!/2"] },
+    ],
+    percussion: [
+      { id: "pandeirola", label: "Pandeirola em colcheias", bars: ["A?/8 A!/8 A?/8 A!/8 A?/8 A!/8 A?/8 A!/8"] },
+      { id: "cowbell", label: "Cowbell", bars: ["B!/4 B/4 B!/4 B/4"] },
+    ],
+    fills: ["S/16 S/16 S/16 S!/16 ; K/8 K/8", "T/16 T/16 M/16 M/16 F/16 F/16 F!/16 F!/16 ; K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16", "S!/16 S/16 T/16 T/16 M/16 M/16 F/16 F!/16 ; K/8 K/8 K/8 K/8", "S/16 S/16 S/16 S/16 T/16 T/16 M/16 M/16 ; K/4 K/4", "T!/8 M!/8 F!/8 F!!/8 ; K/16 K/16 K/16 K/16 K/16 K/16 K/16 K/16"],
+    bass: [
+      { id: "colcheias", label: "Colcheias", pattern: "1/8 1/8 1/8 1/8 1/8 1/8 1/8 1/8" },
+      { id: "galope", label: "Galope", pattern: "1/8 1/16 1/16 1/8 1/16 1/16 1/8 1/16 1/16 1/8 1/16 1/16" },
+      { id: "semicolcheias", label: "Semicolcheias", pattern: "1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16 1/16" },
+    ],
+    bassFill: { chance: 0.3, figure: "16", beats: 1, high: 12, shapes: ["chegada", "descida"] },
+    cells: ["8 8 8 8", "4 4", "8 8 4", "16 16 16 16 4", "2", "r8 8 8 8", "8. 16 4", "4 8 8", "8 8 r4"],
+    fast: ["16 16 16 16 16 16 16 16", "16t 16t 16t 16t 16t 16t 4", "16 16 16 16 4"],
+    phrase: { chromatic: 0.05, enclosure: 0, blue: 0.15, leap: 0.3, rest: 0.2, motif: 0.75, pentatonic: true, sequence: true, minNotes: 4, duet: { octave: 0.15, sixth: 0, triad: 0 } },
+  },
+  {
+    id: "disco", label: "Disco / pop",
+    riffs: ["oitavas", { id: "ataques", label: "Ataques de cordas e metais" }, "arpejador", { id: "abafado", label: "Guitarra abafada em semicolcheias", sound: "ms-guitarra-abafada", rhythms: ["16! 16 16 16 16 16! 16 16 16 16! 16 16 16! 16 16 16", "16 16! 16 16 16! 16 16 16 16 16! 16 16 16 16 16! 16"] }, "ostinato"],
+    influences: ["Dua Lipa", "Bee Gees", "Daft Punk", "Nile Rodgers"],
+    summary: "Bumbo nos quatro tempos, chimbal aberto no contratempo, baixo em oitavas, guitarra abafada, ataques de cordas e synths com ganchos curtos e sincopados. Harmonia diatônica, em laço.",
+    comps: [
+      { id: "contratempo", label: "Ataques no contratempo", pattern: "r/8 T/8 r/8 T/8 r/8 T/8 r/8 T/8" },
+      { id: "quatro", label: "Piano nos quatro tempos", pattern: "T/4 T?/4 T/4 T?/4" },
+      { id: "longos", label: "Acordes longos (cordas)", pattern: "T/1" },
+      { id: "sincopado", label: "Sincopado", pattern: "T!/8. T/16 r/8 T/8 r/8 T/8. T/16+8" },
+      { id: "semicolcheias", label: "Semicolcheias leves", pattern: "T?/16 T??/16 T/16 T??/16 T?/16 T??/16 T/16 T??/16 T?/16 T??/16 T/16 T??/16 T?/16 T??/16 T/16 T??/16" },
+      { id: "oitavas", kind: "ostinato", bass: "oitavas", label: "Oitavas no baixo e ataques", pattern: "S1/8 S8/8 S1/8 S8/8 S1/8 S8/8 S1/8 S8/8 ; r/8 D/8 r/8 D/8 r/8 D/8 r/8 D/8" },
+      { id: "gancho", kind: "ostinato", label: "Gancho de synth", pattern: "M1/8 M1/8 r/8 M3/8 M2/8 r/8 M1/4 ; E/1" },
+    ],
+    beats: [
+      { id: "quatro", label: "Quatro no chão", bars: ["H/8 O!/8 H/8 O!/8 H/8 O!/8 H/8 O!/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4", "H/8 O!/8 H/8 O!/8 H/8 O!/8 H/16 H/16 O!/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4"] },
+      { id: "dezesseis", label: "Chimbal em semicolcheias", bars: ["H/16 H??/16 O/8 H/16 H??/16 O/8 H/16 H??/16 O/8 H/16 H??/16 O/8 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/4", "H/16 H??/16 O/8 H/16 H??/16 O/8 H/16 H??/16 O/8 H/16 H/16 H/16 H/16 ; K/4 K/4 K/4 K/4 ; r/4 S!/4 r/4 S!/8 S?/8"] },
+      { id: "pop", label: "Pop moderno (bumbo sincopado)", bars: ["H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 H?/8 ; K/4 r/8 K/8 r/8 K/8 r/4 ; r/4 S!/4 r/4 S!/4", "H/8 H?/8 H/8 H?/8 H/8 H?/8 H/8 O!/8 ; K/4 r/8 K/8 r/8 K/8 r/8 K/8 ; r/4 S!/4 r/4 S!/4"] },
+    ],
+    percussion: [
+      { id: "pandeirola", label: "Pandeirola em semicolcheias", bars: ["A?/16 A??/16 A!/16 A??/16 A?/16 A??/16 A!/16 A??/16 A?/16 A??/16 A!/16 A??/16 A?/16 A??/16 A!/16 A??/16"] },
+      { id: "congas", label: "Congas", bars: ["U/8 G/8 r/8 N/8 U/8 G/8 N/8 N/8"] },
+      { id: "cowbell", label: "Cowbell", bars: ["B!/4 B/4 B!/4 B/4"] },
+    ],
+    fills: ["S??/16 S?/16 S/16 S!/16 ; K/8 r/8", "S/16 T?/16 M/16 F!/16 ; K/8 K/8", "S!/16 S??/16 S?/16 S!/16 T!/16 T?/16 M!/16 M?/16 ; K/4 K/4", "T/8 M/8 F/8 F!/8 ; K/4 K/4"],
+    bass: [
+      { id: "oitavas", label: "Oitavas", pattern: "1/8 8/8 1/8 8/8 1/8 8/8 1/8 8/8" },
+      { id: "sincopado", label: "Sincopado", pattern: "1/8 r/16 1/16 8/8 r/8 1/8 r/16 1/16 8/8 x/8" },
+      { id: "andante", label: "Andante com quinta", pattern: "1/8 1/8 8/8 1/8 5/8 5/8 8/8 x/8" },
+    ],
+    bassFill: { chance: 0.35, figure: "16", beats: 1, high: 12, shapes: ["chegada", "subida"], pop: 0.15 },
+    cells: ["8 8 4", "r8 8 r8 8", "16 16 8 4", "4 r4", "8 8 r4", "r8 8 4", "4 4", "8. 16 r4", "r4 8 8"],
+    fast: ["16 16 16 16 4", "16 16 8 16 16 8", "8 8 8 8"],
+    phrase: { chromatic: 0, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.45, motif: 0.9, pentatonic: true, minNotes: 3, duet: { octave: 0.3, sixth: 0.1, triad: 0 } },
   },
 ];
 

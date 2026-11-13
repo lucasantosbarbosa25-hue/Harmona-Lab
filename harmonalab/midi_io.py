@@ -37,6 +37,7 @@ PAD_CHANNEL = 4  # o pad: o acorde aberto e parado
 PAD_SOFTER = 20  # o pad toca mais leve que os acordes (velocity a menos)
 VOICE2_CHANNEL = 5  # a segunda voz (dueto ou contracanto da Voz)
 VOICE2_SOFTER = 12  # a segunda voz fica um pouco atrás da Voz
+RIFF_CHANNEL = 6  # o riff ou ostinato (guitarra, dedilhado, synth)
 DRUM_CHANNEL = 9
 #: Os instrumentos de percussão: cada um sai numa faixa própria, com o nome dele, para ir ao som certo em qualquer VST
 #: (o mapa de teclas muda de um para outro). As outras peças do canal 10 são do kit e ficam na faixa "Bateria", venham
@@ -264,6 +265,10 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
             pitch = e.note.midi
             events.append((tick + e.start, 2, pitch, BASS_CHANNEL, mido.Message("note_on", channel=BASS_CHANNEL, note=pitch, velocity=velocity)))
             events.append((tick + e.start + e.length, 0, pitch, BASS_CHANNEL, mido.Message("note_off", channel=BASS_CHANNEL, note=pitch, velocity=0)))
+        for e in chord.riff_events:
+            pitch = e.note.midi
+            events.append((tick + e.start, 2, pitch, RIFF_CHANNEL, mido.Message("note_on", channel=RIFF_CHANNEL, note=pitch, velocity=velocity)))
+            events.append((tick + e.start + e.length, 0, pitch, RIFF_CHANNEL, mido.Message("note_off", channel=RIFF_CHANNEL, note=pitch, velocity=0)))
         if phrase_mode != "chords":
             for e in [*chord.phrase_events, *chord.phrase_extra]:
                 pitch = e.note.midi
@@ -304,7 +309,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     voice = [e for e in events if e[3] == VOICE_CHANNEL]
     pad = [e for e in events if e[3] == PAD_CHANNEL]
     voice2 = [e for e in events if e[3] == VOICE2_CHANNEL]
-    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL, PAD_CHANNEL, VOICE2_CHANNEL)]
+    riff = [e for e in events if e[3] == RIFF_CHANNEL]
+    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL, PAD_CHANNEL, VOICE2_CHANNEL, RIFF_CHANNEL)]
 
     def make_track(name: str, items: list, header: bool) -> mido.MidiTrack:
         track = mido.MidiTrack()
@@ -321,7 +327,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         return track
 
     title = project.title or "Harmona Lab"
-    if not phrase and not drums and not bass and not percussion and not voice and not pad and not voice2:
+    if not phrase and not drums and not bass and not percussion and not voice and not pad and not voice2 and not riff:
         midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
         midi.tracks.append(make_track(title, chords, True))
         return midi
@@ -333,6 +339,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         midi.tracks.append(make_track("Voz 2", voice2, False))
     if phrase:
         midi.tracks.append(make_track("Frase", phrase, False))
+    if riff:
+        midi.tracks.append(make_track("Riff", riff, False))
     if bass:
         midi.tracks.append(make_track("Baixo", bass, False))
     if pad:

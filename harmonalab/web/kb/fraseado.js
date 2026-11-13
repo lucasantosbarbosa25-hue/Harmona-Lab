@@ -109,6 +109,60 @@ export const PERFIS = {
   },
 };
 
+// Rock e metal (guitarra): nada do Weimar. A chegada é na fundamental, na quinta e na terça; a sétima menor nos menores e
+// nos dominantes (pentatônica); tensões quase não entram. Blue notes ficam por conta do estilo (blues-rock).
+PERFIS.rock = {
+  rotulo: "Rock e metal (guitarra)",
+  pesos: {
+    menor: {
+      forte: { 0: 3, 7: 2.6, 3: 2.4, 10: 1.6, 5: 1.4, 2: 0.4 },
+      fraco: { 0: 2.4, 7: 2.4, 3: 2.4, 10: 1.8, 5: 1.6, 2: 0.5 },
+    },
+    dominante: {
+      forte: { 0: 3, 4: 2.4, 7: 2.4, 10: 2, 9: 0.6, 2: 0.6 },
+      fraco: { 0: 2.4, 4: 2.2, 7: 2.4, 10: 2.2, 9: 0.7, 2: 0.7 },
+    },
+    "meio-diminuto": {
+      forte: { 0: 2.4, 3: 2.4, 6: 2, 10: 2, 5: 0.8 },
+      fraco: { 0: 2.2, 3: 2.4, 6: 2, 10: 2, 5: 0.8 },
+    },
+    maior: {
+      forte: { 0: 3, 7: 2.6, 4: 2.4, 9: 1.2, 2: 0.9 },
+      fraco: { 0: 2.4, 7: 2.4, 4: 2.4, 9: 1.4, 2: 1 },
+    },
+  },
+  tensoes: { alterada: 1, natural: 1 },
+  repousoNaTensao: 1,
+  tercaBlue: true,
+};
+
+// Pop, worship e balada: melodia cantável. A chegada é na terça, na quinta e na fundamental, com a nona e a quarta (sus)
+// como cor; sem blue notes e sem tensões de dominante.
+PERFIS.pop = {
+  rotulo: "Pop, worship e balada",
+  pesos: {
+    menor: {
+      forte: { 3: 3, 7: 2.6, 0: 2.4, 5: 1.6, 2: 1.4, 10: 1.2 },
+      fraco: { 3: 2.6, 7: 2.4, 0: 2, 5: 1.8, 2: 1.6, 10: 1.4 },
+    },
+    dominante: {
+      forte: { 4: 2.8, 0: 2.4, 7: 2.4, 10: 1.6, 2: 1.4, 9: 1 },
+      fraco: { 4: 2.6, 0: 2, 7: 2.4, 10: 1.6, 2: 1.6, 9: 1.2 },
+    },
+    "meio-diminuto": {
+      forte: { 3: 2.6, 0: 2.2, 6: 2, 10: 2, 5: 1 },
+      fraco: { 3: 2.6, 0: 2, 6: 2, 10: 2, 5: 1 },
+    },
+    maior: {
+      forte: { 4: 3, 7: 2.6, 0: 2.4, 2: 1.8, 9: 1.2, 11: 0.5 },
+      fraco: { 4: 2.6, 7: 2.4, 0: 2, 2: 2, 9: 1.4, 11: 0.6 },
+    },
+  },
+  tensoes: { alterada: 1, natural: 1 },
+  repousoNaTensao: 1,
+  tercaBlue: false,
+};
+
 /** O perfil em uso. Para voltar ao fraseado de antes do Weimar, troque "weimar" por "anterior". */
 export const PERFIL_ATIVO = "weimar";
 
@@ -116,7 +170,7 @@ export const PERFIL_ATIVO = "weimar";
  * Estilos com perfil PRÓPRIO: não seguem o PERFIL_ATIVO. Assim, voltar o Weimar para "anterior" (rollback) não mexe no
  * fraseado deles. Para um estilo passar a seguir o perfil ativo, é só tirar a linha dele daqui.
  */
-export const PERFIL_POR_ESTILO = { lofi: "lofi" };
+export const PERFIL_POR_ESTILO = { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop" };
 
 /** O perfil de um estilo: o próprio, se tiver; senão o ativo. `id` (opcional) força um perfil, para testes. */
 export const perfilDoEstilo = (estiloId, id) => PERFIS[id] ?? PERFIS[PERFIL_POR_ESTILO[estiloId]] ?? PERFIS[PERFIL_ATIVO];

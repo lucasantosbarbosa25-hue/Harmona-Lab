@@ -15,6 +15,8 @@ export const INSTRUMENTS = [
   ["ms-flauta", false, 73], ["ms-sax-alto", false, 65], ["ms-sax-tenor", false, 66], ["ms-trompete", false, 56], ["ms-coro", false, 52], ["ms-voz", false, 53],
   ["ms-baixo-dedilhado", false, 33], ["ms-baixo-acustico", false, 32], ["ms-baixo-fretless", false, 35], ["ms-baixo-slap", false, 36],
   ["ms-cordas", false, 49], ["ms-cordas-rapidas", false, 48], ["ms-cordas-sinteticas", false, 50], ["ms-pad", false, 89],
+  ["ms-guitarra-limpa", false, 27], ["ms-guitarra-abafada", false, 28], ["ms-guitarra-overdrive", false, 29], ["ms-guitarra-distorcida", false, 30],
+  ["ms-synth-serra", false, 81], ["ms-synth-quadrada", false, 80], ["ms-synth-baixo", false, 38], ["ms-metais", false, 61], ["ms-synth-metais", false, 62],
   ["ms-bateria", true, 0], ["ms-bateria-sala", true, 8], ["ms-bateria-rock", true, 16], ["ms-bateria-jazz", true, 32], ["ms-bateria-vassourinha", true, 40], ["ms-bateria-808", true, 25],
 ];
 

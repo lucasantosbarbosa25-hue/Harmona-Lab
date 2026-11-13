@@ -18,6 +18,7 @@ export const PAD_CHANNEL = 4; // o pad: o acorde aberto e parado
 const PAD_SOFTER = 20; // o pad toca mais leve que os acordes (velocity a menos)
 export const VOICE2_CHANNEL = 5; // a segunda voz (dueto ou contracanto da Voz)
 const VOICE2_SOFTER = 12; // a segunda voz fica um pouco atrás da Voz
+export const RIFF_CHANNEL = 6; // o riff ou ostinato (guitarra, dedilhado, synth)
 export const DRUM_CHANNEL = 9;
 /** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
 export const PHRASE_MODES = ["both", "chords", "line"];
@@ -233,6 +234,9 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     for (const e of chord.bass_events) {
       notes.push({ start: tick + e.start, end: tick + e.start + e.length, pitch: e.note.midi, velocity: velocityFor(project, chord), channel: BASS_CHANNEL, chord: index });
     }
+    for (const e of chord.riff_events) {
+      notes.push({ start: tick + e.start, end: tick + e.start + e.length, pitch: e.note.midi, velocity: velocityFor(project, chord), channel: RIFF_CHANNEL, chord: index, riff: true });
+    }
     if (phraseMode !== "chords") {
       const velocity = velocityFor(project, chord);
       for (const e of [...chord.phrase_events, ...chord.phrase_extra]) {
@@ -305,6 +309,7 @@ export const MIDI_PARTS = [
   { id: "voz", label: "Voz cantada" },
   { id: "voz2", label: "Segunda voz" },
   { id: "solo", label: "Solo (frases)" },
+  { id: "riff", label: "Riff" },
   { id: "baixo", label: "Baixo" },
   { id: "pad", label: "Pad" },
   { id: "bateria", label: "Bateria" },
@@ -316,6 +321,7 @@ export function notePart(n) {
   if (n.voice) return "voz";
   if (n.voice2) return "voz2";
   if (n.pad) return "pad";
+  if (n.riff) return "riff";
   if (n.percussion) return "percussao";
   if (n.channel === DRUM_CHANNEL) return "bateria";
   if (n.channel === BASS_CHANNEL) return "baixo";
@@ -347,7 +353,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   // gains: volume de cada parte só para a escuta do app ({ voz: 0.6, ... }); multiplica a velocity
   if (gains) notes = notes.map((n) => ({ ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity * (gains[notePart(n)] ?? 1)))) }));
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [VOICE2_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: new Map() };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [VOICE2_CHANNEL]: [], [RIFF_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: new Map() };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
@@ -393,6 +399,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   if (events[VOICE_CHANNEL].length) tracks.push(trackBytes("Voz", events[VOICE_CHANNEL], false));
   if (events[VOICE2_CHANNEL].length) tracks.push(trackBytes("Voz 2", events[VOICE2_CHANNEL], false));
   if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
+  if (events[RIFF_CHANNEL].length) tracks.push(trackBytes("Riff", events[RIFF_CHANNEL], false));
   if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
   if (events[PAD_CHANNEL].length) tracks.push(trackBytes("Pad", events[PAD_CHANNEL], false));
   if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));

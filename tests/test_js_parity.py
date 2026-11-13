@@ -173,6 +173,10 @@ CASES = [
                              {"symbol": "Pausa", "duration_beats": 2}, {"symbol": "F#m7b5/C", "section": "B", "bass": "C2", "notes": "F#3 A3 E4", "velocity": 15}, {"notes": "C5", "section": 7}]},
     {"pad": True, "voice": "E4/2", "drums": "K/4 S/4", "chords": [{"notes": "E3 G3 B3", "phrase": "B4/4", "bass_line": "E2/2", "duration_beats": 4}, {"notes": "E3 G3 B3 D4", "duration_beats": 4}]},
     {"pad": "sim", "chords": [{"notes": "C4 E4 G4"}]},  # só true liga o pad
+    # riff (canal 7, faixa "Riff"): por acorde, na notação da frase, com notas juntas (power chords)
+    {"chords": [{"symbol": "E5", "notes": "E3 B3", "riff": "E2&B2/8 E2/8 E2/8 E2&B2&E3/8 G2/4 A2/4", "bass_line": "E1/1", "velocity": 100},
+                {"symbol": "A5", "notes": "A3 E4", "riff": ["A2&E3/4.", "A2/8", "r/2"], "duration_beats": 4}, {"notes": "D4", "riff": "D3/1 D3/4", "duration_beats": 4}]},
+    {"middle_c": "C3", "voice": "E4/1", "pad": True, "chords": [{"notes": "E2 B2 E3", "riff": "E1&B1/8 Hx/8 E1/9", "phrase": "E4/4"}, {"notes": "C3", "riff": 5}]},
     # segunda voz (canal 6, faixa "Voz 2"): mesma notação e mesmas regras da Voz
     {"voice": "E5/4 G5/4 A5/2", "voice2": "G4/4 B4/4 C5/2", "default_velocity": 90, "chords": [{"notes": "C4 E4 G4", "duration_beats": 4}]},
     {"voice2": "r/2 A3/4 C4/1", "middle_c": "C3", "pad": True, "chords": [{"notes": "A2 C3 E3", "duration_beats": 4}]},  # sem a Voz; passa do fim

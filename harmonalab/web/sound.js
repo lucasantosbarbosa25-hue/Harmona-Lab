@@ -23,6 +23,7 @@ const PHRASE_CHANNEL = 1;
 const VOICE_CHANNEL = 3; // a Voz (melodia cantada) toca com o som da frase
 const VOICE2_CHANNEL = 5; // a segunda voz, também
 const PAD_CHANNEL = 4; // o pad (cordas ou pad do banco)
+const RIFF_CHANNEL = 6; // o riff ou ostinato (guitarra, dedilhado, synth)
 /** Acima disso o banco pode pesar demais no celular (avisamos antes de carregar). */
 export const LARGE_BANK_BYTES = 200 * 1024 * 1024;
 
@@ -265,7 +266,7 @@ export class SoundFontPlayer {
    * Toca os bytes de um .mid com os instrumentos escolhidos: { chords, phrase } no formato "sf:MSB:LSB:programa"
    * (phrase e bass podem ser SAME; pad é opcional: sem ele, o pad não vai no arquivo). Resolve quando começa a tocar; `onEnd` é chamado quando o arquivo termina.
    */
-  async play(bytes, { chords, phrase = SAME, drums = NO_DRUMS, bass = SAME, pad = null, onEnd } = {}) {
+  async play(bytes, { chords, phrase = SAME, drums = NO_DRUMS, bass = SAME, pad = null, riff = SAME, onEnd } = {}) {
     this.unlock();
     await this.#ensureSynth();
     const chordPatch = await this.#resolve(chords);
@@ -274,6 +275,7 @@ export class SoundFontPlayer {
     const drumPatch = drums === NO_DRUMS ? null : await this.#resolve(drums);
     const bassPatch = bass === SAME ? chordPatch : (await this.#resolve(bass)) ?? chordPatch;
     const padPatch = pad ? await this.#resolve(pad) : null;
+    const riffPatch = riff === SAME ? chordPatch : (await this.#resolve(riff)) ?? chordPatch;
     this.stop();
     this.#setPatch(CHORD_CHANNEL, chordPatch);
     this.#setPatch(PHRASE_CHANNEL, phrasePatch);
@@ -281,6 +283,7 @@ export class SoundFontPlayer {
     this.#setPatch(VOICE2_CHANNEL, phrasePatch);
     this.#setPatch(BASS_CHANNEL, bassPatch); // o som de baixo escolhido (ou o dos acordes: a mão esquerda de um tecladista)
     if (padPatch) this.#setPatch(PAD_CHANNEL, padPatch);
+    this.#setPatch(RIFF_CHANNEL, riffPatch);
     if (drumPatch) {
       // o banco da bateria escolhida fica na frente, para o canal 10 pegar o kit dele
       const bank = parsePatchValue(drums).bank;

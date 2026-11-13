@@ -14,6 +14,7 @@ import { buildPdf, drawDiagramPages } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { FILL_FREEDOMS, FILL_FREQUENCIES, INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
 import { SECOND_VOICE_MODES, generateSecondVoice } from "./engine/segunda.js";
+import { riffOptions, riffSound } from "./engine/riff.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, beatsToTicks, midiBytes, noteEvents, notePart, MIDI_PARTS, PERCUSSION_INSTRUMENTS, padNotes, partsPresent, percussionPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
@@ -24,6 +25,7 @@ import { LARGE_BANK_BYTES, NO_DRUMS, SAME, SIMPLE, SoundFontPlayer, builtinValue
 
 const DRAFT_KEY = "harmonalab:draft:v1";
 const SOUND_KEY = "harmonalab:sound";
+const RIFF_AUTO = "auto"; // som do riff: o sugerido pelo tipo de riff
 const GROOVE_KEY = "harmonalab:groove";
 const CUSTOM_COMP = "custom"; // levada escrita à mão (ou vinda num projeto), que não é uma das opções do estilo
 const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8", "7/8", "9/8", "12/8"];
@@ -111,7 +113,7 @@ const state = {
   // o timbre simples (acordes), o mesmo dos acordes (frase, baixo), o pad sintético do app (pad), sem bateria
   sound: {
     chords: builtinValue(DEFAULT_SOUNDS.chords), phrase: SAME, drums: builtinValue(DEFAULT_SOUNDS.drums),
-    bass: builtinValue(DEFAULT_SOUNDS.bass), pad: builtinValue(DEFAULT_SOUNDS.pad),
+    bass: builtinValue(DEFAULT_SOUNDS.bass), pad: builtinValue(DEFAULT_SOUNDS.pad), riff: RIFF_AUTO,
   },
   groove: { style: STYLES[0].id, variation: 0, drumVariation: 0 }, // estilo do ritmo e das frases, e as variações das frases e das viradas
   listen: { loop: false, rate: 1, range: null }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
@@ -150,7 +152,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", section: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", ...extra,
   };
 }
 
@@ -169,6 +171,7 @@ function grooveSettings(raw) {
     intensity: INTENSITIES.some((i) => i.id === g.intensity) ? g.intensity : "equilibrado",
     // as viradas (quantas e com que liberdade) e a segunda voz (dueto ou contracanto, e a variação do contracanto)
     drumFill: fillSettings(g.drumFill), bassFill: fillSettings(g.bassFill),
+    riff: String(g.riff || ""), riffVariation: Number.isInteger(g.riffVariation) ? g.riffVariation : 0,
     voice2: ["dueto", "contracanto"].includes(g.voice2) ? g.voice2 : "", voice2Variation: Number.isInteger(g.voice2Variation) ? g.voice2Variation : 0,
   };
 }
@@ -191,7 +194,7 @@ function toEditable(data) {
       bass: text(c.bass), notes: text(c.notes),
       top_note: text(c.top_note), velocity: c.velocity ?? "", strum: text(c.strum),
       omitted: text(c.omitted), comment: text(c.comment), function: text(c.function), scale: text(c.scale),
-      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color), bass_line: text(c.bass_line),
+      phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color), bass_line: text(c.bass_line), riff: text(c.riff),
       comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
       section: text(c.section).trim(),
     };
@@ -1399,6 +1402,19 @@ function renderGroove() {
   segmented("#fill-bass-frequency", FILL_FREQUENCIES, "bassFill", "frequency", "de baixo");
   segmented("#fill-bass-freedom", FILL_FREEDOMS, "bassFill", "freedom", "de baixo");
 
+  // riff: as famílias do estilo; o que estiver no projeto e não for do estilo aparece como "Personalizado"
+  const families = riffOptions(style);
+  const hasRiff = anyChord("riff");
+  const riffId = fills.riff || "";
+  const riffValue = !hasRiff ? "" : families.some((o) => o.id === riffId) ? riffId : CUSTOM_COMP;
+  $("#groove-riff").replaceChildren(
+    h("option", { value: "" }, "Desligado"),
+    ...families.map((o) => h("option", { value: o.id }, o.label)),
+    ...(riffValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizado (do projeto)")] : []),
+  );
+  $("#groove-riff").value = riffValue;
+  $("#groove-riff-row").hidden = !hasRiff || riffValue === CUSTOM_COMP;
+
   // segunda voz: só aparece quando há uma Voz
   const hasVoice = Boolean(String(state.project.voice || "").trim());
   const second = hasVoice ? fills.voice2 : "";
@@ -1440,7 +1456,7 @@ function toggleTag(key, id, current) {
 }
 
 /** Escreve (ou apaga) a levada e/ou as frases em todos os acordes. Tudo pode ser desfeito. */
-function applyGroove({ comp, phrases, drums, bass, percussion, settings, before, only = null, quiet = false }, message) {
+function applyGroove({ comp, phrases, drums, bass, percussion, riff, settings, before, only = null, quiet = false }, message) {
   // only: conjunto de índices de acordes; só neles a levada, o baixo e a frase são reescritos (a bateria é da música inteira)
   const touch = (i) => !only || only.has(i);
   const undo = quiet ? null : snapshot();
@@ -1456,7 +1472,12 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before,
     scales: state.project.groove?.scales || [], color: state.project.groove?.color || "",
     intensity: state.project.groove?.intensity || "equilibrado",
     bassFill: state.project.groove?.bassFill, drumFill: state.project.groove?.drumFill,
+    riff: riff || null, riffVariation: state.project.groove?.riffVariation || 0,
   });
+  if (riff !== undefined) {
+    state.project.chords.forEach((chord, i) => { if (touch(i)) chord.riff = riff ? result.chords[i]?.riff ?? "" : ""; });
+    state.project.groove = { ...state.project.groove, riff: riff || "" };
+  }
   if (bass !== undefined) {
     state.project.chords.forEach((chord, i) => { if (touch(i)) chord.bass_line = bass ? result.chords[i]?.bass_line ?? "" : ""; });
     state.project.groove = { ...state.project.groove, bass: bass || "" };
@@ -1481,8 +1502,9 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before,
     }
   });
   if (comp !== undefined) state.project.groove = { ...state.project.groove, comp: comp || "" };
-  if (comp || drums || bass || percussion || phrases === true) state.project.style = style.label;
+  if (comp || drums || bass || percussion || riff || phrases === true) state.project.style = style.label;
   refreshSecondVoice(); // o estilo dá o jeito da segunda voz
+  renderSound(); // o som automático do riff acompanha o tipo de riff
   renderSettings();
   renderChords();
   validateNow();
@@ -1509,13 +1531,17 @@ function bindGroove() {
     const hasDrums = Boolean(String(state.project.drums || "").trim()) && beat && beat !== CUSTOM_COMP;
     const percId = state.project.groove?.percussion || "";
     const hasPerc = Boolean(String(state.project.percussion || "").trim()) && percId && percId !== CUSTOM_COMP;
-    if (!hasComp && !phrases && !hasDrums && !hasPerc && !anyChord("bass_line")) { renderGroove(); return; }
+    if (!hasComp && !phrases && !hasDrums && !hasPerc && !anyChord("bass_line") && !anyChord("riff")) { renderGroove(); return; }
     const percussion = hasPerc ? (percussionOptions(style).some((o) => o.id === percId) ? percId : style.percussion[0].id) : undefined;
     const comp = hasComp ? (compOptions(style).some((o) => o.id === current) ? current : style.comps[0].id) : undefined;
     const drums = hasDrums ? (beatOptions(style).some((o) => o.id === beat) ? beat : style.beats[0].id) : undefined;
     const hasBass = anyChord("bass_line") && state.project.groove?.bass && state.project.groove.bass !== CUSTOM_COMP;
     const bass = hasBass ? bassForComp(style, comp ?? current) : undefined;
-    applyGroove({ comp, drums, bass, percussion, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
+    // o riff segue o estilo: a mesma família, se ele tiver; senão a primeira dele
+    const riffId = state.project.groove?.riff || "";
+    const hasRiff = anyChord("riff") && riffId && riffId !== CUSTOM_COMP;
+    const riff = hasRiff ? (riffOptions(style).some((o) => o.id === riffId) ? riffId : riffOptions(style)[0]?.id ?? "") : undefined;
+    applyGroove({ comp, drums, bass, percussion, riff, phrases: phrases ? true : undefined }, `Ritmo refeito em ${style.label}.`);
   });
   $("#groove-comp").addEventListener("change", (e) => {
     const id = e.target.value;
@@ -1550,6 +1576,17 @@ function bindGroove() {
     const drums = String(state.project.drums || "").trim() && g.drums && g.drums !== CUSTOM_COMP ? g.drums : undefined;
     const bass = anyChord("bass_line") && g.bass && g.bass !== CUSTOM_COMP ? g.bass : undefined;
     applyGroove({ drums, bass }, "Outras viradas sorteadas.");
+  });
+  $("#groove-riff").addEventListener("change", (e) => {
+    const id = e.target.value;
+    if (id === CUSTOM_COMP) return;
+    const label = e.target.selectedOptions[0]?.textContent ?? "";
+    applyGroove({ riff: id }, id ? `Riff: ${label}.` : "Riff desligado.");
+  });
+  $("#groove-riff-again").addEventListener("click", () => {
+    const g = state.project.groove;
+    if (!g.riff || g.riff === CUSTOM_COMP) return;
+    applyGroove({ riff: g.riff, settings: { riffVariation: (g.riffVariation || 0) + 1 } }, `Outro riff (${(g.riffVariation || 0) + 2}).`);
   });
   $("#groove-voice2").addEventListener("change", (e) => {
     const undo = snapshot();
@@ -1588,6 +1625,12 @@ function bindGroove() {
 
 // ---------------------------------------------------------------- banco de sons (.sf2)
 const APP_PAD = "app"; // o pad sintético do próprio app (sem banco de sons)
+/** O som do riff: o escolhido, ou (em "automático") o sugerido pela família do riff neste estilo, se o app o tiver. */
+function riffSoundValue() {
+  if (state.sound.riff !== RIFF_AUTO) return state.sound.riff;
+  const id = riffSound(grooveStyle(), state.project?.groove?.riff);
+  return id && BUILTIN_BANKS.some((b) => b.id === id) ? builtinValue(id) : SAME;
+}
 const usingSoundFont = () => parsePatchValue(state.sound.chords) !== null && (parsePatchValue(state.sound.chords).bank !== "aparelho" || Boolean(soundFont.bank));
 
 /**
@@ -1609,13 +1652,14 @@ async function playWithSoundFont(only = null, onEnd = null) {
     phraseMode: state.phraseMode, parts: ids.filter((id) => (id !== "pad" || padPatch) && mixGain(id) > 0), gains: Object.fromEntries(ids.map((id) => [id, mixGain(id)])),
   });
   const hasDrums = project.drum_bars.length || project.percussion_bars.length;
-  const fresh = [state.sound.chords, state.sound.phrase, hasDrums ? state.sound.drums : "", hasBass ? state.sound.bass : "", padPatch ?? ""]
+  const hasRiff = project.chords.some((c) => c.riff_events.length);
+  const fresh = [state.sound.chords, state.sound.phrase, hasDrums ? state.sound.drums : "", hasBass ? state.sound.bass : "", padPatch ?? "", hasRiff ? riffSoundValue() : ""]
     .map(parsePatchValue).filter((patch) => patch && patch.bank !== "aparelho");
   const slow = setTimeout(() => toast(fresh.length ? "Baixando o banco de sons (só na primeira vez)…" : "Carregando o banco de sons…"), 500);
   try {
     await soundFont.play(bytes, {
       chords: state.sound.chords, phrase: state.sound.phrase, drums: hasDrums ? state.sound.drums : NO_DRUMS,
-      bass: hasBass ? state.sound.bass : SAME, pad: padPatch,
+      bass: hasBass ? state.sound.bass : SAME, pad: padPatch, riff: hasRiff ? riffSoundValue() : SAME,
       onEnd: onEnd ?? (() => (only ? setPlaying(-1) : stopPlayback())),
     });
   } catch (err) {
@@ -1659,6 +1703,7 @@ function loadSoundChoice() {
         // escolhas novas: quem já usava o app ganha o baixo e as cordas de verdade
         bass: typeof saved.bass === "string" ? saved.bass : builtinValue(DEFAULT_SOUNDS.bass),
         pad: typeof saved.pad === "string" ? saved.pad : builtinValue(DEFAULT_SOUNDS.pad),
+        riff: typeof saved.riff === "string" ? saved.riff : RIFF_AUTO,
       };
     }
   } catch { /* fica o padrão */ }
@@ -1709,6 +1754,11 @@ function renderSound() {
   const bassSelect = $("#sound-bass");
   bassSelect.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...builtinOptions(basses), ...deviceGroup(false));
   bassSelect.value = state.sound.bass;
+  const riffSelect = $("#sound-riff");
+  const auto = parsePatchValue(riffSoundValue());
+  const autoLabel = state.sound.riff === RIFF_AUTO && auto ? BUILTIN_BANKS.find((b) => b.id === auto.bank)?.label : "";
+  riffSelect.replaceChildren(h("option", { value: RIFF_AUTO }, autoLabel ? `Automático: ${autoLabel}` : "Automático (o do tipo de riff)"), h("option", { value: SAME }, "O mesmo dos acordes"), ...melodicOptions());
+  riffSelect.value = state.sound.riff;
   const padSelect = $("#sound-pad");
   padSelect.replaceChildren(h("option", { value: APP_PAD }, "Pad do app (sintético)"), ...builtinOptions(pads), ...deviceGroup(false));
   padSelect.value = state.sound.pad;
@@ -1732,6 +1782,7 @@ function updateSoundPhraseField() {
   $("#sound-drums-field").hidden = !banks || !String(state.project?.drums || state.project?.percussion || "").trim();
   $("#sound-bass-field").hidden = !banks || !(state.project?.chords || []).some((c) => String(c.bass_line || "").trim());
   $("#sound-pad-field").hidden = !banks || !state.project?.pad;
+  $("#sound-riff-field").hidden = !banks || !(state.project?.chords || []).some((c) => String(c.riff || "").trim());
   $("#sound-simple-hint").hidden = banks;
 }
 
@@ -1777,7 +1828,7 @@ function bindSound() {
     if (state.playing) stopPlayback();
     saveSoundChoice();
   });
-  for (const key of ["bass", "pad"]) {
+  for (const key of ["bass", "pad", "riff"]) {
     $(`#sound-${key}`).addEventListener("change", (e) => {
       state.sound[key] = e.target.value;
       if (state.playing) stopPlayback();
@@ -2311,7 +2362,7 @@ function applyContinuation(data, { explanation = "" } = {}) {
   const options = {
     comp: had("comp") ? pick(g.comp) : undefined, bass: had("bass_line") ? pick(g.bass) : undefined,
     drums: String(p.drums || "").trim() ? pick(g.drums) : undefined, percussion: String(p.percussion || "").trim() ? pick(g.percussion) : undefined,
-    phrases: had("phrase") ? true : undefined,
+    phrases: had("phrase") ? true : undefined, riff: had("riff") ? pick(g.riff) : undefined,
   };
   formSelected = blocks.length - 1;
   renderAll();

@@ -38,8 +38,8 @@ export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
     top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
-    phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", section: "",
-    phrase_events: [], phrase_extra: [], phrase_pcs: [], comp_layers: [], bass_events: [], // derivados da frase, da escala e da levada, preenchidos na leitura
+    phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "",
+    phrase_events: [], phrase_extra: [], phrase_pcs: [], comp_layers: [], bass_events: [], riff_events: [], // derivados da frase, da escala e da levada, preenchidos na leitura
   };
 }
 
@@ -76,6 +76,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   if (chord.phrase_color) d.phrase_color = chord.phrase_color;
   if (chord.comp) d.comp = chord.comp;
   if (chord.bass_line) d.bass_line = chord.bass_line;
+  if (chord.riff) d.riff = chord.riff;
   if (chord.section) d.section = chord.section;
   return d;
 }
@@ -358,6 +359,21 @@ function loadPhrase(raw, chord, index, project, issues) {
       issues.push(issue("error", 'A linha de baixo ("bass_line") deve ser um texto, por exemplo "E2/4. B1/8+4 E2/4".', index, "bass_line"));
     }
   }
+  const riff = raw.riff;
+  if (riff !== undefined && riff !== null && riff !== "") {
+    if (isText(riff)) {
+      chord.riff = phraseText(riff);
+      const { events, ticks, errors } = parsePhrase(chord.riff, project.middle_c);
+      for (const message of errors) issues.push(issue("error", message.replace("Frase:", "Riff:").replace("na frase", "no riff"), index, "riff"));
+      if (ticks > roundHalfEven(chord.duration_beats * TICKS_PER_BEAT)) {
+        issues.push(issue("error", `O riff dura ${fmtG(ticks / TICKS_PER_BEAT)} tempos, mais que os `
+          + `${fmtG(chord.duration_beats)} do acorde.`, index, "riff"));
+      }
+      chord.riff_events = events;
+    } else {
+      issues.push(issue("error", 'O riff ("riff") deve ser um texto, por exemplo "E2&B2/8 E2/8 G3/4".', index, "riff"));
+    }
+  }
   const comp = raw.comp;
   if (comp !== undefined && comp !== null && comp !== "") {
     if (isText(comp)) {
@@ -402,7 +418,7 @@ export function renameProjectNotes(data, toMiddleC) {
     for (const key of [...PARTS, "top_note"]) {
       if (c[key] !== undefined && c[key] !== null && c[key] !== "") c[key] = renameNoteText(c[key], fromMiddleC, toMiddleC);
     }
-    for (const key of ["phrase", "bass_line"]) {
+    for (const key of ["phrase", "bass_line", "riff"]) {
       if (c[key] !== undefined && c[key] !== null && c[key] !== "") c[key] = renamePhraseText(c[key], fromMiddleC, toMiddleC);
     }
     return c;

@@ -195,6 +195,7 @@ def analyze_chord(project: Project, chord: ChordEvent, index: int, start_beats: 
         } if chord.phrase_events else None,
         "comp": chord.comp or None,
         "bass_line": chord.bass_line or None,
+        "riff": chord.riff or None,
     }
 
 

@@ -6,6 +6,7 @@
 // (phrase_color: "dentro", "cromatico" ou "outside"; sem ela, vale o costume do estilo). O sorteio tem semente:
 // a mesma variação dá sempre a mesma frase.
 
+import { generateRiff } from "./riff.js";
 import { beatsPerBar, loadProject, sounding, totalBeats } from "./model.js";
 import { TICKS_PER_BEAT, durationTicks } from "./phrase.js";
 import { LETTER_PC, makeNote, noteName, pitchClass, pitchClassName } from "./pitch.js";
@@ -729,7 +730,7 @@ function legMoves(delta, n, rng) {
   return out;
 }
 
-function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
+function stepPath(pool, a, b, count, rng, { waves = false, sequence = false } = {}) {
   const ia = pool.indexOf(nearest(pool, a));
   const ib = pool.indexOf(nearest(pool, b));
   const moves = count + 1;
@@ -757,6 +758,19 @@ function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
         list = [...legMoves(way * reach, out, rng), ...legMoves(ib - apex, moves - out, rng)];
         swept = true;
       }
+    }
+  }
+  if (!swept && sequence && count >= 5 && Math.abs(d) < moves && rng.chance(0.55)) {
+    // sequência (guitarra de rock e metal): grupos de 3 ou de 4 notas que andam um grau de cada vez ("1-2-3, 2-3-4...")
+    const group = rng.pick([3, 3, 4]);
+    const cell = group === 3 ? [1, 1, -1] : [1, 1, 1, -2];
+    const groups = Math.max(1, Math.min(Math.floor(moves / group), Math.abs(d) + 3));
+    const rest = moves - groups * group;
+    const after = d - sign * groups;
+    if (rest >= Math.ceil(Math.abs(after) / 3)) {
+      for (let g = 0; g < groups; g++) list.push(...cell.map((m) => sign * m));
+      list.push(...legMoves(after, rest, rng));
+      swept = true;
     }
   }
   if (swept) {
@@ -813,7 +827,7 @@ function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
  * Compõe as frases de todos os acordes de uma vez (a linha atravessa os acordes). items: [{ ctx, slots }] por acorde
  * (slots null = acorde sem frase). Escreve midi e role em cada slot.
  */
-function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado" }) {
+function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado", sequence = false }) {
   const secondsPerTick = 60 / (tempo || 100) / TICKS_PER_BEAT;
   const halfBar = barTicks % (2 * TICKS_PER_BEAT) === 0 && barTicks >= 4 * TICKS_PER_BEAT ? barTicks / 2 : barTicks;
   const line = [];
@@ -940,7 +954,7 @@ function composeSolo(items, { rng, tempo, barTicks, level = "equilibrado" }) {
     const group = notes.slice(notes.indexOf(a) + 1, notes.indexOf(b));
     if (!group.length || group.some((n) => n.outside)) continue;
     const ctx = group[0].ctx;
-    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng, { waves: level === "virtuoso" });
+    const path = stepPath(ctx.linePool, a.midi, b.midi, group.length, rng, { waves: level === "virtuoso", sequence });
     group.forEach((n, k) => {
       n.midi = path[k];
       n.role = ctx.palette.blue.has(mod12(n.midi)) ? "blue" : "";
@@ -1099,6 +1113,7 @@ export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
   phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null, intensity = "equilibrado",
   bassFill = {}, drumFill = {}, // controles das viradas: { frequency, freedom }
+  riff = null, riffVariation = 0, // riff ou ostinato: a família (engine/riff.js) e o sorteio
   perfil, // perfil de fraseado (kb/fraseado.js), para testes; sem ele vale o do estilo (lo-fi) ou o PERFIL_ATIVO
 } = {}) {
   const { project } = loadProject(data);
@@ -1137,7 +1152,7 @@ export function generateGroove(data, {
       const slots = (color === "outside" && length >= 3 * TICKS_PER_BEAT ? planner.takeOutside(length, { toNext }) : null) ?? planner.take(length);
       return { ctx, slots, length };
     });
-    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks, level: intensity });
+    composeSolo(items, { rng: makeRng(`${style.id}|${variation}|notas|${intensity}`), tempo: project.tempo, barTicks, level: intensity, sequence: Boolean(style.phrase.sequence) });
     project.chords.forEach((chord, i) => {
       const { ctx, slots, length } = items[i];
       if (!ctx) { out[i].phrase = ""; return; }
@@ -1171,6 +1186,7 @@ export function generateGroove(data, {
       out[i].bass_line = result.notes.map((n) => (n.rest ? `r/${n.dur}` : `${spell(n.midi)}/${n.dur}${n.role ? `*${n.role}` : ""}`)).join(" ");
     });
   }
+  if (riff) generateRiff(project, { style, family: riff, variation: riffVariation }).forEach((text, i) => { out[i].riff = text; });
   const result = { chords: out, notes: warnings };
   if (drums) result.drums = drumsFor(style, drums, project, drumVariation, drumFill);
   if (percussion) result.percussion = percussionFor(style, percussion);

@@ -239,6 +239,11 @@
             </div>
           </div>
         </details>
+        <label class="field" for="groove-riff"><span class="label">Riff / ostinato <small>(um motivo que se repete e acompanha cada acorde)</small></span><select id="groove-riff"></select></label>
+        <div class="groove-row" id="groove-riff-row" hidden>
+          <span class="ai-help">Sorteado pelo app, só com notas do acorde e da escala. Sai no MIDI na faixa “Riff”.</span>
+          <button type="button" class="btn secondary small" id="groove-riff-again">Outro riff</button>
+        </div>
         <label class="field" for="groove-voice2" id="groove-voice2-field" hidden><span class="label">Segunda voz <small>(escrita a partir da Voz)</small></span><select id="groove-voice2"></select></label>
         <div class="groove-row" id="groove-voice2-row" hidden>
           <span class="ai-help" id="groove-voice2-hint"></span>
@@ -276,6 +281,7 @@
           <label class="field wide" for="sound-chords"><span class="label">Som dos acordes</span><select id="sound-chords"></select></label>
           <label class="field wide" for="sound-phrase" id="sound-phrase-field" hidden><span class="label">Som da frase</span><select id="sound-phrase"></select></label>
           <label class="field wide" for="sound-bass" id="sound-bass-field" hidden><span class="label">Som do baixo</span><select id="sound-bass"></select></label>
+          <label class="field wide" for="sound-riff" id="sound-riff-field" hidden><span class="label">Som do riff</span><select id="sound-riff"></select></label>
           <label class="field wide" for="sound-pad" id="sound-pad-field" hidden><span class="label">Som do pad</span><select id="sound-pad"></select></label>
           <label class="field wide" for="sound-drums" id="sound-drums-field" hidden><span class="label">Som da bateria</span><select id="sound-drums"></select></label>
           <p class="ai-help wide" id="sound-simple-hint">No timbre simples, tudo toca com sons sintéticos leves. Escolha um som do app (piano elétrico, piano) para ouvir com instrumentos de verdade: baixo, cordas e bateria acústica.</p>

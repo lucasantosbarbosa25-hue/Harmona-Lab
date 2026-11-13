@@ -47,6 +47,11 @@ FORMATO DO PROJETO (JSON)
 {"title":"B7alt resolvendo em Em9 com F# na ponta","key":"Em","tempo":80,"time_signature":"4/4","middle_c":"C4","chords":[{"symbol":"F#m7(b5)","function":"iiø7","scale":"Lócrio","duration_beats":4,"left_hand":["F#2","C3"],"right_hand":["E3","A3","C4","E4"],"top_note":"E4","comment":"A b5 do iiø7 já é a b9 do B7alt, então ele prepara o dominante.","phrase_scale":"F# G A B C D E"},{"symbol":"B7alt","function":"V7alt","scale":"C menor melódica a partir de B","duration_beats":4,"left_hand":["B2","A3"],"right_hand":["D4","Eb4","G4","C5"],"top_note":"C5","comment":"Dominante alterado, tensão máxima antes de resolver no Em9.","phrase_scale":"B C D Eb F G A"},{"symbol":"Em9","function":"i9","scale":"Eólio","duration_beats":4,"left_hand":["E2","B2","D3"],"right_hand":["G3","F#4"],"top_note":"F#4","comment":"Resolução no acorde de repouso, com a 9 na ponta.","phrase_scale":"E F# G A B C D"}]}
 ```
 
+HARMONIA POR ESTILO
+- Jazz, fusion, neo-soul, gospel, bossa, samba e afins: a linguagem rica descrita acima.
+- Worship, balada, rock, metal, disco e pop: harmonia DIATÔNICA e simples. Tríades, power chords (fundamental e quinta), sus2, sus4, add9, acordes com baixo trocado (slash) e, no máximo, sétimas simples. Poucos acordes, em laço (4 ou 8 compassos). SEM modulação, sem dominantes alterados, sem substituições e sem empréstimos, a menos que o pedido peça. Voicings abertos e simples; a escala de cada acorde é a do tom (ou a pentatônica).
+- Em qualquer estilo: modulação só quando o pedido pedir.
+
 CRITÉRIOS MUSICAIS
 - Tocável e na região média: mão esquerda com 1 a 3 notas, em geral entre C3 e C4, e mão direita com 3 a 5 notas, em geral entre C4 e C6. O grave fica para a linha de baixo, que o Harmona Lab escreve; desça a mão esquerda até C2 só quando o pedido pedir baixo ou pedal na mão do tecladista; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.
 - Se o pedido fixar a ponta (uma nota ou uma sequência), respeite exatamente e escolha a oitava que cabe na mão direita. Se pedir pedal no baixo, repita a nota no bass dos acordes pedidos.

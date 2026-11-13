@@ -95,6 +95,11 @@ ${FENCE}json
 ${JSON.stringify(EXAMPLE_PROJECT)}
 ${FENCE}
 
+HARMONIA POR ESTILO
+- Jazz, fusion, neo-soul, gospel, bossa, samba e afins: a linguagem rica descrita acima.
+- Worship, balada, rock, metal, disco e pop: harmonia DIATÔNICA e simples. Tríades, power chords (fundamental e quinta), sus2, sus4, add9, acordes com baixo trocado (slash) e, no máximo, sétimas simples. Poucos acordes, em laço (4 ou 8 compassos). SEM modulação, sem dominantes alterados, sem substituições e sem empréstimos, a menos que o pedido peça. Voicings abertos e simples; a escala de cada acorde é a do tom (ou a pentatônica).
+- Em qualquer estilo: modulação só quando o pedido pedir.
+
 CRITÉRIOS MUSICAIS
 - Tocável e na região média: mão esquerda com 1 a 3 notas, em geral entre C3 e C4, e mão direita com 3 a 5 notas, em geral entre C4 e C6. O grave fica para a linha de baixo, que o Harmona Lab escreve; desça a mão esquerda até C2 só quando o pedido pedir baixo ou pedal na mão do tecladista; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.
 - Se o pedido fixar a ponta (uma nota ou uma sequência), respeite exatamente e escolha a oitava que cabe na mão direita. Se pedir pedal no baixo, repita a nota no bass dos acordes pedidos.

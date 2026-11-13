@@ -100,6 +100,8 @@ class ChordEvent:
     bass_line: str = ""  # linha de baixo, na notação da frase ("E2/4. B1/8+4 E2/4"); vai para o canal 3
     section: str = ""  # começa aqui uma parte da música com este nome ("A", "B", "Refrão"); vale até a próxima marca
     bass_events: list[PhraseEvent] = field(default_factory=list)  # derivado de bass_line
+    riff: str = ""  # riff ou ostinato do acorde, na notação da frase ("E2&B2/8 E2/8 G3/4"); faixa própria, "Riff" (canal 7)
+    riff_events: list[PhraseEvent] = field(default_factory=list)  # derivado de riff
     comp_layers: list[tuple[list[CompHit], int]] = field(default_factory=list)  # derivado de comp
     # Derivados da frase e da escala, preenchidos na leitura (não fazem parte do JSON).
     phrase_events: list[PhraseEvent] = field(default_factory=list)
@@ -167,6 +169,8 @@ class ChordEvent:
             d["comp"] = self.comp
         if self.bass_line:
             d["bass_line"] = self.bass_line
+        if self.riff:
+            d["riff"] = self.riff
         if self.section:
             d["section"] = self.section
         return d
@@ -522,6 +526,19 @@ def _load_phrase(raw: dict[str, Any], chord: ChordEvent, index: int, project: Pr
             chord.bass_events = events
         else:
             issues.append(Issue("error", 'A linha de baixo ("bass_line") deve ser um texto, por exemplo "E2/4. B1/8+4 E2/4".', index, "bass_line"))
+    riff = raw.get("riff")
+    if riff not in (None, ""):
+        if isinstance(riff, (str, list, tuple)):
+            chord.riff = phrase_text(riff)
+            events, total, errors = parse_phrase(chord.riff, project.middle_c)
+            for message in errors:
+                issues.append(Issue("error", message.replace("Frase:", "Riff:").replace("na frase", "no riff"), index, "riff"))
+            if total > beats_to_ticks(chord.duration_beats):
+                issues.append(Issue("error", f"O riff dura {total / TICKS_PER_BEAT:g} tempos, mais que os "
+                                             f"{chord.duration_beats:g} do acorde.", index, "riff"))
+            chord.riff_events = events
+        else:
+            issues.append(Issue("error", 'O riff ("riff") deve ser um texto, por exemplo "E2&B2/8 E2/8 G3/4".', index, "riff"))
     comp = raw.get("comp")
     if comp not in (None, ""):
         if isinstance(comp, (str, list, tuple)):
@@ -554,7 +571,7 @@ def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, An
         for key in (*PARTS, "top_note"):
             if c.get(key) not in (None, ""):
                 c[key] = rename_note_text(c[key], from_middle_c, to_middle_c)
-        for key in ("phrase", "bass_line"):
+        for key in ("phrase", "bass_line", "riff"):
             if c.get(key) not in (None, ""):
                 c[key] = rename_phrase_text(c[key], from_middle_c, to_middle_c)
         chords.append(c)
