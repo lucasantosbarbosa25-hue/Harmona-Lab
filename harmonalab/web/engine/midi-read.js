@@ -4,6 +4,9 @@
 import { estimateKey, quantize, voiceText } from "./canto.js";
 
 const DRUM_CHANNEL = 9;
+// Limites de sanidade: um arquivo quebrado (ou feito para travar) não pode pedir memória sem fim.
+const MAX_BEATS = 4000; // 1000 compassos de 4/4
+const MAX_NOTES = 50000;
 
 /** Bytes de um .mid → { division (ticks por semínima), bpm (null se o arquivo não diz), timeSignature, tempoChanges, tracks }. */
 export function parseMidi(bytes) {
@@ -14,6 +17,7 @@ export function parseMidi(bytes) {
   if (data.length < 14 || text(0, 4) !== "MThd") throw new Error("Este arquivo não é um MIDI (.mid).");
   const headerLength = u32(4);
   const division = u16(12);
+  if (division === 0) throw new Error("Este MIDI está com o cabeçalho quebrado (sem ticks por semínima).");
   if (division & 0x8000) throw new Error("Este MIDI usa tempo em quadros (SMPTE), que o app não lê. Exporte de novo em ticks por semínima.");
   let at = 8 + headerLength;
   const tracks = [];
@@ -60,7 +64,7 @@ export function parseMidi(bytes) {
       } else if (byte === 0x80 || (byte === 0x90 && b === 0)) {
         const stack = open.get((channel << 8) | a);
         const on = stack?.shift();
-        if (on && tick > on.start) { track.notes.push({ start: on.start, end: tick, pitch: a, velocity: on.velocity, channel }); track.channels.add(channel); }
+        if (on && tick > on.start && track.notes.length < MAX_NOTES) { track.notes.push({ start: on.start, end: tick, pitch: a, velocity: on.velocity, channel }); track.channels.add(channel); }
       }
     }
     at = end;
@@ -96,6 +100,7 @@ export function melodyFromMidi(midi, trackIndex, { middleC = "C4" } = {}) {
   const raw = (track?.notes ?? []).filter((n) => n.channel !== DRUM_CHANNEL);
   if (!raw.length) return { events: [], text: "", key: null, bpm: midi.bpm, timeSignature: midi.timeSignature, warnings: ["Esta faixa não tem notas."], source: "midi" };
   const beat = (tick) => tick / midi.division;
+  if (beat(Math.max(...raw.map((n) => n.end))) > MAX_BEATS) throw new Error("Este MIDI é longo demais (ou está com os tempos quebrados) para virar melodia.");
   // uma nota por vez: nas que começam juntas (acorde) fica a mais aguda; cada nota acaba quando a próxima entra
   const near = midi.division / 16;
   const top = [];

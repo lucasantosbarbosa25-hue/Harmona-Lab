@@ -5,6 +5,7 @@ import { melodyFromMidi, melodyTracks, parseMidi } from "./engine/midi-read.js";
 
 const COUNT_IN_BARS = 1; // 2 quando há anacruse ou quando o fim da parte anterior toca antes (parte nova)
 const PREROLL_BARS = 2;
+const MAX_MIDI_BYTES = 5 * 1024 * 1024; // um MIDI de melodia tem poucos KB; acima disso nem é lido
 // Cantar devagar acerta mais (para quem não é cantor profissional). A Voz fica guardada em figuras, então depois o BPM do
 // projeto pode subir (no campo BPM ou pelo prompt) e a melodia acompanha, sem gravar de novo.
 export const SING_BPM = { min: 60, max: 100, suggested: 80 };
@@ -504,6 +505,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     event.target.value = "";
     if (!file) return;
     halt();
+    if (file.size > MAX_MIDI_BYTES) { status("Este arquivo é grande demais para ser um MIDI de melodia (o limite é 5 MB).", true); return; }
     try {
       const parsed = parseMidi(new Uint8Array(await file.arrayBuffer()));
       const tracks = melodyTracks(parsed);

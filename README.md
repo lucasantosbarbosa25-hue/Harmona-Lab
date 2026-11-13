@@ -69,6 +69,22 @@ sem reescrever nada.
 
 ---
 
+
+### Segurança
+
+O Harmona Lab é só arquivos estáticos: não tem servidor próprio, login, banco de dados nem chaves. Tudo roda no navegador
+de quem usa; o projeto fica no aparelho (armazenamento local) e o áudio do microfone nunca sai dele (o app não faz nenhuma
+chamada de rede além de baixar os próprios arquivos). O código é público (repositório aberto e, como em todo site, o
+JavaScript pode ser lido por quem abre a página): não coloque segredos nele.
+
+- **Cabeçalhos do site** (`web/_headers`, lido pelo Cloudflare Pages; o servidor local manda os mesmos): política de
+  conteúdo que só aceita arquivos do próprio endereço (sem scripts de fora e sem `eval`; só o WebAssembly do tocador de
+  sons), proibição de embutir o site em outro (contra clickjacking), `nosniff`, sem "referrer", e microfone só para o app.
+- **Dados de fora são tratados como texto**: o que vem de um link, de um JSON colado ou de um MIDI nunca vira HTML (a tela
+  é montada com `textContent`). Links comprimidos têm limite de tamanho ao abrir (2 MB) e o MIDI importado também (5 MB,
+  4.000 tempos, 50.000 notas); há um teste que embaralha arquivos MIDI para garantir que arquivo quebrado não trava o app.
+- **Servidor local** (`python -m harmonalab`): escuta só em 127.0.0.1 por padrão e não entrega nada fora de `web/`.
+
 ## Usar no computador sem publicar
 
 Precisa de **Python 3.10+**. A única dependência é o [`mido`](https://mido.readthedocs.io).

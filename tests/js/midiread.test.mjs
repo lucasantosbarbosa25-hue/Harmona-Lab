@@ -33,3 +33,21 @@ test("faixa com acordes: fica a nota mais aguda de cada vez, e avisa", () => {
 test("arquivo que não é MIDI: erro claro", () => {
   assert.throws(() => parseMidi(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15])), /não é um MIDI/);
 });
+
+test("arquivos MIDI quebrados ou maliciosos: nunca travam; no máximo, um erro em português", () => {
+  let seed = 12345;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+  const good = midiBytes(project());
+  for (let round = 0; round < 400; round++) {
+    const bytes = Uint8Array.from(good);
+    const cuts = 1 + Math.floor(rnd() * 8);
+    for (let k = 0; k < cuts; k++) bytes[Math.floor(rnd() * bytes.length)] = Math.floor(rnd() * 256); // bytes trocados ao acaso
+    const sliced = rnd() < 0.3 ? bytes.subarray(0, Math.floor(rnd() * bytes.length)) : bytes; // ou o arquivo cortado
+    try {
+      const midi = parseMidi(sliced);
+      for (const t of melodyTracks(midi)) melodyFromMidi(midi, t.index);
+    } catch (err) {
+      assert.ok(err instanceof Error, "só erros comuns");
+    }
+  }
+});

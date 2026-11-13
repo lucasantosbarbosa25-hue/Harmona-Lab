@@ -63,6 +63,13 @@ const sumCache = new Map();
 export function ticksText(ticks) {
   if (ticks <= 0) return "";
   if (sumCache.has(ticks)) return sumCache.get(ticks);
+  // duração muito longa (uma pausa de muitos compassos): as semibreves inteiras saem na frente e só o resto é calculado,
+  // para a conta não crescer com o tamanho (o resultado é o mesmo: o menor número de figuras)
+  if (ticks > 2 * 1920) {
+    const wholes = Math.floor(ticks / 1920) - 1;
+    const rest = ticksText(ticks - wholes * 1920);
+    return rest ? `${"1+".repeat(wholes)}${rest}` : "";
+  }
   const best = new Array(ticks + 1).fill(null);
   best[0] = [];
   for (let t = 1; t <= ticks; t++) {

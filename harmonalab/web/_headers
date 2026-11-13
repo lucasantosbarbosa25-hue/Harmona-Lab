@@ -1,0 +1,10 @@
+# Cabeçalhos de segurança do site (Cloudflare Pages lê este arquivo; ele não é servido como página).
+# O app é só arquivos do próprio endereço: nada de fora pode ser carregado nem executado, e o site não pode ser
+# embutido em outro. O microfone só vale para o próprio app (cantar uma melodia).
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: microphone=(self), camera=(), geolocation=(), payment=(), usb=(), bluetooth=()
+  Cross-Origin-Opener-Policy: same-origin

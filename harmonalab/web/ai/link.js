@@ -108,10 +108,25 @@ function readParams(hash) {
 const toBase64Url = (bytes) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 const fromBase64Url = (text) => Uint8Array.from(atob(text.replace(/-/g, "+").replace(/_/g, "/")), (c) => c.charCodeAt(0));
 
-async function pipeThrough(bytes, stream) {
+const MAX_UNPACKED = 2 * 1024 * 1024; // um link comprimido não pode "inchar" além disso (um projeto enorme tem poucos KB)
+
+async function pipeThrough(bytes, stream, limit = Infinity) {
   const writer = stream.writable.getWriter();
   writer.write(bytes).then(() => writer.close()).catch(() => {}); // o erro de dado inválido aparece na leitura, logo abaixo
-  return new Uint8Array(await new Response(stream.readable).arrayBuffer());
+  const reader = stream.readable.getReader();
+  const chunks = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.length;
+    if (size > limit) { reader.cancel().catch(() => {}); throw new Error("Link grande demais depois de aberto."); }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) { out.set(chunk, at); at += chunk.length; }
+  return out;
 }
 
 export const canCompress = () => typeof CompressionStream === "function" && typeof DecompressionStream === "function";
@@ -155,7 +170,7 @@ export async function parseLinkHash(hash) {
     if (params.pedido) return { kind: "request", request: textOf(params.pedido) };
     if (params.z) {
       if (!canCompress()) return { kind: "error", message: "Este navegador não abre links comprimidos. Peça a versão com #json= ou #p=." };
-      const bytes = await pipeThrough(fromBase64Url(params.z.trim()), new DecompressionStream("deflate-raw"));
+      const bytes = await pipeThrough(fromBase64Url(params.z.trim()), new DecompressionStream("deflate-raw"), MAX_UNPACKED);
       return fromJson(JSON.parse(new TextDecoder().decode(bytes)));
     }
     if (params.json) return fromJson(JSON.parse(decode(params.json)));

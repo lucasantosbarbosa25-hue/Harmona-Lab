@@ -28,6 +28,22 @@ CONTENT_TYPES = {
 }
 
 
+def _security_headers() -> dict[str, str]:
+    """Os mesmos cabeçalhos de segurança do site publicado (lidos de ``web/_headers``, o arquivo do Cloudflare Pages)."""
+    headers = {"X-Content-Type-Options": "nosniff"}
+    try:
+        for line in (WEB_DIR / "_headers").read_text(encoding="utf-8").splitlines():
+            if line.startswith("  ") and ":" in line:
+                name, value = line.strip().split(":", 1)
+                headers[name.strip()] = value.strip()
+    except OSError:
+        pass
+    return headers
+
+
+SECURITY_HEADERS = _security_headers()
+
+
 def resolve_web_file(url_path: str) -> Path | None:
     """Arquivo de ``web/`` para um caminho de URL, ou ``None`` (fora da pasta, oculto, tipo não servido)."""
     path = unquote(urlsplit(url_path).path)
@@ -56,7 +72,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", CONTENT_TYPES[file.suffix] if file else "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache")  # o service worker cuida do modo offline
-        self.send_header("X-Content-Type-Options", "nosniff")
+        for name, value in SECURITY_HEADERS.items():
+            self.send_header(name, value)
         self.end_headers()
         if with_body:
             self.wfile.write(body)

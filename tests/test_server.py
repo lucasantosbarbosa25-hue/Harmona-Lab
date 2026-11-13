@@ -112,3 +112,17 @@ def test_tocador_de_sf2_vem_com_licencas_e_versoes_fixas():
         assert f"{package} {version}" in versions, package
     # a página só usa o que o pacote exporta: o sintetizador (AudioWorklet) e o sequenciador
     assert re.search(r"export\{[^}]*as Sequencer[^}]*\}", (vendor / "spessasynth.min.js").read_text(encoding="utf-8"))
+
+
+def test_cabecalhos_de_seguranca_do_site_e_do_servidor_local():
+    """O site publicado (web/_headers, lido pelo Cloudflare Pages) e o servidor local mandam os mesmos cabeçalhos."""
+    from harmonalab.server import SECURITY_HEADERS, resolve_web_file
+
+    csp = SECURITY_HEADERS["Content-Security-Policy"]
+    assert "default-src 'self'" in csp and "object-src 'none'" in csp and "frame-ancestors 'none'" in csp
+    assert "unsafe-eval'" not in csp.replace("'wasm-unsafe-eval'", "")  # só o WebAssembly do tocador de sons
+    assert "http:" not in csp and "https:" not in csp and "*" not in csp  # nada de fora
+    assert SECURITY_HEADERS["X-Frame-Options"] == "DENY"
+    assert SECURITY_HEADERS["X-Content-Type-Options"] == "nosniff"
+    assert "microphone=(self)" in SECURITY_HEADERS["Permissions-Policy"]
+    assert resolve_web_file("/_headers") is None  # o arquivo de configuração não é servido como página
