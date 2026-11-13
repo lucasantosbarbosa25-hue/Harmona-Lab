@@ -1494,7 +1494,7 @@ function bindUi() {
   setupCanto({
     defaults: () => ({ bpm: toNumber(state.project.tempo) || 80, timeSignature: state.project.time_signature, middleC: state.project.middle_c }),
     onUse: useVoice,
-    play: (notes, total) => { stopPlayback(); player.play(notes, { total }); },
+    play: (notes, total, options = {}) => { stopPlayback(); player.play(notes, { total, ...options }); },
     stop: () => stopPlayback(),
   });
 }

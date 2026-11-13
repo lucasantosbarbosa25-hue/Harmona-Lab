@@ -190,6 +190,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     }
     const signature = $("#canto-signature").value;
     const beatsPerBar = beatsPerBarOf(signature);
+    stopListening();
     stop?.();
     state.recorder = new CantoRecorder();
     state.bpm = bpm;
@@ -281,22 +282,49 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     for (let b = 0; b <= beats; b += bpb) { g.beginPath(); g.moveTo(x(b), 0); g.lineTo(x(b), height); g.stroke(); }
     const spell = speller(r.key, defaults().middleC);
     g.font = "11px system-ui, sans-serif";
+    const playing = state.listen ? r.events.findIndex((e) => state.listen.beat >= e.beat && state.listen.beat < e.beat + e.beats) : -1;
     r.events.forEach((e, i) => {
       const left = x(e.beat);
       const w = Math.max(3, x(e.beat + e.beats) - left - 2);
       const top = y(e.midi) - 5;
-      g.fillStyle = i === state.selected ? color("--primary", "#a85a00") : color("--muted", "#666");
-      g.fillRect(left, top, w, 10);
-      if (w > 22 || i === state.selected) { g.fillStyle = color("--text", "#111"); g.fillText(spell(e.midi), left, top - 3 > 10 ? top - 3 : top + 22); }
+      const lit = i === playing;
+      g.globalAlpha = playing >= 0 && !lit ? 0.45 : 1; // ao ouvir, as outras notas apagam um pouco
+      g.fillStyle = lit || (playing < 0 && i === state.selected) ? color("--primary", "#a85a00") : color("--muted", "#666");
+      if (lit) g.fillRect(left - 1, top - 3, w + 2, 16); // a nota que soa acende e cresce
+      else g.fillRect(left, top, w, 10);
+      if (i === state.selected && playing >= 0) { g.strokeStyle = color("--primary", "#a85a00"); g.lineWidth = 2; g.strokeRect(left, top, w, 10); }
+      g.globalAlpha = 1;
+      if (w > 22 || i === state.selected || lit) { g.fillStyle = color("--text", "#111"); g.fillText(spell(e.midi), left, top - 3 > 10 ? top - 3 : top + 22); }
     });
+    if (state.listen) {
+      // a linha que corre junto com o som
+      const at = x(Math.min(beats, state.listen.beat));
+      g.strokeStyle = color("--primary", "#a85a00");
+      g.lineWidth = 2;
+      g.beginPath(); g.moveTo(at, 0); g.lineTo(at, height); g.stroke();
+    }
     canvas.dataset.beats = String(beats);
+    canvas.dataset.playing = String(playing);
   };
 
+  /** Para o destaque do "Ouvir" (o som em si para com stop()). */
+  const stopListening = () => {
+    if (!state.listen) return;
+    cancelAnimationFrame(state.listen.frame);
+    state.listen = null;
+    $("#canto-play").textContent = "Ouvir";
+    $("#canto-play").setAttribute("aria-pressed", "false");
+    if (state.result) drawRoll();
+  };
+  const halt = () => { if (state.listen) { stopListening(); stop?.(); } };
+
   const shiftAll = (semitones) => {
+    halt();
     state.result.events = state.result.events.map((e) => ({ ...e, midi: Math.max(24, Math.min(108, e.midi + semitones)) }));
     renderResult();
   };
   const shiftSelected = (semitones) => {
+    halt();
     const e = state.result.events[state.selected];
     if (e) e.midi = Math.max(24, Math.min(108, e.midi + semitones));
     renderResult();
@@ -304,7 +332,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
 
   $("#canto-open").addEventListener("click", open);
   $("#canto-close").addEventListener("click", () => { state.recorder?.cancel(); state.recorder = null; state.recording = false; stop?.(); dialog.close(); });
-  dialog.addEventListener("close", () => { state.recorder?.cancel(); state.recorder = null; state.recording = false; $("#canto-record").textContent = "Gravar"; $("#canto-record").classList.remove("recording"); });
+  dialog.addEventListener("close", () => { halt(); state.recorder?.cancel(); state.recorder = null; state.recording = false; $("#canto-record").textContent = "Gravar"; $("#canto-record").classList.remove("recording"); });
   $("#canto-record").addEventListener("click", record);
   document.querySelectorAll("#canto-mode button").forEach((b) => b.addEventListener("click", () => {
     state.mode = b.dataset.mode;
@@ -346,18 +374,34 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
   $("#canto-semi-down").addEventListener("click", () => shiftSelected(-1));
   $("#canto-semi-up").addEventListener("click", () => shiftSelected(1));
   $("#canto-delete").addEventListener("click", () => {
+    halt();
     state.result.events.splice(state.selected, 1);
     state.selected = -1;
     if (!state.result.events.length) { state.result = null; $("#canto-result").hidden = true; status("Todas as notas foram apagadas. Grave de novo."); return; }
     renderResult();
   });
   $("#canto-play").addEventListener("click", () => {
+    if (state.listen) { stopListening(); stop?.(); return; }
     const seconds = 60 / state.result.bpm;
-    play(state.result.events.map((e) => ({ midi: e.midi, start: e.beat * seconds, length: e.beats * seconds, velocity: 95 })), totalBeats() * seconds);
+    const total = totalBeats() * seconds;
+    play(state.result.events.map((e) => ({ midi: e.midi, start: e.beat * seconds, length: e.beats * seconds, velocity: 95 })), total, { onEnd: () => stopListening() });
+    // o som começa 60 ms depois (o mesmo atraso do tocador); a linha segue o relógio da página a partir daí
+    state.listen = { start: performance.now() + 60, seconds, total, beat: 0, frame: 0 };
+    $("#canto-play").textContent = "Parar";
+    $("#canto-play").setAttribute("aria-pressed", "true");
+    const tick = () => {
+      if (!state.listen) return;
+      const elapsed = (performance.now() - state.listen.start) / 1000;
+      if (elapsed > total + 0.1) { stopListening(); return; }
+      state.listen.beat = Math.max(0, elapsed) / seconds;
+      drawRoll();
+      state.listen.frame = requestAnimationFrame(tick);
+    };
+    tick();
   });
   $("#canto-use").addEventListener("click", () => {
     onUse({ text: text(), bpm: state.result.bpm, timeSignature: state.result.signature, beats: totalBeats() });
     dialog.close();
   });
-  $("#canto-again").addEventListener("click", () => { state.result = null; $("#canto-result").hidden = true; record(); });
+  $("#canto-again").addEventListener("click", () => { halt(); state.result = null; $("#canto-result").hidden = true; record(); });
 }
