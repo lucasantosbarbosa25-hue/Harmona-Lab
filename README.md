@@ -126,7 +126,7 @@ com a explicação acorde a acorde e **um link**: toque nele e a progressão abr
 
 **Sem configurar nada:** escreva ou dite (🎤) o pedido no cartão do topo e use **Copiar pedido para a IA**; cole no chat,
 e depois toque no link que ela mandar ou cole a resposta no passo 3. Se a conferência achar problema, o app mostra a lista
-e copia o texto de correção para você colar na mesma conversa. **Ajustar a atual** pede mudanças na progressão da tela.
+e copia o texto de correção para você colar na mesma conversa. Depois que a música existe, o assistente trabalha **por parte** (veja "O assistente por parte", abaixo).
 
 **Links.** O que vem depois do `#` nunca vai para servidor.
 - `#t=…&k=Em&bpm=80&p=cifra:notas:duração:função:escala;…`: o formato compacto que qualquer IA consegue escrever
@@ -180,16 +180,26 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   compasso vêm do arquivo, a faixa mais provável é escolhida (dá para trocar), acordes viram a nota mais aguda, e o ritmo é
   encaixado em semicolcheias. O resto é igual ao canto: conferir, ajustar e usar (como música toda ou como parte nova).
 
-  **Continuar com a IA.** Depois de cantar uma parte nova, o assistente ganha o modo **Continuar (parte B)**. O pedido leva
-  só a **harmonia** da música (sem frases, levadas, baixo, bateria nem voz, que são do app), a melodia com as notas da parte
-  nova marcadas, e a tarefa: harmonizar a parte nova (as durações têm de somar os tempos dela) e, se quiser, reescrever o
-  último ou os 2 últimos acordes da parte anterior para ligar as duas. A IA devolve **só os acordes novos**, por link
+  **O assistente por parte.** Com música na tela, o cartão do pedido mostra as partes (**A**, **B**, **+ nova**) e trabalha
+  em uma de cada vez; tocar no quadrado de uma parte, na faixa das partes, escolhe a mesma parte no assistente. Cada parte
+  guarda **o seu próprio pedido** (o de uma parte nova começa vazio), e o botão diz o que vai acontecer:
+  - **Criar a parte B** (parte vazia). Se você cantou a melodia dela, o tamanho é o da melodia e o pedido é opcional. Se a
+    parte nasceu do **+** → **Descrever para a IA**, quem decide o tamanho é a IA (as partes seguintes se deslocam, com a
+    melodia delas). A IA pode reescrever o último ou os 2 últimos acordes da parte anterior para ligar as duas.
+  - **Ajustar a parte B** (parte que já tem harmonia). Só ela muda, e **do mesmo tamanho**; para uma parte de outro
+    tamanho, crie uma parte nova.
+  O **+** da faixa das partes oferece três jeitos de criar: **Descrever para a IA**, **Cantar a melodia** e **Repetir a
+  parte X** (a cópia vai para o fim). Nada disso zera a música: para começar outra, use o menu → **Começar outra música**
+  (pede confirmação). A progressão de exemplo, que abre na primeira vez, é a exceção: o primeiro pedido cria a sua música
+  no lugar dela.
+
+  O pedido de uma parte leva só a **harmonia** da música (sem frases, levadas, baixo, bateria nem voz, que são do app), a
+  melodia com as notas da parte marcadas (quando há) e a tarefa. A IA devolve **só os acordes novos**, por link
   (`#cont=B&ret=1&p=...`: `ret` = quantos acordes do fim da parte anterior foram reescritos) ou em JSON
   (`{"continuacao": {"parte": "B", "retocados": 1}, "projeto": {"chords": [...]}}`). O app encaixa esses acordes no lugar,
   confere as durações (se não baterem, explica e não mexe em nada) e mantém todo o resto: os outros acordes, com a levada,
-  o baixo e as frases deles, e a Voz. O ritmo que estava ligado é escrito também nos acordes novos. O texto do pedido é
-  opcional nesse modo (a caixa começa vazia: o pedido antigo não vale para a parte nova). O modo "Ajustar a atual" também
-  passou a mandar só a harmonia.
+  o baixo e as frases deles, e a Voz. O ritmo que estava ligado é escrito também nos acordes novos. Se a resposta trouxer
+  uma música inteira quando já existe música, o app pergunta antes de trocar.
 
   **Melodia e partes num lugar só.** Logo abaixo do pedido à IA fica o cartão **Melodia e partes**: o botão de cantar, os
   blocos das partes (com o desenho da melodia) e os controles de escuta (o que ouvir, Mixer, Repetir e andamento de

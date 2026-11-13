@@ -111,3 +111,24 @@ test("continuação: o pedido leva só a harmonia e pede só os acordes novos; a
   assert.deepEqual(fromLink.continuation, { section: "B", retouched: 2 });
   assert.equal(fromLink.chords.length, 1);
 });
+
+test("pedido por parte: ajustar mantém o tamanho; parte criada por texto tem tamanho livre", () => {
+  const project = { title: "T", tempo: 90, time_signature: "4/4", chords: [
+    { symbol: "Am7", duration_beats: 4, left_hand: ["A2"], right_hand: ["C4", "E4"], section: "A", comp: "x", bass_line: "A2/1" },
+    { symbol: "", duration_beats: 16, section: "B" },
+  ] };
+  const base = { fromBar: 1, toBar: 1, beats: 4, hasNext: true };
+  const adjust = buildChatPrompt({ request: "mais tenso", mode: "continue", currentProject: project, continuation: { ...base, kind: "adjust", section: "A", previous: null, fixed: true }, appUrl: "https://x.test/" });
+  assert.match(adjust, /AJUSTE DA PARTE "A"/);
+  assert.match(adjust, /EXATAMENTE 4 tempos/);
+  assert.match(adjust, /#cont=A&ret=K/);
+  assert.match(adjust, /mais tenso/);
+  assert.doesNotMatch(adjust, /bass_line|Crie uma progressão nova/);
+  const create = buildChatPrompt({ request: "refrão aberto", mode: "continue", currentProject: project, continuation: { kind: "create", section: "B", previous: "A", fromBar: 2, toBar: 5, beats: 16, fixed: false, hasNext: false }, appUrl: "https://x.test/" });
+  assert.match(create, /PARTE NOVA: a parte "B"/);
+  assert.match(create, /O tamanho é você quem decide/);
+  assert.doesNotMatch(create, /EXATAMENTE 16 tempos/);
+  assert.match(create, /reescrever o último ou os 2 últimos acordes da parte "A"/);
+  const empty = buildChatPrompt({ request: "", mode: "continue", currentProject: project, continuation: { kind: "create", section: "B", previous: "A", fromBar: 2, toBar: 5, beats: 16, fixed: false, hasNext: false }, appUrl: "https://x.test/" });
+  assert.match(empty, /Crie a parte nova da música\./);
+});

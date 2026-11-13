@@ -26,55 +26,67 @@ const loadResearch = () => { try { return localStorage.getItem(RESEARCH_KEY) ===
 const saveResearch = (on) => { try { localStorage.setItem(RESEARCH_KEY, on ? "1" : "0"); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
-  const { $, h, icon, toast, getProjectJson, getVoice, getContinuation, hasProgression, applyGenerated, applyContinuation } = api;
+  const { $, h, icon, toast, getProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
-    mic: $("#ai-mic"), mode: $("#ai-mode"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
+    mic: $("#ai-mic"), parts: $("#ai-parts"), partsList: $("#ai-parts-list"), task: $("#ai-task"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
     chatPrompt: $("#ai-chat-prompt"), answer: $("#ai-answer"), fixActions: $("#ai-fix-actions"),
     research: $("#ai-research"),
   };
-  let mode = "new";
   const basePlaceholder = els.prompt.placeholder;
+  let shown = ""; // a parte cujo pedido está na caixa (para não trocar o texto enquanto a pessoa escreve)
+  let asked = -1; // a parte para a qual o último pedido foi copiado (a resposta entra nela)
   let chatRequest = ""; // o pedido que foi copiado (vai para as notas do projeto)
   let pending = null; // resposta recusada pela conferência: { project, explanation, problems }
   let dictation = null;
 
   // ------------------------------------------------------------ pedido
-  els.prompt.value = loadPrompt();
-  els.prompt.addEventListener("input", () => { if (mode !== "continue") savePrompt(els.prompt.value); });
+  // cada parte tem o seu pedido; o da música nova (antes de existir harmonia) fica guardado no aparelho
+  const keep = (text) => { const t = getTarget(); if (!t || t.kind === "new") savePrompt(text); else setPartRequest(t.index, text); };
+  els.prompt.addEventListener("input", () => keep(els.prompt.value));
   els.research.checked = loadResearch();
   els.research.addEventListener("change", () => saveResearch(els.research.checked));
   els.examples.replaceChildren(...EXAMPLES.map((text) => h("button", {
-    type: "button", class: "chip-button", onclick: () => { els.prompt.value = text; savePrompt(text); els.prompt.focus(); },
+    type: "button", class: "chip-button", onclick: () => { els.prompt.value = text; keep(text); els.prompt.focus(); },
   }, truncate(text, 56))));
   $("#ai-chat-links").replaceChildren(...CHATS.map((c) => h("a", { class: "btn secondary small", href: c.url, target: "_blank", rel: "noopener noreferrer" }, c.name)));
-  els.generate.replaceChildren(icon("paste"), "1. Copiar pedido para a IA");
   els.generate.addEventListener("click", copyForChat);
   $("#ai-load-answer").addEventListener("click", loadAnswer);
-  // o pedido da continuação é outro texto: o pedido antigo (“20 acordes no estilo…”) não vale para a parte nova
-  let otherText = "";
-  function switchMode(next) {
-    const was = mode === "continue";
-    const will = next === "continue";
-    if (was !== will) { const current = els.prompt.value; els.prompt.value = otherText; otherText = current; if (!will) savePrompt(els.prompt.value); }
-    mode = next;
-    refresh();
+
+  const bars = (t) => { const n = t.toBar - t.fromBar + 1; return `${n} compasso${n === 1 ? "" : "s"}`; };
+  /** O que o assistente vai fazer na parte escolhida, em uma frase. */
+  function taskText(t) {
+    if (t.kind === "adjust") return `Parte ${t.name}: já tem harmonia (${bars(t)}). Diga o que mudar; ela continua com o mesmo tamanho e o resto da música não muda.`;
+    if (t.melody) return `Parte ${t.name}: tem a melodia (${bars(t)}) e falta a harmonia. O pedido é opcional: vazio, a IA harmoniza do jeito dela.`;
+    return `Parte ${t.name}: nova e vazia. Escreva como você quer essa parte; a IA decide o tamanho. O resto da música não muda.`;
   }
-  els.mode.querySelectorAll("button").forEach((b) => b.addEventListener("click", () => switchMode(b.dataset.mode)));
 
   function refresh() {
-    const canAdjust = hasProgression();
-    const next = canAdjust ? getContinuation?.() ?? null : null; // há uma parte nova, vazia, esperando a harmonia?
-    els.mode.hidden = !canAdjust;
-    if (!canAdjust) mode = "new";
-    if (mode === "continue" && !next) { mode = "adjust"; const current = els.prompt.value; els.prompt.value = otherText; otherText = current; }
-    const button = els.mode.querySelector('[data-mode="continue"]');
-    button.hidden = !next;
-    if (next) button.textContent = `Continuar (parte ${next.section})`;
-    els.mode.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
-    els.prompt.placeholder = mode === "continue"
-      ? `Opcional: diga como quer a parte ${next.section} (ex.: "refrão mais aberto, modulando um tom acima"). Vazio = a IA decide.`
-      : basePlaceholder;
+    const parts = getParts();
+    const t = getTarget();
+    const fresh = !t || t.kind === "new"; // música ainda sem harmonia: o pedido cria a música
+    els.parts.hidden = fresh;
+    els.task.hidden = fresh && !t?.example;
+    if (fresh && t?.example) els.task.textContent = "O que está na tela é um exemplo. O seu pedido cria a sua música no lugar dele.";
+    els.examples.hidden = !fresh;
+    if (!fresh) {
+      els.partsList.replaceChildren(
+        ...parts.map((p) => h("button", {
+          type: "button", class: "ai-part", style: `--hue:${p.hue}`, "aria-pressed": String(p.index === t.index),
+          "aria-label": `Parte ${p.name}${p.empty ? ", sem harmonia" : ""}`, onclick: () => selectPart(p.index),
+        }, h("strong", null, p.name), p.empty ? h("small", null, "vazia") : null)),
+        h("button", { type: "button", class: "ai-part add", "aria-label": "Criar uma parte nova pelo pedido", onclick: () => describeNewSection() }, h("strong", null, "+"), h("small", null, "nova")),
+      );
+      els.task.textContent = taskText(t);
+    }
+    // o texto da caixa só troca quando a parte muda
+    const key = fresh ? "new" : `${t.index}:${t.name}`;
+    if (key !== shown) { shown = key; els.prompt.value = fresh ? loadPrompt() : t.request; }
+    els.prompt.placeholder = fresh ? basePlaceholder
+      : t.kind === "adjust" ? `O que mudar na parte ${t.name}? Ex.: "troque o último acorde por um dominante alterado" ou "deixe mais tensa".`
+        : t.melody ? `Opcional: como você quer a harmonia da parte ${t.name}? Ex.: "refrão mais aberto". Vazio = a IA decide.`
+          : `Como você quer a parte ${t.name}? Ex.: "refrão de 8 compassos, mais aberto, subindo um tom".`;
+    els.generate.replaceChildren(icon("paste"), fresh ? "1. Copiar pedido para a IA" : `1. ${t.kind === "adjust" ? "Ajustar" : "Criar"} a parte ${t.name}: copiar pedido`);
   }
 
   function setStatus(kind, text) {
@@ -98,25 +110,31 @@ export function initAssistant(api) {
   // ------------------------------------------------------------ copiar o pedido
   async function copyForChat() {
     const request = els.prompt.value.trim();
-    const continuation = mode === "continue" && hasProgression() ? getContinuation?.() ?? null : null;
-    if (!request && !continuation) {
-      setStatus("error", "Escreva ou dite o que você quer, por exemplo: “6 acordes, 72 BPM, estilo Jesús Molina”.");
+    const t = getTarget();
+    const part = t && t.kind !== "new" ? t : null;
+    if (!request && (!part || part.kind === "adjust")) {
+      setStatus("error", part ? `Escreva o que você quer mudar na parte ${part.name}.` : "Escreva ou dite o que você quer, por exemplo: “6 acordes, 72 BPM, estilo Jesús Molina”.");
       els.prompt.focus();
       return;
     }
     dictation?.stop();
-    if (!continuation) savePrompt(request);
-    const adjust = mode === "adjust" && hasProgression();
+    keep(els.prompt.value);
+    const continuation = part ? {
+      kind: part.kind, section: part.name, previous: part.kind === "create" ? part.previous : null, fromBar: part.fromBar, toBar: part.toBar,
+      beats: part.beats, fixed: part.fixed, hasNext: part.hasNext,
+    } : null;
     const text = buildChatPrompt({
-      request, mode: continuation ? "continue" : adjust ? "adjust" : "new", currentProject: adjust || continuation ? getProjectJson() : null,
+      request, mode: part ? "continue" : "new", currentProject: part ? getProjectJson() : null,
       appUrl: appUrl(), research: els.research.checked, voice: getVoice?.() ?? null, continuation,
     });
     chatRequest = request;
+    asked = part ? part.index : -1;
     els.chatPrompt.hidden = true;
     els.chatStep.hidden = false;
     els.result.hidden = true;
     const copied = await copyText(text);
-    setStatus("info", copied ? "Pedido copiado! Abra a sua IA, cole e envie. Depois toque no link que ela mandar ou cole a resposta no passo 3." : "Não consegui copiar sozinho: toque e segure no texto do pedido, copie e cole na sua IA.");
+    const what = part ? `Pedido da parte ${part.name} copiado!` : "Pedido copiado!";
+    setStatus("info", copied ? `${what} Abra a sua IA, cole e envie. Depois toque no link que ela mandar ou cole a resposta no passo 3.` : "Não consegui copiar sozinho: toque e segure no texto do pedido, copie e cole na sua IA.");
   }
 
   $("#ai-copy-instructions").addEventListener("click", async () => {
@@ -139,17 +157,20 @@ export function initAssistant(api) {
   }
 
   /** Resposta de continuação (só os acordes novos): o app encaixa na parte nova. Devolve true se era uma continuação. */
+  let fromBox = false; // a resposta veio da caixa do passo 3 (e não de um link aberto de fora)
+  let replaceConfirmed = false; // a pessoa já confirmou a troca da música toda (ao abrir um link)
   function acceptContinuation(project, explanation, problems) {
     if (!project?.continuation) return false;
-    const result = applyContinuation(project, { explanation });
+    const result = applyContinuation(project, { explanation, request: chatRequest, index: asked });
     if (result.problems.length) {
       pending = { problems: result.problems };
       els.fixActions.hidden = false;
       $("#ai-load-anyway").hidden = true;
       els.chatStep.hidden = false;
-      setStatus("error", `A parte nova não encaixou: ${result.problems.join(" · ")}`);
+      setStatus("error", `A parte não encaixou: ${result.problems.join(" · ")}`);
       return true;
     }
+    asked = -1;
     showResult(result.title, explanation, problems);
     pending = null;
     els.fixActions.hidden = true;
@@ -160,7 +181,18 @@ export function initAssistant(api) {
 
   function accept(project, explanation, problems, message, request = chatRequest || els.prompt.value.trim()) {
     if (acceptContinuation(project, explanation, problems)) return;
+    // a música já existe e a resposta traz uma música inteira: só troca tudo se a pessoa confirmar
+    if (hasProgression() && getTarget()?.kind !== "new" && !replaceConfirmed
+      && !window.confirm("Esta resposta traz uma música inteira, não uma parte. Trocar a música atual por ela? (Dá para desfazer logo em seguida.)")) {
+      setStatus("info", "Nada foi trocado. Para mexer só em uma parte, escolha a parte e copie o pedido dela.");
+      return;
+    }
+    replaceConfirmed = false;
     const title = String(project.title || "Progressão");
+    // o pedido que criou a música fica guardado na primeira parte dela (é o pedido da parte A)
+    const own = request || (fromBox ? chatRequest : ""); // link colado na caixa da resposta: é a resposta ao pedido copiado
+    if (own && Array.isArray(project.chords) && project.chords[0] && typeof project.chords[0] === "object") project.chords[0] = { ...project.chords[0], request: own };
+    shown = "";
     applyGenerated(project, { comment: buildComment(request, explanation), message: message || `Progressão carregada: ${title}` });
     showResult(title, explanation, problems);
     pending = null;
@@ -192,12 +224,15 @@ export function initAssistant(api) {
     if (link.kind === "error") { setStatus("error", link.message); return true; }
     if (link.kind === "request") {
       els.prompt.value = link.request;
-      savePrompt(link.request);
+      keep(link.request);
       setStatus("info", "Pedido do link carregado. Toque em “Copiar pedido para a IA” quando quiser.");
       els.prompt.scrollIntoView({ behavior: "smooth", block: "center" });
       return true;
     }
-    if (!link.project?.continuation && askBeforeReplacing && !window.confirm("Abrir a progressão deste link? Ela substitui a atual (dá para desfazer logo em seguida).")) return true;
+    if (!link.project?.continuation && askBeforeReplacing) {
+      if (!window.confirm("Abrir a progressão deste link? Ela substitui a atual (dá para desfazer logo em seguida).")) return true;
+      replaceConfirmed = true;
+    }
     receiveProject(link.project, link.explanation);
     return true;
   }
@@ -206,7 +241,10 @@ export function initAssistant(api) {
     const text = els.answer.value.trim();
     if (!text) { setStatus("error", "Cole a resposta da IA (ou o link dela) na caixa do passo 3."); els.answer.focus(); return; }
     const hash = findLinkInText(text);
-    if (hash && (await openLink(hash))) { if (!pending) els.answer.value = ""; return; }
+    fromBox = true;
+    try {
+      if (hash && (await openLink(hash))) { if (!pending) els.answer.value = ""; return; }
+    } finally { fromBox = false; }
     let read;
     try {
       read = readChatAnswer(text);
@@ -240,7 +278,7 @@ export function initAssistant(api) {
         els.mic.setAttribute("aria-pressed", String(state === "listening"));
         els.mic.classList.toggle("listening", state === "listening");
         if (state === "listening") setStatus("info", "Ouvindo… fale o pedido e faça uma pausa quando terminar.");
-        else { if (els.status.classList.contains("info")) setStatus("", ""); savePrompt(els.prompt.value); }
+        else { if (els.status.classList.contains("info")) setStatus("", ""); keep(els.prompt.value); }
       },
       onError: (message) => setStatus("error", message),
     });
@@ -255,7 +293,5 @@ export function initAssistant(api) {
   els.mic.append(icon("mic"));
 
   refresh();
-  /** Escolhe o modo de fora (depois de cantar uma parte nova, o app já deixa em "Continuar"). */
-  const setMode = (next) => { switchMode(next); };
-  return { refresh, openLink, setMode };
+  return { refresh, openLink };
 }

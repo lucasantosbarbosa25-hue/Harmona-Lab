@@ -42,11 +42,11 @@
         <h2 id="assistant-heading">Peça a harmonia à sua IA</h2>
         <p class="assistant-intro">Descreva do seu jeito: estilo, artista ou música de referência, número de acordes, BPM, ponta, baixo… Sua IA monta a progressão e <strong>explica a função de cada acorde</strong>; o Harmona Lab confere as notas e abre tudo aqui, pronto para ouvir e exportar.</p>
       </div>
-      <div class="segmented" id="ai-mode" role="group" aria-label="O que fazer" hidden>
-        <button type="button" data-mode="new" aria-pressed="true">Nova progressão</button>
-        <button type="button" data-mode="adjust" aria-pressed="false">Ajustar a atual</button>
-        <button type="button" data-mode="continue" aria-pressed="false" hidden>Continuar</button>
+      <div class="ai-parts" id="ai-parts" hidden>
+        <span class="ai-parts-label" id="ai-parts-label">Você está em:</span>
+        <div class="ai-parts-list" id="ai-parts-list" role="group" aria-labelledby="ai-parts-label"></div>
       </div>
+      <p class="ai-task" id="ai-task" hidden></p>
       <div class="ai-input">
         <label class="sr-only" for="ai-prompt">Pedido</label>
         <textarea id="ai-prompt" rows="4" maxlength="4000" placeholder="Ex.: 8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E"></textarea>
@@ -380,7 +380,7 @@
       <button class="menu-item" value="diagrams" data-icon="download">Exportar diagramas dos acordes (PDF)</button>
       <button class="menu-item" value="save" data-icon="save">Salvar projeto (.json)</button>
       <button class="menu-item" value="example" data-icon="sparkle">Carregar exemplo</button>
-      <button class="menu-item" value="new" data-icon="file">Novo projeto vazio</button>
+      <button class="menu-item" value="new" data-icon="file">Começar outra música</button>
       <button class="menu-item subtle" value="close">Fechar</button>
     </form>
   </dialog>

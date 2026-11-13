@@ -624,3 +624,14 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
   .hint-touch { display: none; }
 }
 @media (min-width: 900px) { dialog#canto-dialog { max-width: min(1100px, 94vw); } }
+
+/* assistente: a parte em que o pedido trabalha */
+.ai-parts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ai-parts-label { font-size: .9rem; color: var(--muted); }
+.ai-parts-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-part { --hue: 30; display: inline-flex; align-items: baseline; gap: 6px; min-height: 40px; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 2px solid hsl(var(--hue) 55% 45% / .55); background: hsl(var(--hue) 65% 50% / .12); color: var(--text); font: inherit; }
+.ai-part small { font-size: .78rem; color: var(--muted); }
+.ai-part[aria-pressed="true"] { border-color: hsl(var(--hue) 65% 42%); background: hsl(var(--hue) 65% 50% / .3); box-shadow: 0 0 0 3px hsl(var(--hue) 65% 50% / .25); }
+.ai-part.add { border-style: dashed; border-color: var(--border); background: transparent; color: var(--muted); }
+.ai-task { margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .92rem; }

@@ -7,8 +7,8 @@ import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
 import {
-  appendSection, emptyLastSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
-  sectionBlocks, splitSection, voiceNotes,
+  appendSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
+  sectionBlocks, splitSection, voiceNotes, voiceTextOf,
 } from "./partes.js";
 import { buildPdf, drawDiagramPages } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
@@ -152,7 +152,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", request: "", ...extra,
   };
 }
 
@@ -197,6 +197,7 @@ function toEditable(data) {
       phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color), bass_line: text(c.bass_line), riff: text(c.riff),
       comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
       section: text(c.section).trim(),
+      request: text(c.request),
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -219,14 +220,17 @@ function toEditable(data) {
     voice: Array.isArray(data.voice) ? data.voice.join(" ") : typeof data.voice === "string" ? data.voice : "",
     voice2: Array.isArray(data.voice2) ? data.voice2.join(" ") : typeof data.voice2 === "string" ? data.voice2 : "",
     pad: data.pad === true,
+    example: data.example === true, // só do app: é a progressão de exemplo (o primeiro pedido cria a música da pessoa no lugar dela)
     chords,
   };
 }
 
 /** Modelo editável → JSON enviado ao servidor (sem ids internos). */
-function toPayload(project = state.project) {
-  const { chords, ...rest } = project;
-  return { ...rest, chords: chords.map(({ id, ...chord }) => chord) };
+function toPayload(project = state.project, { draft = false } = {}) {
+  const { chords, example, ...rest } = project;
+  if (draft && example) rest.example = true;
+  // "request" (o pedido de cada parte) é só do app: fica no rascunho, não vai para o JSON nem para a análise
+  return { ...rest, chords: chords.map(({ id, request, ...chord }) => (draft && request ? { ...chord, request } : chord)) };
 }
 
 // ---------------------------------------------------------------- análise (motor local)
@@ -259,7 +263,7 @@ let draftTimer = null;
 function saveDraftSoon() {
   clearTimeout(draftTimer);
   draftTimer = setTimeout(() => {
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(toPayload())); } catch { /* sem armazenamento */ }
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(toPayload(state.project, { draft: true }))); } catch { /* sem armazenamento */ }
   }, 400);
 }
 function loadDraft() {
@@ -694,6 +698,7 @@ const sectionHue = (name) => {
   return [28, 205, 140, 280, 350, 95, 245, 55][index % 8];
 };
 let formSelected = -1; // o bloco escolhido na faixa das partes
+let formAdding = false; // o "+" está aberto, mostrando os jeitos de criar uma parte
 
 /** A faixa das partes: um bloco por parte, na ordem da música. Arrastar muda a ordem; tocar abre as opções. */
 function renderForm() {
@@ -710,12 +715,29 @@ function renderForm() {
     bindFormDrag(tile, i);
     return tile;
   });
-  tiles.push(h("button", { type: "button", class: "form-block add", "aria-label": "Acrescentar uma parte vazia", onclick: addEmptySection },
-    h("strong", null, "+"), h("small", null, "parte")));
+  tiles.push(h("button", {
+    type: "button", class: "form-block add", "aria-label": "Acrescentar uma parte", "aria-pressed": String(formAdding),
+    onclick: () => { formAdding = !formAdding; formSelected = -1; renderForm(); },
+  }, h("strong", null, "+"), h("small", null, "parte")));
   $("#form-blocks").replaceChildren(...tiles);
   drawSongRoll();
   const actions = $("#form-actions");
   const b = blocks[formSelected];
+  if (formAdding && !b) {
+    // parte nova: descrever para a IA, cantar a melodia, ou repetir uma parte que já existe
+    const name = nextSectionName(chords);
+    const option = (label, run, primary = false) => h("button", { type: "button", class: `btn small ${primary ? "primary" : "secondary"}`, onclick: () => { formAdding = false; run(); } }, label);
+    const seen = new Set();
+    const repeats = blocks.map((block, index) => ({ block, index })).filter(({ block }) => !seen.has(block.name) && seen.add(block.name));
+    actions.hidden = false;
+    actions.replaceChildren(
+      h("span", { class: "who" }, `Como criar a parte ${name}?`),
+      option("Descrever para a IA", () => describeNewSection(), true),
+      option("Cantar a melodia", () => { renderForm(); $("#canto-open").click(); $('#canto-target [data-target="nova"]')?.click(); }),
+      ...repeats.map(({ block, index }) => option(`Repetir a parte ${block.name}`, () => repeatAtEnd(index))),
+    );
+    return;
+  }
   actions.hidden = !b;
   if (!b) return;
   const i = formSelected;
@@ -816,6 +838,7 @@ function changeSections(result, message, select = -1) {
   const undo = snapshot();
   stopPlayback();
   state.project.chords = result.chords.map((c) => ({ ...c, id: c.id ?? nextId++ }));
+  state.project.example = false; // mexeu nas partes: a música passa a ser da pessoa
   if (result.voice !== undefined) state.project.voice = result.voice;
   refreshSecondVoice();
   formSelected = select;
@@ -823,13 +846,26 @@ function changeSections(result, message, select = -1) {
   toast(message, { action: { label: "Desfazer", run: undo } });
 }
 
-function addEmptySection() {
+/** Parte nova por texto: reserva 4 compassos vazios (a IA decide o tamanho de verdade) e leva a pessoa ao pedido, vazio. */
+function describeNewSection() {
   const chords = state.project.chords;
   const name = nextSectionName(chords);
   const bpb = beatsPerBar();
   const next = chords.map((c, i) => (i === 0 && !String(c.section || "").trim() ? { ...c, section: "A" } : c));
   for (let k = 0; k < 4; k++) next.push(blankChord({ duration_beats: bpb, section: k === 0 ? name : "" }));
-  changeSections({ chords: next }, `Parte ${name} criada com 4 compassos vazios. Cante a melodia dela (ou escreva os acordes).`, sectionBlocks(next).length - 1);
+  const index = sectionBlocks(next).length - 1;
+  changeSections({ chords: next }, `Parte ${name} criada. Escreva o pedido dela e copie para a sua IA.`, index);
+  selectPart(index, { focus: true });
+}
+
+/** Repete uma parte no fim da música (acordes e melodia). */
+function repeatAtEnd(index) {
+  const copied = repeatSection(state.project, index);
+  if (!copied) { changeSections(null); return; }
+  const count = sectionBlocks(copied.chords).length;
+  const name = sectionBlocks(state.project.chords)[index].name;
+  const moved = index + 1 === count - 1 ? copied : moveSection({ ...state.project, ...copied }, index + 1, count - 1);
+  changeSections(moved, `Parte ${name} repetida no fim (acordes e melodia).`, count - 1);
 }
 
 /** Arrastar um bloco para o lugar de outro (dedo ou mouse). Um toque sem arrastar escolhe o bloco. */
@@ -878,6 +914,8 @@ function bindFormDrag(tile, index) {
     }
     if (event.type === "pointercancel") return;
     formSelected = formSelected === index ? -1 : index;
+    formAdding = false;
+    if (formSelected >= 0) selectPart(index);
     renderForm();
     if (formSelected >= 0) $(`.section-divider[data-section="${index}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
@@ -887,6 +925,8 @@ function bindFormDrag(tile, index) {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
     formSelected = formSelected === index ? -1 : index;
+    formAdding = false;
+    if (formSelected >= 0) selectPart(index);
     renderForm();
   });
 }
@@ -911,7 +951,7 @@ function renderGuide() {
   const hasVoice = Boolean(String(p.voice || "").trim());
   const harmony = hasProgression();
   const errors = (state.report?.issues || []).filter((i) => i.level === "error").length;
-  const next = harmony ? getContinuation() : null;
+  const waiting = harmony ? getParts().find((part) => part.empty) ?? null : null;
   const go = (selector) => () => $(selector).scrollIntoView({ behavior: "smooth", block: "start" });
   const button = (label, run, primary = false) => h("button", { type: "button", class: `btn small ${primary ? "primary" : "secondary"}`, onclick: run }, label);
   const sing = () => $("#canto-open").click();
@@ -930,14 +970,20 @@ function renderGuide() {
     step = "Passo 2";
     text = "A melodia está pronta. Agora peça a harmonia: copie o pedido para a sua IA e abra o link que ela mandar.";
     actions = [button("Ir para o pedido", go("#assistant"), true), button("Cantar de novo", sing)];
-  } else if (next) {
-    step = `Parte ${next.section}`;
-    text = `A parte ${next.section} já tem melodia; falta a harmonia. No assistente, use “Continuar (parte ${next.section})”.`;
-    actions = [button("Ir para o pedido", () => { assistant?.setMode("continue"); go("#assistant")(); }, true)];
+  } else if (waiting) {
+    step = `Parte ${waiting.name}`;
+    text = waiting.melody
+      ? `A parte ${waiting.name} já tem melodia; falta a harmonia. Copie o pedido dela para a sua IA.`
+      : `A parte ${waiting.name} está vazia. Escreva o pedido dela e copie para a sua IA.`;
+    actions = [button(`Ir para o pedido da parte ${waiting.name}`, () => selectPart(waiting.index, { focus: true }), true)];
   } else {
     step = hasVoice ? "Passo 3" : "Passo 2";
-    text = "Ouça e ajuste. Depois, cante a próxima parte ou gere o MIDI.";
-    actions = [button("Ouvir", () => { state.listen.range = null; if (!state.playing) playAll(); }, true), button(hasVoice ? "Cantar a próxima parte" : "Cantar uma melodia", sing), button("Gerar MIDI", exportMidi)];
+    text = "Ouça e ajuste. Depois, crie a próxima parte (no “+” das partes) ou gere o MIDI.";
+    actions = [
+      button("Ouvir", () => { state.listen.range = null; if (!state.playing) playAll(); }, true),
+      button("Criar a próxima parte", () => { formAdding = true; formSelected = -1; renderForm(); $("#song").scrollIntoView({ behavior: "smooth", block: "start" }); }),
+      button("Gerar MIDI", exportMidi),
+    ];
   }
   $("#guide-step").textContent = step;
   $("#guide-text").textContent = text;
@@ -2037,6 +2083,9 @@ function loadProject(data, message) {
   stopPlayback();
   state.project = toEditable(data);
   state.byId = new Map();
+  assistTarget = -1;
+  formSelected = -1;
+  formAdding = false;
   renderAll();
   toast(message, { action: { label: "Desfazer", run: undo } });
 }
@@ -2078,13 +2127,14 @@ async function loadExample() {
   try {
     const res = await fetch("./example.json");
     if (!res.ok) throw new Error();
-    loadProject(await res.json(), "Exemplo carregado.");
+    loadProject({ ...(await res.json()), example: true }, "Exemplo carregado.");
   } catch {
     toast("Exemplo indisponível.", { error: true });
   }
 }
 
 function newProject() {
+  if (hasProgression() && !state.project.example && !window.confirm("Começar outra música? A atual sai da tela (dá para desfazer logo em seguida, ou salve o JSON antes).")) return;
   loadProject({ title: "Nova progressão", tempo: state.project.tempo, time_signature: state.project.time_signature,
     middle_c: state.project.middle_c, default_velocity: state.project.default_velocity, strum: state.project.strum, chords: [{}] }, "Projeto novo.");
 }
@@ -2215,6 +2265,7 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
   const undo = snapshot();
   stopPlayback();
   const p = state.project;
+  p.example = false; // cantou em cima: a música passa a ser da pessoa
   if (target === "editar") {
     // a melodia do projeto, depois de mexida no desenho: só o texto dela muda (BPM, compasso e acordes ficam)
     p.voice = text;
@@ -2235,8 +2286,9 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     renderAll();
     validateNow();
     saveDraftSoon();
-    assistant?.setMode("continue");
-    toast(`Parte ${result.section} criada: ${result.bars} compasso${result.bars > 1 ? "s" : ""} com a melodia. Agora peça a harmonia dela: no assistente, “Continuar (parte ${result.section})”.`,
+    assistTarget = formSelected;
+    assistant?.refresh();
+    toast(`Parte ${result.section} criada: ${result.bars} compasso${result.bars > 1 ? "s" : ""} com a melodia. Agora peça a harmonia dela: no assistente, “Criar a parte ${result.section}”.`,
       { action: { label: "Desfazer", run: undo }, timeout: 9000 });
     return;
   }
@@ -2295,86 +2347,142 @@ function currentProjectJson() {
 /** A melodia cantada (a Voz) do projeto, para o pedido à IA. */
 const getVoice = () => (state.project.voice ? { text: state.project.voice, tempo: state.project.tempo, timeSignature: state.project.time_signature } : null);
 
-/** A parte nova que espera a harmonia (a última, só com pausas): o que a IA precisa saber para continuar a música. */
-function getContinuation() {
-  const report = state.report;
-  if (!report?.chords?.length) return null;
+// ---------------------------------------------------------------- o assistente trabalha por PARTE
+let assistTarget = -1; // a parte em que o assistente está trabalhando (índice do bloco); -1 = o app escolhe
+
+/** As partes da música, com o que o assistente precisa saber de cada uma. */
+function getParts() {
   const chords = state.project.chords;
-  const last = emptyLastSection(chords, (c) => report.chords[chords.indexOf(c)]?.is_rest ?? true);
-  if (!last) return null;
+  const report = state.report;
   const blocks = sectionBlocks(chords);
   const bpb = beatsPerBar();
-  return {
-    section: last.name, previous: blocks[last.index - 1].name, beats: last.beats,
-    fromBar: Math.floor(last.startBeat / bpb + 1e-9) + 1, toBar: Math.ceil((last.startBeat + last.beats) / bpb - 1e-9),
-  };
+  const notes = voiceNotes(state.project.voice, state.project.middle_c) || [];
+  const harmony = hasProgression();
+  return blocks.map((b, index) => {
+    const empty = chords.slice(b.from, b.to).every((c) => report?.chords?.[chords.indexOf(c)]?.is_rest ?? true);
+    const from = Math.round(b.startBeat * TICKS_PER_BEAT);
+    const to = Math.round((b.startBeat + b.beats) * TICKS_PER_BEAT);
+    const melody = notes.some((n) => n.start >= from && n.start < to);
+    // "new": a música ainda não tem harmonia nenhuma e só tem uma parte (ou é o exemplo): o pedido cria a música inteira
+    const kind = state.project.example || (empty && !harmony && blocks.length === 1) ? "new" : empty ? "create" : "adjust";
+    return {
+      index, name: b.name, hue: sectionHue(b.name), beats: b.beats, empty, melody, kind, example: state.project.example === true,
+      from: b.from, to: b.to, previous: blocks[index - 1]?.name ?? null, hasNext: index < blocks.length - 1,
+      fromBar: Math.floor(b.startBeat / bpb + 1e-9) + 1, toBar: Math.ceil((b.startBeat + b.beats) / bpb - 1e-9),
+      // o tamanho é livre só numa parte vazia e sem melodia (criada pelo pedido); com melodia ou com acordes, é fixo
+      fixed: !(empty && !melody),
+      request: String(chords[b.from]?.request || ""),
+    };
+  });
+}
+
+/** A parte em que o assistente trabalha: a escolhida; senão a primeira vazia; senão a última. */
+function getTarget() {
+  const parts = getParts();
+  if (!parts.length) return null;
+  return parts[assistTarget] ?? parts.find((p) => p.empty) ?? parts.at(-1);
+}
+
+/** Escolhe a parte do assistente (e a mostra na faixa das partes). focus: leva a pessoa até o pedido. */
+function selectPart(index, { focus = false } = {}) {
+  assistTarget = index;
+  if (formSelected !== index || formAdding) { formSelected = index; formAdding = false; renderForm(); }
+  assistant?.refresh();
+  if (focus) {
+    $("#assistant").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#ai-prompt").focus({ preventScroll: true });
+  }
+}
+
+/** O pedido de cada parte fica guardado no primeiro acorde dela (campo "request", só do app). */
+function setPartRequest(index, text) {
+  const block = sectionBlocks(state.project.chords)[index];
+  if (!block) return;
+  state.project.chords[block.from].request = text;
+  saveDraftSoon();
 }
 
 const hasProgression = () => Boolean(state.report?.chords?.some((c) => !c.is_rest));
 
 /**
- * Encaixa a resposta de uma continuação: a IA mandou só os acordes novos (primeiro os reescritos do fim da parte anterior,
- * `continuation.retouched` deles, depois os da parte nova). Todo o resto da música fica como está, com a levada, o baixo e
- * as frases; nos acordes novos, o app escreve o ritmo que estiver ligado. Devolve { problems, title }.
+ * Encaixa a resposta de uma PARTE: a IA mandou só os acordes novos (primeiro os reescritos do fim da parte anterior,
+ * `continuation.retouched` deles, depois os da parte). Todo o resto da música fica como está, com a levada, o baixo e as
+ * frases; nos acordes novos, o app escreve o ritmo que estiver ligado. Parte com melodia ou com harmonia não muda de
+ * tamanho; parte criada só pelo pedido tem o tamanho que a IA der (as partes seguintes, e a melodia delas, se deslocam).
+ * options: { explanation, request (o texto do pedido, que fica guardado na parte), index (a parte para a qual o pedido foi
+ * copiado) }. Devolve { problems, title }.
  */
-function applyContinuation(data, { explanation = "" } = {}) {
-  const target = getContinuation();
-  const asked = String(data.continuation?.section || "").trim();
-  if (!target) return { problems: ["Não há uma parte nova esperando a harmonia: esta resposta é de uma continuação. Cante a parte nova antes (ou use “Nova progressão”)."] };
-  if (asked && asked.toLowerCase() !== target.section.toLowerCase()) {
-    return { problems: [`A resposta é da parte "${asked}", mas a parte que espera a harmonia é a "${target.section}".`] };
-  }
+function applyContinuation(data, { explanation = "", request = "", index: asked = -1 } = {}) {
+  const parts = getParts();
+  const wanted = String(data.continuation?.section || "").trim().toLowerCase();
+  const same = (p) => !wanted || p.name.toLowerCase() === wanted;
+  // a parte: a do pedido copiado, se o nome bater; senão a parte vazia com esse nome; senão a primeira com esse nome
+  const target = (parts[asked] && same(parts[asked]) ? parts[asked] : null) ?? parts.find((p) => p.empty && same(p)) ?? parts.find((p) => same(p)) ?? null;
+  if (!target) return { problems: [`A resposta é da parte "${data.continuation?.section}", mas a música não tem uma parte com esse nome.`] };
   const p = state.project;
   const mc = p.middle_c;
   const raw = { middle_c: "C4", chords: Array.isArray(data.chords) ? data.chords : [] };
   const incoming = toEditable(mc === "C4" ? raw : renameProjectNotes(raw, mc)).chords;
-  const blocks = sectionBlocks(p.chords);
-  const part = blocks.at(-1);
-  const previous = blocks.at(-2);
-  const count = Math.max(0, Math.min(2, Math.round(Number(data.continuation?.retouched) || 0), previous.to - previous.from, incoming.length));
+  const before = target.index > 0 ? parts[target.index - 1] : null;
+  // retoque do fim da parte anterior: só ao CRIAR uma parte, e no máximo 2 acordes
+  const allowed = target.kind === "create" && before ? Math.min(2, before.to - before.from) : 0;
+  const count = Math.max(0, Math.min(allowed, Math.round(Number(data.continuation?.retouched) || 0), Math.max(0, incoming.length - 1)));
   const sum = (list) => list.reduce((n, c) => n + (toNumber(c.duration_beats) || 0), 0);
-  const replaced = p.chords.slice(part.from - count, part.from);
+  const replaced = p.chords.slice(target.from - count, target.from);
   const retouched = incoming.slice(0, count);
   const fresh = incoming.slice(count);
   const problems = [];
   const near = (a, b) => Math.abs(a - b) < 1e-6;
-  if (!fresh.length) problems.push(`Faltam os acordes da parte "${target.section}".`);
-  else if (!near(sum(fresh), part.beats)) {
-    problems.push(`Os acordes da parte "${target.section}" somam ${fmt(sum(fresh))} tempos, mas a parte tem ${fmt(part.beats)} (a melodia dela não pode sair do lugar).`);
+  if (!fresh.length) problems.push(`Faltam os acordes da parte "${target.name}".`);
+  else if (target.fixed && !near(sum(fresh), target.beats)) {
+    problems.push(`Os acordes da parte "${target.name}" somam ${fmt(sum(fresh))} tempos, mas a parte tem ${fmt(target.beats)} `
+      + `(${target.melody ? "a melodia dela não pode sair do lugar" : "uma parte que já existe não muda de tamanho"}).`);
   }
   if (count && !near(sum(retouched), sum(replaced))) {
-    problems.push(`Os ${count} acordes reescritos do fim da parte "${target.previous}" somam ${fmt(sum(retouched))} tempos, mas os que eles substituem somam ${fmt(sum(replaced))}.`);
+    problems.push(`Os ${count} acordes reescritos do fim da parte "${before.name}" somam ${fmt(sum(retouched))} tempos, mas os que eles substituem somam ${fmt(sum(replaced))}.`);
   }
   if (problems.length) return { problems };
   const undo = snapshot();
   stopPlayback();
-  // as marcas das partes ficam onde estavam: a do começo da parte anterior (se o 1º acorde dela foi reescrito) e a da nova
-  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; });
-  fresh.forEach((c, i) => { c.section = i === 0 ? part.name : ""; });
-  const start = part.from - count;
-  p.chords = [...p.chords.slice(0, start), ...retouched, ...fresh];
-  if (explanation) p.comment = [p.comment, `Parte ${target.section}: ${explanation}`].filter(Boolean).join("\n\n");
-  // o ritmo que já estava ligado continua, agora também nos acordes novos (os antigos não mudam)
+  // as marcas das partes ficam onde estavam: a do começo da parte anterior (se o 1º acorde dela foi reescrito) e a desta
+  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; c.request = i === 0 ? String(replaced[0]?.request || "") : ""; });
+  fresh.forEach((c, i) => { c.section = i === 0 ? target.name : ""; });
+  fresh[0].request = request || target.request;
+  const start = target.from - count;
+  const after = p.chords.slice(target.to);
+  // parte criada só pelo pedido: se o tamanho mudou, a melodia das partes seguintes se desloca junto
+  const delta = Math.round((sum(fresh) - target.beats) * TICKS_PER_BEAT);
+  if (delta && after.length) {
+    const edge = Math.round(sectionBlocks(p.chords)[target.index + 1].startBeat * TICKS_PER_BEAT);
+    const notes = voiceNotes(p.voice, mc);
+    if (notes) p.voice = voiceTextOf(notes.map((n) => (n.start >= edge ? { ...n, start: n.start + delta } : n)));
+  }
+  p.chords = [...p.chords.slice(0, start), ...retouched, ...fresh, ...after];
+  if (explanation) p.comment = [p.comment, `Parte ${target.name}: ${explanation}`].filter(Boolean).join("\n\n");
+  // o ritmo que já estava ligado continua, agora também nos acordes novos (os outros não mudam)
   const g = p.groove || {};
-  const only = new Set(p.chords.map((_, i) => i).filter((i) => i >= start));
-  const had = (key) => p.chords.slice(0, start).some((c) => String(c[key] || "").trim());
+  const only = new Set(Array.from({ length: retouched.length + fresh.length }, (_, i) => start + i));
+  const others = p.chords.filter((_, i) => !only.has(i));
+  const had = (key) => others.some((c) => String(c[key] || "").trim());
   const pick = (id) => (id && id !== CUSTOM_COMP ? id : undefined);
   const options = {
     comp: had("comp") ? pick(g.comp) : undefined, bass: had("bass_line") ? pick(g.bass) : undefined,
     drums: String(p.drums || "").trim() ? pick(g.drums) : undefined, percussion: String(p.percussion || "").trim() ? pick(g.percussion) : undefined,
     phrases: had("phrase") ? true : undefined, riff: had("riff") ? pick(g.riff) : undefined,
   };
-  formSelected = blocks.length - 1;
+  formSelected = target.index;
+  assistTarget = target.index;
   renderAll();
   if (Object.values(options).some((v) => v !== undefined)) applyGroove({ ...options, only, quiet: true });
   refreshSecondVoice();
   renderAll();
   validateNow();
   saveDraftSoon();
-  const what = count ? ` e ${count} acorde${count > 1 ? "s" : ""} do fim da parte ${target.previous} reescrito${count > 1 ? "s" : ""}` : "";
-  toast(`Parte ${target.section} harmonizada: ${fresh.length} acordes${what}. O resto da música ficou como estava.`, { action: { label: "Desfazer", run: undo }, timeout: 9000 });
+  const what = count ? ` e ${count} acorde${count > 1 ? "s" : ""} do fim da parte ${before.name} reescrito${count > 1 ? "s" : ""}` : "";
+  const verb = target.kind === "adjust" ? "ajustada" : "criada";
+  toast(`Parte ${target.name} ${verb}: ${fresh.length} acordes${what}. O resto da música ficou como estava.`, { action: { label: "Desfazer", run: undo }, timeout: 9000 });
   $("#progression-heading").scrollIntoView({ behavior: "smooth", block: "start" });
-  return { problems: [], title: `parte ${target.section} de ${p.title}` };
+  return { problems: [], title: `parte ${target.name} de ${p.title}` };
 }
 
 /** Carrega a progressão gerada. A IA escreve em C4 = dó central; convertemos para a convenção escolhida aqui. */
@@ -2427,13 +2535,13 @@ async function init() {
   if (!data) {
     try {
       const res = await fetch("./example.json");
-      if (res.ok) data = await res.json();
+      if (res.ok) data = { ...(await res.json()), example: true };
     } catch { /* sem exemplo: começa vazio */ }
   }
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getContinuation, hasProgression, applyGenerated, applyContinuation,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);

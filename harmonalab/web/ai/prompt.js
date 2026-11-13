@@ -185,36 +185,64 @@ const APP_LAYERS = "O ritmo dos acordes, as frases, o baixo, a bateria e a melod
 
 /**
  * A tarefa da continuação: a última parte da música está vazia (só a melodia cantada) e a IA harmoniza essa parte.
- * continuation: { section (nome da parte nova), previous (nome da anterior), fromBar, toBar, beats, appUrl }.
+ * continuation: { section (nome da parte), previous (nome da anterior, ou null se for a primeira), fromBar, toBar, beats,
+ *   kind ("create", o padrão, ou "adjust": mexer numa parte que já tem harmonia, sem mudar o tamanho),
+ *   fixed (false = parte criada só pelo pedido, sem melodia: a IA decide o tamanho), hasNext (há partes depois dela) }.
  * A IA devolve SÓ os acordes novos (os retocados do fim da parte anterior, se houver, e os da parte nova): a resposta fica
  * curta, cabe no link, e o resto da música não corre risco.
  */
 export function describeContinuation(c, appUrl = DEFAULT_APP_URL) {
   if (!c) return "";
   const bars = c.toBar - c.fromBar + 1;
-  return [
-    `CONTINUAÇÃO DA MÚSICA: a parte "${c.section}". A música já tem a harmonia pronta até a parte "${c.previous}" (JSON resumido, abaixo). `
-    + `A parte "${c.section}" vai do compasso ${c.fromBar} ao ${c.toBar} (${bars} compasso${bars === 1 ? "" : "s"}, ${c.beats} tempos) e ainda não tem acordes: `
-    + "a pessoa cantou a melodia dela (está na lista da melodia, nesses compassos). O que fazer:",
-    `1. Crie os acordes da parte "${c.section}" para harmonizar a melodia dela. As durações (duration_beats) devem somar EXATAMENTE ${c.beats} tempos. `
-    + "Ela deve soar como continuação da música: mesma linguagem, mas com contraste (outra região, outro caminho, ou uma modulação, se a melodia pedir).",
-    `2. Opcional: você pode reescrever o último ou os 2 últimos acordes da parte "${c.previous}" para ligar melhor na parte nova `
-    + "(um dominante, um II-V, um acorde pivô). Os acordes reescritos devem somar a MESMA duração dos que eles substituem. Diga na explicação o que mudou.",
-    `3. ENTREGA: devolva SÓ os acordes novos, nesta ordem: primeiro os reescritos da parte "${c.previous}" (se houver), depois os da parte "${c.section}". `
-    + "NÃO repita os outros acordes da música: o app encaixa os novos no lugar e mantém todo o resto.",
-    `   - Link: use cont=${c.section} e ret=K no lugar de t=, k= e bpm= (K = quantos acordes do fim da parte "${c.previous}" você reescreveu: 0, 1 ou 2). `
+  const where = `do compasso ${c.fromBar} ao ${c.toBar} (${bars} compasso${bars === 1 ? "" : "s"}, ${c.beats} tempos)`;
+  const delivery = (retouch) => [
+    `   - Link: use cont=${c.section} e ret=K no lugar de t=, k= e bpm= (${retouch ? `K = quantos acordes do fim da parte "${c.previous}" você reescreveu: 0, 1 ou 2` : "K = 0"}). `
     + `Formato: ${appUrl}#cont=${c.section}&ret=K&x=explicação_curta&p=acorde;acorde;... (cada acorde como nas instruções).`,
     `   - JSON de reserva: {"explicacao": "...", "continuacao": {"parte": "${c.section}", "retocados": K}, "projeto": {"chords": [ ...só os acordes novos... ]}}.`,
     "   - A explicação acorde a acorde, no chat, também é só dos acordes novos.",
     APP_LAYERS,
+  ];
+  if (c.kind === "adjust") {
+    // ajustar uma parte que já tem harmonia: só ela muda, e do mesmo tamanho
+    return [
+      `AJUSTE DA PARTE "${c.section}". A música já tem a harmonia pronta (JSON resumido, abaixo). Mexa SÓ na parte "${c.section}", que vai ${where}, conforme o pedido.`,
+      `1. Reescreva os acordes da parte "${c.section}". As durações (duration_beats) devem somar EXATAMENTE ${c.beats} tempos: a parte não muda de tamanho.`,
+      "2. As outras partes ficam IGUAIS, nota por nota: não as reescreva.",
+      `3. ENTREGA: devolva SÓ os acordes da parte "${c.section}". NÃO repita os outros acordes da música: o app troca só essa parte.`,
+      ...delivery(false),
+    ].join("\n");
+  }
+  const retouch = Boolean(c.previous);
+  const size = c.fixed === false
+    ? `O tamanho é você quem decide (em geral 4 ou 8 compassos), a menos que o pedido diga; ${c.hasNext ? "as partes seguintes se deslocam" : "ela entra no fim da música"}.`
+    : `As durações (duration_beats) devem somar EXATAMENTE ${c.beats} tempos.`;
+  const intro = c.fixed === false
+    ? `PARTE NOVA: a parte "${c.section}". ${retouch ? `A música já tem a harmonia pronta até a parte "${c.previous}" (JSON resumido, abaixo).` : "O JSON resumido da música está abaixo."} `
+      + `A parte "${c.section}" ainda não tem acordes nem melodia: crie-a a partir do pedido. O que fazer:`
+    : `CONTINUAÇÃO DA MÚSICA: a parte "${c.section}". ${retouch ? `A música já tem a harmonia pronta até a parte "${c.previous}" (JSON resumido, abaixo).` : "O JSON resumido da música está abaixo."} `
+      + `A parte "${c.section}" vai ${where} e ainda não tem acordes: `
+      + "a pessoa cantou a melodia dela (está na lista da melodia, nesses compassos). O que fazer:";
+  return [
+    intro,
+    `1. Crie os acordes da parte "${c.section}"${c.fixed === false ? "" : " para harmonizar a melodia dela"}. ${size} `
+    + "Ela deve soar como continuação da música: mesma linguagem, mas com contraste (outra região, outro caminho, ou uma modulação, se o pedido ou a melodia pedirem).",
+    retouch
+      ? `2. Opcional: você pode reescrever o último ou os 2 últimos acordes da parte "${c.previous}" para ligar melhor na parte nova `
+        + "(um dominante, um II-V, um acorde pivô). Os acordes reescritos devem somar a MESMA duração dos que eles substituem. Diga na explicação o que mudou."
+      : "2. As outras partes da música ficam IGUAIS, nota por nota.",
+    `3. ENTREGA: devolva SÓ os acordes novos, nesta ordem: ${retouch ? `primeiro os reescritos da parte "${c.previous}" (se houver), depois ` : ""}os da parte "${c.section}". `
+    + "NÃO repita os outros acordes da música: o app encaixa os novos no lugar e mantém todo o resto.",
+    ...delivery(retouch),
   ].join("\n");
 }
 
 /** A mensagem do pedido. O pedido fica entre aspas triplas para ficar claramente separado das instruções. */
 export function buildUserMessage({ request, mode, currentProject, voice, continuation = null, appUrl = DEFAULT_APP_URL }) {
-  const asked = request.trim() || (mode === "continue" ? "Harmonize a parte nova da música." : "");
+  const fallback = continuation?.kind === "adjust" ? "" : continuation?.fixed === false ? "Crie a parte nova da música." : "Harmonize a parte nova da música.";
+  const asked = request.trim() || (mode === "continue" ? fallback : "");
   const parts = [`PEDIDO (pode ter sido ditado por voz):\n"""\n${asked}\n"""`];
-  const sung = describeVoice(voice, mode === "continue" && continuation ? continuation : null);
+  // a melodia vai com as notas da parte marcadas (quando a parte tem melodia: criada cantando, ou em ajuste)
+  const sung = describeVoice(voice, mode === "continue" && continuation && continuation.fixed !== false ? continuation : null);
   if (sung) parts.push(sung);
   if (mode === "continue" && currentProject && continuation) {
     parts.push(describeContinuation(continuation, appUrl));
