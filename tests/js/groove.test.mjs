@@ -193,7 +193,7 @@ test("a virada interrompe o beat no fim do compasso, o beat volta no tempo 1 e e
   assert.equal(generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums, text);
   assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project).split(" | ").map(plain).join(" | "), plain(style.beats[0].bars.join(" | "))); // um compasso só: sem virada
   assert.equal(drumsFor(style, "nao-existe", project), "");
-  assert.deepEqual(beatOptions(style).map((o) => o.id), ["basico", "meio", "aberto"]);
+  assert.deepEqual(beatOptions(style).map((o) => o.id), ["basico", "meio", "aberto", "duplo", "rajada", "galope", "tons", "prog"]);
 });
 
 test("a bateria gerada é válida em todos os estilos e compassos, e sai numa faixa própria no canal 10", () => {
@@ -920,4 +920,27 @@ test("virtuoso: as corridas seguem o andamento (fusas a 60 BPM, semicolcheias a 
   const quick = measure(findStyle("gospel"), 170, "virtuoso", 0).text;
   assert.ok(/\/32/.test(slow), "a 60 BPM o virtuoso usa fusas");
   assert.ok(!/\/32/.test(quick) && !/\/16t/.test(quick), "a 170 BPM, nada de fusas nem sextinas");
+});
+
+test("rock e metal: o dobro de baterias dos outros estilos, várias com bumbo duplo", () => {
+  const data = { ...bare(), chords: [...bare().chords, ...bare().chords] };
+  const most = Math.max(...STYLES.filter((s) => !["rock", "metal"].includes(s.id)).map((s) => s.beats.length));
+  for (const id of ["rock", "metal"]) {
+    const style = findStyle(id);
+    assert.ok(style.beats.length >= 8 && style.beats.length >= 2 * (most - 1), `${id}: ${style.beats.length} baterias`);
+    assert.equal(new Set(style.beats.map((b) => b.id)).size, style.beats.length, `${id}: ids repetidos`);
+    let double = 0;
+    for (const beat of style.beats) {
+      const text = generateGroove(data, { style, drums: beat.id }).drums;
+      assert.deepEqual(parseDrums(text).errors, [], `${id}/${beat.id}`);
+      const { project } = loadProject({ ...data, drums: text });
+      const kicks = drumNotes(project, 8 * 1920).filter((n) => n[2] === 36 && n[0] < 2 * 1920).map((n) => n[0]).sort((a, b) => a - b);
+      // bumbo duplo: pelo menos 4 bumbos seguidos a uma semicolcheia (ou menos) um do outro
+      let run = 1;
+      let best = 1;
+      for (let i = 1; i < kicks.length; i++) { run = kicks[i] - kicks[i - 1] <= 120 ? run + 1 : 1; best = Math.max(best, run); }
+      if (best >= 4) double += 1;
+    }
+    assert.ok(double >= 3, `${id}: ${double} baterias com bumbo duplo`);
+  }
 });

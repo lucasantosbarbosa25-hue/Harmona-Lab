@@ -287,6 +287,11 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   **Linha em uníssono** (sequências de escala), **Pedal com melodia**, **Melodia em terças (guitarras gêmeas)** e **Arpejo
   largo de teclado** (add9 em sextinas ou quiálteras). Os outros estilos não mudaram.
 
+  **Baterias do rock e do metal: oito em cada (o dobro dos outros estilos), várias com bumbo duplo.** Rock: básico, meio
+  tempo, chimbal aberto, **bumbo duplo em semicolcheias**, **bumbo duplo em rajadas**, **galope com bumbo duplo**, levada
+  de tons e acentos 3+3+2 (rock progressivo). Metal: galope, **bumbo duplo**, thrash, meio tempo pesado, **bumbo duplo em
+  sextinas**, **meio tempo com bumbo duplo**, blast beat e **bumbo duplo com acentos 3+3+2**.
+
   **Worship, Balada, Metal, Disco / pop e Rock refeito.** Cinco estilos com levadas, baterias (aro e crescendo no worship,
   bumbo duplo, galope e thrash no metal, quatro no chão no disco), baixos, viradas e riffs próprios. O fraseado deles **não
   usa o Weimar**: há dois perfis novos em `kb/fraseado.js`, "Rock e metal (guitarra)" (chegada na fundamental, na quinta
