@@ -38,6 +38,39 @@ PAD_SOFTER = 20  # o pad toca mais leve que os acordes (velocity a menos)
 VOICE2_CHANNEL = 5  # a segunda voz (dueto ou contracanto da Voz)
 VOICE2_SOFTER = 12  # a segunda voz fica um pouco atrás da Voz
 DRUM_CHANNEL = 9
+#: Os instrumentos de percussão: cada um sai numa faixa própria, com o nome dele, para ir ao som certo em qualquer VST
+#: (o mapa de teclas muda de um para outro). As outras peças do canal 10 são do kit e ficam na faixa "Bateria", venham
+#: do texto da bateria ou do da percussão. (id, nome da faixa, notas General MIDI)
+PERCUSSION_INSTRUMENTS = (
+    ("cowbell", "Cowbell", (56,)),
+    ("clave", "Clave", (75,)),
+    ("pandeirola", "Pandeirola", (54,)),
+    ("ganza", "Ganzá", (70,)),
+    ("congas", "Congas", (62, 63, 64)),
+    ("bongos", "Bongôs", (60, 61)),
+    ("timbales", "Timbales", (65, 66)),
+    ("guiro", "Güiro", (73, 74)),
+    ("agogo", "Agogô", (67,)),
+)
+#: No máximo este número de faixas de percussão: se a música usar mais instrumentos, os últimos dividem a última faixa.
+MAX_PERCUSSION_TRACKS = 6
+_PERCUSSION_OF = {pitch: key for key, _, pitches in PERCUSSION_INSTRUMENTS for pitch in pitches}
+
+
+def percussion_tracks(present: set[str], single: bool = False) -> list[tuple[str, list[str]]]:
+    """As faixas de percussão para os instrumentos presentes: [(nome da faixa, [ids dos instrumentos])]."""
+    found = [(key, name) for key, name, _ in PERCUSSION_INSTRUMENTS if key in present]
+    if not found:
+        return []
+    if single:
+        return [("Percussão", [key for key, _ in found])]
+    tracks = [(f"Perc {name}", [key]) for key, name in found]
+    if len(tracks) > MAX_PERCUSSION_TRACKS:
+        rest = tracks[MAX_PERCUSSION_TRACKS - 1:]
+        tracks = tracks[:MAX_PERCUSSION_TRACKS - 1] + [("Perc outras", [key for _, keys in rest for key in keys])]
+    return tracks
+
+
 #: O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase).
 PHRASE_MODES = ("both", "chords", "line")
 
@@ -211,7 +244,7 @@ def pad_notes(project: Project, ticks_per_beat: int = TICKS_PER_BEAT) -> list[li
 
 
 def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, markers: bool = True,
-               phrase_mode: str = "both") -> mido.MidiFile:
+               phrase_mode: str = "both", percussion_single: bool = False) -> mido.MidiFile:
     """Gera o MidiFile exatamente com as notas, oitavas e durações do projeto."""
     if phrase_mode not in PHRASE_MODES:
         raise ValueError(f"phrase_mode deve ser um de {PHRASE_MODES} (recebido {phrase_mode!r}).")
@@ -258,15 +291,14 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         events.append((e.start, 2, pitch, VOICE2_CHANNEL, mido.Message("note_on", channel=VOICE2_CHANNEL, note=pitch, velocity=second_velocity)))
         events.append((min(e.start + e.length, end_tick), 0, pitch, VOICE2_CHANNEL, mido.Message("note_off", channel=VOICE2_CHANNEL, note=pitch, velocity=0)))
 
-    drums = [(start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel))
-             for start, _, pitch, vel in drum_notes(project, end_tick, ticks_per_beat)]
-    drums += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
-              for _, end, pitch, _ in drum_notes(project, end_tick, ticks_per_beat)]
-    percussion_notes = drum_notes(project, end_tick, ticks_per_beat, project.percussion_bars)
-    percussion = [(start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel))
-                  for start, _, pitch, vel in percussion_notes]
-    percussion += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
-                   for _, end, pitch, _ in percussion_notes]
+    # canal 10: as peças do kit vão para a faixa "Bateria"; cada instrumento de percussão, para a faixa dele
+    drums: list = []
+    percussion: dict[str, list] = {}
+    for start, end, pitch, vel in [*drum_notes(project, end_tick, ticks_per_beat),
+                                   *drum_notes(project, end_tick, ticks_per_beat, project.percussion_bars)]:
+        target = percussion.setdefault(_PERCUSSION_OF[pitch], []) if pitch in _PERCUSSION_OF else drums
+        target.append((start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel)))
+        target.append((end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0)))
     phrase = [e for e in events if e[3] == PHRASE_CHANNEL]
     bass = [e for e in events if e[3] == BASS_CHANNEL]
     voice = [e for e in events if e[3] == VOICE_CHANNEL]
@@ -307,8 +339,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         midi.tracks.append(make_track("Pad", pad, False))
     if drums:
         midi.tracks.append(make_track("Bateria", drums, False))
-    if percussion:
-        midi.tracks.append(make_track("Percussão", percussion, False))
+    for name, keys in percussion_tracks(set(percussion), percussion_single):
+        midi.tracks.append(make_track(name, [e for key in keys for e in percussion[key]], False))
     return midi
 
 

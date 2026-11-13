@@ -337,6 +337,11 @@
       <p class="sheet-title" id="export-title">O que vai no MIDI</p>
       <p class="export-hint">Marque as partes. Cada uma sai numa faixa própria; o BPM, o compasso e os nomes dos acordes vão sempre.</p>
       <div class="export-parts" id="export-parts"></div>
+      <div class="export-perc" id="export-perc" hidden>
+        <span class="label">Percussão: uma faixa por instrumento <small>(leve cada uma ao som certo no seu VST)</small></span>
+        <div class="export-perc-list" id="export-perc-list"></div>
+        <label class="export-part export-perc-single"><input type="checkbox" id="export-perc-single"><span>Juntar a percussão numa faixa só</span></label>
+      </div>
       <div class="export-quick">
         <button type="button" class="btn secondary small" id="export-all">Todas</button>
         <button type="button" class="btn secondary small" id="export-none">Nenhuma</button>

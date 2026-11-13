@@ -253,13 +253,50 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     if (e.start >= tick) continue;
     notes.push({ start: e.start, end: Math.min(e.start + e.length, tick), pitch: e.note.midi, velocity: secondVelocity, channel: VOICE2_CHANNEL, chord: -1, voice2: true });
   }
-  for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat) : []) {
-    notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1 });
-  }
-  for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat, project.percussion_bars) : []) {
-    notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1, percussion: true });
+  // canal 10: `percussion` diz o instrumento de percussão da nota (undefined = peça do kit, que vai para a faixa "Bateria")
+  for (const [start, end, pitch, velocity] of drums ? [...drumNotes(project, tick, ticksPerBeat), ...drumNotes(project, tick, ticksPerBeat, project.percussion_bars)] : []) {
+    notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1, percussion: PERCUSSION_OF.get(pitch) });
   }
   return { notes, starts, end: tick };
+}
+
+/**
+ * Os instrumentos de percussão: cada um sai numa faixa própria, com o nome dele, para ir ao som certo em qualquer VST (o
+ * mapa de teclas muda de um para outro). As outras peças do canal 10 são do kit e ficam na faixa "Bateria", venham do
+ * texto da bateria ou do da percussão.
+ */
+export const PERCUSSION_INSTRUMENTS = [
+  { id: "cowbell", label: "Cowbell", pitches: [56] },
+  { id: "clave", label: "Clave", pitches: [75] },
+  { id: "pandeirola", label: "Pandeirola", pitches: [54] },
+  { id: "ganza", label: "Ganzá", pitches: [70] },
+  { id: "congas", label: "Congas", pitches: [62, 63, 64] },
+  { id: "bongos", label: "Bongôs", pitches: [60, 61] },
+  { id: "timbales", label: "Timbales", pitches: [65, 66] },
+  { id: "guiro", label: "Güiro", pitches: [73, 74] },
+  { id: "agogo", label: "Agogô", pitches: [67] },
+];
+/** No máximo este número de faixas de percussão: se a música usar mais instrumentos, os últimos dividem a última faixa. */
+export const MAX_PERCUSSION_TRACKS = 6;
+const PERCUSSION_OF = new Map(PERCUSSION_INSTRUMENTS.flatMap((i) => i.pitches.map((p) => [p, i.id])));
+
+/** As faixas de percussão para os instrumentos presentes: [{ name, ids }]. `single`: tudo numa faixa só. */
+export function percussionTracks(present, single = false) {
+  const found = PERCUSSION_INSTRUMENTS.filter((i) => present.has(i.id));
+  if (!found.length) return [];
+  if (single) return [{ name: "Percussão", ids: found.map((i) => i.id) }];
+  let tracks = found.map((i) => ({ name: `Perc ${i.label}`, ids: [i.id] }));
+  if (tracks.length > MAX_PERCUSSION_TRACKS) {
+    const rest = tracks.slice(MAX_PERCUSSION_TRACKS - 1);
+    tracks = [...tracks.slice(0, MAX_PERCUSSION_TRACKS - 1), { name: "Perc outras", ids: rest.flatMap((t) => t.ids) }];
+  }
+  return tracks;
+}
+
+/** Os instrumentos de percussão que a música usa (ids, na ordem das faixas). */
+export function percussionPresent(project, options = {}) {
+  const found = new Set(noteEvents(project, options).notes.map((n) => n.percussion).filter(Boolean));
+  return PERCUSSION_INSTRUMENTS.map((i) => i.id).filter((id) => found.has(id));
 }
 
 /** As partes que dá para escolher na exportação, na ordem das faixas. */
@@ -296,22 +333,27 @@ export function partsPresent(project, options = {}) {
  * Gera o .mid exatamente com as notas, oitavas e durações do projeto. `parts` (opcional): só as partes escolhidas
  * (ids de MIDI_PARTS); a primeira faixa (nome, compasso, andamento e os nomes dos acordes) sai sempre, para a DAW
  * acertar o BPM, mesmo sem as notas dos acordes. `gains` (opcional): volume por parte, só para a escuta.
+ * A percussão sai numa faixa por instrumento ("Perc Congas", "Perc Clave"..., no máximo 6); `percussionSingle` junta
+ * tudo numa faixa "Percussão", e `percussionOnly` (ids) deixa só alguns instrumentos.
  */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null, gains = null } = {}) {
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null, gains = null, percussionSingle = false, percussionOnly = null } = {}) {
   const [num, den] = project.time_signature;
   const all = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   const keep = parts ? new Set(parts) : null;
   const { starts, end: endTick } = all;
   let notes = keep ? all.notes.filter((n) => keep.has(notePart(n))) : all.notes;
+  // percussionOnly: só estes instrumentos de percussão (ids); percussionSingle: toda a percussão numa faixa só
+  if (percussionOnly) { const only = new Set(percussionOnly); notes = notes.filter((n) => !n.percussion || only.has(n.percussion)); }
   // gains: volume de cada parte só para a escuta do app ({ voz: 0.6, ... }); multiplica a velocity
   if (gains) notes = notes.map((n) => ({ ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity * (gains[notePart(n)] ?? 1)))) }));
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [VOICE2_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [VOICE2_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: new Map() };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
   for (const n of notes) {
-    const list = n.percussion ? events.percussion : events[n.channel];
+    if (n.percussion && !events.percussion.has(n.percussion)) events.percussion.set(n.percussion, []);
+    const list = n.percussion ? events.percussion.get(n.percussion) : events[n.channel];
     list.push([n.start, 2, n.pitch, { bytes: [0x90 | n.channel, n.pitch, n.velocity] }, n.channel]);
     list.push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
   }
@@ -354,7 +396,9 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
   if (events[PAD_CHANNEL].length) tracks.push(trackBytes("Pad", events[PAD_CHANNEL], false));
   if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));
-  if (events.percussion.length) tracks.push(trackBytes("Percussão", events.percussion, false));
+  for (const { name, ids } of percussionTracks(new Set(events.percussion.keys()), percussionSingle)) {
+    tracks.push(trackBytes(name, ids.flatMap((id) => events.percussion.get(id)), false));
+  }
   const u32 = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
   const u16 = (n) => [(n >> 8) & 0xff, n & 0xff];
   return new Uint8Array([

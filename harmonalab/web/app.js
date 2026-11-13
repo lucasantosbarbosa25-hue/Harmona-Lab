@@ -14,7 +14,7 @@ import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { FILL_FREEDOMS, FILL_FREQUENCIES, INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
 import { SECOND_VOICE_MODES, generateSecondVoice } from "./engine/segunda.js";
-import { DRUM_CHANNEL, TICKS_PER_BEAT, beatsToTicks, midiBytes, noteEvents, notePart, MIDI_PARTS, padNotes, partsPresent } from "./engine/midi.js";
+import { DRUM_CHANNEL, TICKS_PER_BEAT, beatsToTicks, midiBytes, noteEvents, notePart, MIDI_PARTS, PERCUSSION_INSTRUMENTS, padNotes, partsPresent, percussionPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
@@ -1817,18 +1817,28 @@ function exportMidi() {
   $("#export-parts").replaceChildren(...MIDI_PARTS.filter((p) => present.includes(p.id)).map((p) => h("label", { class: "export-part" },
     h("input", { type: "checkbox", value: p.id, checked: !off.has(p.id), onchange: renderExportNote }),
     h("span", null, p.label))));
+  // a percussão sai numa faixa por instrumento: dá para escolher quais (todos, alguns ou um só) ou juntar tudo numa faixa
+  const instruments = percussionPresent(project, { phraseMode: state.phraseMode });
+  $("#export-perc-list").replaceChildren(...PERCUSSION_INSTRUMENTS.filter((i) => instruments.includes(i.id)).map((i) => h("label", { class: "export-part" },
+    h("input", { type: "checkbox", value: i.id, checked: !off.has(`perc:${i.id}`), onchange: renderExportNote }),
+    h("span", null, i.label))));
+  $("#export-perc-single").checked = off.has("perc:juntar");
   renderExportNote();
   $("#export-dialog").showModal();
 }
 
+const percChoice = () => [...document.querySelectorAll("#export-perc-list input")].filter((i) => i.checked).map((i) => i.value);
 const exportChoice = () => [...document.querySelectorAll("#export-parts input")].filter((i) => i.checked).map((i) => i.value);
 
 function renderExportNote() {
   const chosen = exportChoice();
   const note = $("#export-note");
-  note.hidden = chosen.length > 0;
-  note.textContent = "Marque pelo menos uma parte.";
-  $("#export-go").disabled = chosen.length === 0;
+  const percussion = chosen.includes("percussao") && $("#export-perc-list").children.length > 0;
+  const noInstrument = percussion && percChoice().length === 0;
+  $("#export-perc").hidden = !percussion;
+  note.hidden = chosen.length > 0 && !noInstrument;
+  note.textContent = noInstrument ? "Marque pelo menos um instrumento de percussão (ou desmarque a Percussão)." : "Marque pelo menos uma parte.";
+  $("#export-go").disabled = chosen.length === 0 || noInstrument;
 }
 
 /** Gera o .mid só com as partes marcadas. */
@@ -1838,12 +1848,25 @@ async function exportChosen() {
   if (!parts.length) return;
   const off = loadExportOff();
   for (const b of boxes) (b.checked ? off.delete(b.value) : off.add(b.value));
+  const percBoxes = [...document.querySelectorAll("#export-perc-list input")];
+  const percussion = parts.includes("percussao");
+  const instruments = percChoice();
+  const single = $("#export-perc-single").checked;
+  if (percussion) {
+    for (const b of percBoxes) (b.checked ? off.delete(`perc:${b.value}`) : off.add(`perc:${b.value}`));
+    if (single) off.add("perc:juntar"); else off.delete("perc:juntar");
+  }
   saveExportOff(off);
   $("#export-dialog").close();
   const { project } = readProject(toPayload());
-  const every = boxes.length === parts.length;
-  const bytes = midiBytes(project, { phraseMode: state.phraseMode, parts: every ? null : parts });
-  const suffix = every ? "" : `-${parts.join("-")}`;
+  const allInstruments = !percussion || instruments.length === percBoxes.length;
+  const every = boxes.length === parts.length && allInstruments;
+  const bytes = midiBytes(project, {
+    phraseMode: state.phraseMode, parts: boxes.length === parts.length ? null : parts,
+    percussionSingle: single, percussionOnly: allInstruments ? null : instruments,
+  });
+  const names = parts.map((id) => (id === "percussao" && !allInstruments ? `percussao-${instruments.join("-")}` : id));
+  const suffix = every ? "" : `-${names.join("-")}`;
   const filename = `${slugify(state.project.title)}${suffix}.mid`;
   const saved = await saveFile(new Blob([bytes], { type: "audio/midi" }), filename, "Arquivo MIDI", "audio/midi", ".mid");
   if (!saved) return;
@@ -1976,6 +1999,7 @@ function bindUi() {
   });
   $("#export").addEventListener("click", exportMidi);
   $("#export-go").addEventListener("click", exportChosen);
+  $("#export-perc-single").addEventListener("change", renderExportNote);
   $("#chords-toggle-all").addEventListener("click", () => {
     const chords = state.project.chords;
     const open = !chords.every((c) => openChords.has(c.id));
@@ -1992,7 +2016,7 @@ function bindUi() {
     playRange(block.from, state.project.chords.length);
   });
   window.addEventListener("resize", () => drawSongRoll());
-  $("#export-all").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = true)); renderExportNote(); });
+  $("#export-all").addEventListener("click", () => { document.querySelectorAll("#export-parts input, #export-perc-list input").forEach((i) => (i.checked = true)); renderExportNote(); });
   $("#export-none").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = false)); renderExportNote(); });
   document.querySelectorAll("#phrase-mode button").forEach((b) => b.addEventListener("click", () => {
     if (!PHRASE_MODES.includes(b.dataset.mode)) return;

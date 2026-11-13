@@ -6,7 +6,7 @@ import { test } from "node:test";
 
 import { analyzeData } from "../../harmonalab/web/engine/analysis.js";
 import { INTENSITIES, SOURCE_SCALES, percussionFor, percussionOptions, bassForComp, bassOptions, beatOptions, compFor, compOptions, drumsFor, generateGroove, makeRng, ticksText } from "../../harmonalab/web/engine/groove.js";
-import { DRUM_CHANNEL, chordNotes, drumNotes, midiBytes, noteEvents } from "../../harmonalab/web/engine/midi.js";
+import { DRUM_CHANNEL, MAX_PERCUSSION_TRACKS, PERCUSSION_INSTRUMENTS, chordNotes, drumNotes, midiBytes, noteEvents, percussionPresent, percussionTracks } from "../../harmonalab/web/engine/midi.js";
 import { loadProject, sounding } from "../../harmonalab/web/engine/model.js";
 import { DRUM_PIECES, durationTicks, parseComp, parseDrums } from "../../harmonalab/web/engine/phrase.js";
 import { COLORS, SOURCES, STYLES, findStyle, styleByLabel } from "../../harmonalab/web/kb/estilos.js";
@@ -506,7 +506,35 @@ test("percussão: cada estilo tem opções de compassos inteiros, e ela sai numa
   const perc = notes.filter((n) => n.percussion);
   assert.ok(perc.length > 20 && perc.every((n) => n.channel === DRUM_CHANNEL));
   assert.ok(perc.some((n) => n.pitch === 62) && perc.some((n) => n.pitch === 60) && perc.some((n) => n.pitch === 73));
-  assert.ok(Buffer.from(midiBytes(loadProject(data).project)).includes(Buffer.from("Percuss")));
+  // salsa completa: as peças do kit ficam na Bateria e cada instrumento de percussão sai na faixa dele, com o nome
+  const text = (bytes) => Buffer.from(bytes).toString("latin1");
+  const project = loadProject(data).project;
+  const names = (bytes) => [...text(bytes).matchAll(/Perc [A-Za-z\u00c0-\u00ff]+|Percuss\u00e3o|Bateria/g)].map((m) => m[0]);
+  assert.deepEqual(names(midiBytes(project)), ["Bateria", "Perc Clave", "Perc Congas", "Perc Bong\u00f4s", "Perc Timbales", "Perc G\u00fciro"]);
+  assert.deepEqual(names(midiBytes(project, { percussionSingle: true })), ["Bateria", "Percuss\u00e3o"]);
+  assert.deepEqual(names(midiBytes(project, { parts: ["percussao"], percussionOnly: ["congas"] })), ["Perc Congas"]);
+  assert.deepEqual(percussionPresent(project), ["clave", "congas", "bongos", "timbales", "guiro"]);
+  const kit = notes.filter((n) => n.channel === DRUM_CHANNEL && !n.percussion).map((n) => n.pitch);
+  assert.ok(kit.length > 0 && kit.every((p) => !PERCUSSION_INSTRUMENTS.some((i) => i.pitches.includes(p))), "a Bateria só tem peças do kit");
+});
+
+test("no máximo 6 faixas de percussão em qualquer combinação de bateria e percussão dos estilos", () => {
+  for (const style of STYLES) {
+    for (const beat of style.beats) {
+      for (const option of style.percussion) {
+        const made = generateGroove(bare(), { style, drums: beat.id, percussion: option.id });
+        const project = loadProject({ ...bare(), drums: made.drums, percussion: made.percussion }).project;
+        const present = percussionPresent(project);
+        assert.ok(present.length <= MAX_PERCUSSION_TRACKS, `${style.id}/${beat.id}/${option.id}: ${present.join()}`);
+      }
+    }
+  }
+  // um projeto escrito à mão com todos os instrumentos: os que passam do limite dividem a última faixa
+  const everything = new Set(PERCUSSION_INSTRUMENTS.map((i) => i.id));
+  const tracks = percussionTracks(everything);
+  assert.equal(tracks.length, MAX_PERCUSSION_TRACKS);
+  assert.equal(tracks.at(-1).name, "Perc outras");
+  assert.equal(tracks.flatMap((t) => t.ids).length, PERCUSSION_INSTRUMENTS.length);
 });
 
 // progressão variada, com escalas: ii-V-I, dominante alterado, meio-diminuto, frígio dominante, dórico, lídio

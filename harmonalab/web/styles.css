@@ -603,3 +603,7 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .fills-body { display: grid; gap: 12px; padding: 8px 0 6px; }
 .fills-group { display: grid; gap: 4px; }
 .fills-group[hidden] { display: none; }
+.export-perc { display: grid; gap: 2px; margin: 0 8px 0 20px; padding: 8px 10px; border-left: 3px solid var(--border-strong); }
+.export-perc[hidden] { display: none; }
+.export-perc-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 0 8px; }
+.export-perc .export-part { padding: 6px 4px; font-size: .95rem; }

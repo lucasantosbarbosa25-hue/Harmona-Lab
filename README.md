@@ -203,6 +203,16 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   segunda voz é reescrita quando a Voz, a harmonia, as partes ou o estilo mudam; fica no campo `voice2` e sai no MIDI na
   faixa **"Voz 2"** (canal 6), um pouco mais leve que a Voz. Entra no mixer e na lista de partes do MIDI.
 
+  **Bateria e percussão separadas no MIDI.** No canal 10, as peças do kit (bumbo, caixa, aro, chimbais, pratos, tons)
+  ficam na faixa **"Bateria"**, e cada **instrumento de percussão** sai numa faixa própria, com o nome dele: "Perc
+  Cowbell", "Perc Clave", "Perc Pandeirola", "Perc Ganzá", "Perc Congas" (aberta, grave e tapa juntas), "Perc Bongôs",
+  "Perc Timbales", "Perc Güiro", "Perc Agogô". Vale a peça, e não o texto em que ela foi escrita (a clave e os timbales da
+  bateria de salsa vão para as faixas de percussão). Assim cada faixa vai para o som certo em qualquer VST, sem depender do
+  mapa de teclas dele. São **no máximo 6 faixas** de percussão (nenhuma combinação dos estilos passa disso; num projeto
+  escrito à mão com mais instrumentos, os últimos dividem a faixa "Perc outras"). Ao gerar o MIDI, a lista mostra os
+  instrumentos: dá para exportar todos, alguns ou **um só**, ou **juntar a percussão numa faixa** ("Percussão"). No Python,
+  `build_midi(..., percussion_single=True)` junta. As notas continuam as do General MIDI.
+
   **Viradas.** Com bateria ou baixo ligados, o painel **Viradas** tem, para cada um, **quantas** (Sem, Poucas, Normal,
   Muitas) e a **liberdade** (Contidas, Normal, Soltas). Na bateria: sem viradas; só no fim (e a cada 8 compassos); o costume
   (fim e a cada 4); a cada 2 compassos; contidas usam só as viradas curtas do estilo, soltas preferem as longas e não
