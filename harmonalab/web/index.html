@@ -40,6 +40,7 @@
       <div class="segmented" id="ai-mode" role="group" aria-label="O que fazer" hidden>
         <button type="button" data-mode="new" aria-pressed="true">Nova progressão</button>
         <button type="button" data-mode="adjust" aria-pressed="false">Ajustar a atual</button>
+        <button type="button" data-mode="continue" aria-pressed="false" hidden>Continuar</button>
       </div>
       <div class="ai-input">
         <label class="sr-only" for="ai-prompt">Pedido</label>
@@ -176,6 +177,13 @@
           <button type="button" class="btn secondary small" id="groove-fill">Outra virada</button>
         </div>
         <div class="groove-row">
+          <label class="switch" for="groove-pad">
+            <input type="checkbox" id="groove-pad" role="switch">
+            <span class="switch-track" aria-hidden="true"></span>
+            <span class="switch-text">Pad <small>o acorde aberto e parado por baixo de tudo, para sustentar; no MIDI sai na faixa "Pad" (use strings ou pad na DAW)</small></span>
+          </label>
+        </div>
+        <div class="groove-row">
           <label class="switch" for="groove-phrases">
             <input type="checkbox" id="groove-phrases" role="switch">
             <span class="switch-track" aria-hidden="true"></span>
@@ -255,6 +263,11 @@
           <p class="ai-help wide">Só mudam as oitavas da mão direita; a esquerda e o baixo ficam como estão. Em cada acorde dá para trocar o voicing no cartão. Tudo pode ser desfeito.</p>
         </div>
       </details>
+      <div class="form-strip" id="form-strip" hidden>
+        <span class="label">Partes da música <small>arraste um bloco para mudar a ordem; toque nele para repetir, renomear ou apagar</small></span>
+        <div class="form-blocks" id="form-blocks"></div>
+        <div class="form-actions" id="form-actions" hidden></div>
+      </div>
       <ol class="chords" id="chords"></ol>
       <div class="add-row">
         <button class="btn outline" id="add-chord"></button>
@@ -340,8 +353,16 @@
 
   <dialog id="canto-dialog" class="sheet" aria-labelledby="canto-title">
     <div class="sheet-body canto-body">
-      <p class="sheet-title" id="canto-title">Cantar uma melodia</p>
+      <p class="sheet-title" id="canto-title">Cantar uma melodia (ou usar um MIDI)</p>
       <p class="canto-hint">O áudio fica só no aparelho. Use fone com fio se puder: o clique chega na hora e o microfone do celular grava a voz. Cante devagar (até 100 BPM): depois dá para subir o BPM do projeto, e a melodia acompanha.</p>
+      <div id="canto-target-box" hidden>
+        <span class="label">Onde esta melodia entra</span>
+        <div class="segmented" id="canto-target" role="group" aria-label="Onde a melodia entra">
+          <button type="button" data-target="nova" aria-pressed="true">Parte nova</button>
+          <button type="button" data-target="toda" aria-pressed="false">Música toda</button>
+        </div>
+        <p class="canto-hint" id="canto-target-hint"></p>
+      </div>
       <div class="canto-settings">
         <label class="field">
           <span class="label">BPM (obrigatório, de 60 a 100)</span>
@@ -372,6 +393,11 @@
         <span class="switch-track" aria-hidden="true"></span>
         <span class="switch-text">Ajustar à escala do tom <small>toda nota vai para a escala diatônica do tom que o app identificar no canto</small></span>
       </label>
+      <label class="switch" for="canto-pickup">
+        <input type="checkbox" id="canto-pickup" role="switch">
+        <span class="switch-track" aria-hidden="true"></span>
+        <span class="switch-text">Anacruse <small>a melodia começa antes do tempo 1: a contagem passa a ter 2 compassos e você pode entrar cantando no segundo</small></span>
+      </label>
       <span class="label">Metrônomo</span>
       <div class="segmented" id="canto-mode" role="group" aria-label="Como ouvir o metrônomo">
         <button type="button" data-mode="fone" aria-pressed="true">Com fone</button>
@@ -391,9 +417,15 @@
       <div class="canto-record-row">
         <button type="button" class="btn primary" id="canto-record">Gravar</button>
         <div class="canto-beats" id="canto-beats" aria-hidden="true"></div>
+        <button type="button" class="btn secondary" id="canto-midi" title="Em vez de cantar, use a melodia de um arquivo MIDI">Usar um MIDI</button>
+        <input type="file" id="canto-midi-file" accept=".mid,.midi,audio/midi,audio/x-midi" hidden>
       </div>
       <p class="canto-status" id="canto-status" role="status" aria-live="polite"></p>
       <div class="canto-result" id="canto-result" hidden>
+        <label class="field" id="canto-track-box" hidden>
+          <span class="label">Faixa do MIDI com a melodia</span>
+          <select id="canto-track"></select>
+        </label>
         <canvas id="canto-roll" class="canto-roll" aria-label="As notas que o app ouviu"></canvas>
         <p class="canto-info" id="canto-info"></p>
         <ul class="canto-warnings" id="canto-warnings"></ul>

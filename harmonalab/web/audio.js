@@ -57,6 +57,32 @@ export class Player {
   }
 
   /** Ruído branco, criado uma vez (pratos, caixa, ganzá). */
+  /** Uma nota do pad: entra devagar, fica parada e sai devagar (duas ondas levemente desafinadas, com o agudo cortado). */
+  #pad(midi, velocity, t0, seconds) {
+    const ctx = this.ctx;
+    const peak = (velocity / 127) ** 1.2 * 0.075;
+    const end = t0 + Math.max(0.2, seconds);
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, t0);
+    env.gain.linearRampToValueAtTime(peak, t0 + 0.45);
+    env.gain.setTargetAtTime(0, end - 0.05, 0.3);
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 1400;
+    filter.Q.value = 0.4;
+    filter.connect(env).connect(this.master);
+    for (const cents of [-7, 7]) {
+      const osc = ctx.createOscillator();
+      osc.type = "sawtooth";
+      osc.frequency.value = freq(midi);
+      osc.detune.value = cents;
+      osc.connect(filter);
+      osc.start(t0);
+      osc.stop(end + 1.4);
+      this.voices.push(osc);
+    }
+  }
+
   #noise() {
     if (!this.noiseBuffer) {
       const length = this.ctx.sampleRate;
@@ -133,7 +159,7 @@ export class Player {
 
   /**
    * Toca uma lista de notas (a mesma de onde sai o arquivo MIDI).
-   * notes: [{midi, start, length, velocity, drum (peça de bateria?)}] em segundos; steps: [{time, index}] para destacar o acorde que soa;
+   * notes: [{midi, start, length, velocity, drum (peça de bateria?), pad (nota do pad?)}] em segundos; steps: [{time, index}] para destacar o acorde que soa;
    * total: duração em segundos; onStep(index) / onEnd().
    */
   play(notes, { steps = [], total = 0, onStep, onEnd } = {}) {
@@ -142,9 +168,10 @@ export class Player {
     const t0 = ctx.currentTime + 0.06;
     const together = new Map(); // quantas notas entram juntas (para o volume não estourar nos acordes cheios)
     const bucket = (n) => Math.round(n.start * 25);
-    for (const n of notes) if (!n.drum) together.set(bucket(n), (together.get(bucket(n)) || 0) + 1);
+    for (const n of notes) if (!n.drum && !n.pad) together.set(bucket(n), (together.get(bucket(n)) || 0) + 1);
     for (const n of notes) {
-      if (n.drum) this.#drum(n.midi, n.velocity, t0 + n.start);
+      if (n.pad) this.#pad(n.midi, n.velocity, t0 + n.start, n.length);
+      else if (n.drum) this.#drum(n.midi, n.velocity, t0 + n.start);
       else this.#voice(n.midi, n.velocity, t0 + n.start, n.length, together.get(bucket(n)));
     }
     for (const step of steps) this.timers.push(setTimeout(() => onStep?.(step.index), (t0 + step.time - ctx.currentTime) * 1000));

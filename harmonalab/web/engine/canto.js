@@ -479,12 +479,13 @@ export function voiceText(events, { key = null, middleC = "C4" } = {}) {
  * vazou para o microfone, e o tempo entre o clique agendado e o que chegou é o atraso do caminho (o mesmo que a pessoa
  * sente ao ouvir e cantar). Devolve { leak, latency (s), found, total, level (dB do clique em relação ao fundo) }.
  */
-export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.35 } = {}) {
+export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.35, music = false } = {}) {
   const step = Math.max(1, Math.round(sampleRate * 0.002));
   const env = [];
-  for (let i = 1; i + step < samples.length; i += step) {
+  // music: há música (grave e suave) tocando junto dos cliques; a segunda diferença realça ainda mais o agudo do clique
+  for (let i = 2; i + step < samples.length; i += step) {
     let e = 0;
-    for (let j = i; j < i + step; j++) { const d = samples[j] - samples[j - 1]; e += d * d; }
+    for (let j = i; j < i + step; j++) { const d = music ? samples[j] - 2 * samples[j - 1] + samples[j - 2] : samples[j] - samples[j - 1]; e += d * d; }
     env.push(Math.sqrt(e / step));
   }
   const at = (t) => Math.max(0, Math.min(env.length - 1, Math.floor((t * sampleRate) / step)));
@@ -494,7 +495,7 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
     const before = env.slice(at(t - 0.06), at(t));
     const base = Math.max(median(before) ?? 0, 1e-6);
     for (let k = at(t); k <= at(t + maxLatency); k++) {
-      if (env[k] > base * 8 && env[k] > 1e-4) { latencies.push((k * step) / sampleRate - t); levels.push(20 * Math.log10(env[k] / base)); break; }
+      if (env[k] > base * 8 && env[k] > (music ? 1e-5 : 1e-4)) { latencies.push((k * step) / sampleRate - t); levels.push(20 * Math.log10(env[k] / base)); break; }
     }
   }
   const latency = median(latencies);
@@ -508,17 +509,19 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
 /**
  * Da gravação às notas. options: { bpm, beatsPerBar, clickTimes (s, na linha do tempo da gravação: os agendados),
  * tickTimes (s: os tiques das colcheias, entre os tempos),
- * countInBeats (quantos cliques são da contagem), latencyFallback (s, quando não dá para medir pelo vazamento), middleC,
+ * countInBeats (quantos cliques são da contagem), measureBeats (quantos deles servem para medir o atraso: com anacruse, só os
+ * do primeiro compasso), pickupBeats (quantos tempos antes do tempo 1 o canto já vale; o que vier antes é descartado), music (o trecho anterior da música toca na contagem), latencyFallback (s, quando não dá para medir pelo vazamento), middleC,
  * fastest ("auto", o padrão: semicolcheia até SIXTEENTHS_UP_TO_BPM e colcheia acima; "8" ou "16" fixos), diatonic (true:
  * toda nota vai para a escala do tom identificado), maskClicks (apagar da análise os instantes dos cliques que vazaram; false: nos testes, apagar atrapalhou as notas curtas que
  * começam junto do clique, e a nota é lida bem mesmo com o clique por cima) }. O clique (e o eco dele) é descartado pela
  * altura: ele soa entre dois semitons (CLICK_MIDI), onde nenhuma nota cantada afinada cai.
  * Devolve { events, text, key, tuning, leak, latency, shift, notes (brutas), warnings }.
  */
-export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true } = {}) {
+export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, measureBeats = countInBeats, pickupBeats = Infinity, music = false, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true } = {}) {
   const warnings = [];
-  const countIn = clickTimes.slice(0, countInBeats);
-  const leak = countIn.length ? measureClicks(samples, sampleRate, countIn) : { leak: false, latency: null, found: 0, total: 0 };
+  // measureBeats: os cliques da contagem em que ninguém canta (com anacruse, só o primeiro compasso), usados para medir o atraso
+  const countIn = clickTimes.slice(0, Math.min(measureBeats, countInBeats));
+  const leak = countIn.length ? measureClicks(samples, sampleRate, countIn, { music }) : { leak: false, latency: null, found: 0, total: 0 };
   const latency = leak.leak ? leak.latency : latencyFallback;
   // o clique morre em uns 40 ms: só esse trecho é ignorado
   const masks = leak.leak && maskClicks ? clickTimes.map((t) => [t + latency - 0.008, t + latency + 0.045]) : [];
@@ -534,7 +537,11 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
     : [];
   const track = trackPitch(samples, sampleRate, { masks, reject, clickWindows });
   const raw = segmentNotes(track);
-  const notes = raw;
+  // o tempo 1 (depois da contagem) e o começo do trecho em que o canto vale: `pickupBeats` tempos antes dele (anacruse).
+  // O que soar antes disso (o trecho anterior da música tocando na contagem, um pigarro) é descartado.
+  const firstBeat = clickTimes[countInBeats] ?? (clickTimes.length ? clickTimes[0] + countInBeats * (60 / bpm) : 0);
+  const from = Number.isFinite(pickupBeats) ? firstBeat + latency - (pickupBeats + 0.25) * (60 / bpm) : -Infinity;
+  const notes = raw.filter((n) => n.start >= from);
   if (!notes.length) {
     warnings.push("Não encontrei notas cantadas. Cante mais perto do microfone, ou mais alto.");
     return { events: [], text: "", key: null, tuning: { offset: 0, strength: 0 }, leak, latency, shift: 0, notes, warnings };
@@ -555,7 +562,6 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   const resolved = fastest === "auto" ? (bpm <= SIXTEENTHS_UP_TO_BPM ? "16" : "8") : fastest;
   const step = resolved === "16" ? 0.25 : 0.5;
   const simple = simplifyNotes(notes, { minSeconds: 0.6 * step * (60 / bpm), reach: 2 });
-  const firstBeat = clickTimes[countInBeats] ?? (countIn.length ? countIn.at(-1) + 60 / bpm : 0);
   const { events, shift } = quantize(simple, { bpm, beatZero: firstBeat + latency, beatsPerBar, step });
   // o clique chegou ao microfone mais alto que a voz? (com eco forte, aí sim pode confundir)
   let clickVsVoice = null;

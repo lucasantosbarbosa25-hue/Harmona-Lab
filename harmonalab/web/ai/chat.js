@@ -14,8 +14,8 @@ export const CHATS = [
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 /** Texto completo para colar no chat: instruções + pedido (+ progressão atual, no ajuste). `research`: a IA pesquisa antes de compor? */
-export function buildChatPrompt({ request, mode, currentProject, appUrl, research = false, voice = null }) {
-  return `${instructions(appUrl, { research: Boolean(research) })}\n\n---\n\n${buildUserMessage({ request, mode, currentProject, voice })}`;
+export function buildChatPrompt({ request, mode, currentProject, appUrl, research = false, voice = null, continuation = null }) {
+  return `${instructions(appUrl, { research: Boolean(research) })}\n\n---\n\n${buildUserMessage({ request, mode, currentProject, voice, continuation })}`;
 }
 
 /** Acha o JSON na resposta do chat: bloco ```json``` (o maior que for válido) ou o trecho entre a primeira { e a última }. */

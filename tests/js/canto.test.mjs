@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CLICK_MIDI, hatTickSamples, simplifyNotes, estimateKey, estimateTuning, measureClicks, midiFromHz, quantize, snapPitch, transcribe, voiceText, woodblockSamples, yin } from "../../harmonalab/web/engine/canto.js";
+import { CLICK_MIDI, hatTickSamples, hzFromMidi, simplifyNotes, estimateKey, estimateTuning, measureClicks, midiFromHz, quantize, snapPitch, transcribe, voiceText, woodblockSamples, yin } from "../../harmonalab/web/engine/canto.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { MELODY, RATE, score, singMelody } from "./canto_fixture.mjs";
 
@@ -188,4 +188,29 @@ test("ritmo automático: semicolcheias até 75 BPM (cada uma com 200 ms ou mais)
     assert.equal(r.fastest, "8", `${bpm} BPM`);
     assert.equal(score(r.events, take.truth).hits, take.truth.length, `${bpm} BPM: ${r.text}`);
   }
+});
+
+test("anacruse: com 2 compassos de contagem, o canto pode entrar no segundo; o atraso é medido só no primeiro", () => {
+  const melody = [{ beat: -1.5, beats: 0.5, midi: 64 }, { beat: -1, beats: 1, midi: 67 }, { beat: 0, beats: 2, midi: 72 }, { beat: 2, beats: 2, midi: 69 }];
+  const take = singMelody(melody, { bpm: 80, click: -10, countIn: 8, latency: 0.12 });
+  const out = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 8, measureBeats: 4, pickupBeats: 4, fastest: "8", diatonic: false });
+  assert.equal(out.leak.leak, true);
+  assert.ok(Math.abs(out.latency - 0.12) < 0.02, `atraso ${out.latency}`);
+  assert.equal(out.shift, 4);
+  assert.deepEqual(out.events.map((e) => [e.beat, e.midi]), [[2.5, 64], [3, 67], [4, 72], [6, 69]]);
+});
+
+test("parte nova: o trecho anterior da música, tocando na contagem e vazando para o microfone, não vira nota", () => {
+  const take = singMelody(MELODY, { bpm: 80, click: -12, countIn: 8, latency: 0.1 });
+  // a harmonia do fim da parte anterior soa nos 2 compassos da contagem (um acorde de Dó maior, suave)
+  const beat = 60 / 80;
+  for (let i = Math.round(0.4 * RATE); i < Math.round((0.4 + 8 * beat) * RATE); i++) {
+    const t = i / RATE;
+    for (const midi of [48, 55, 64]) take.samples[i] += 0.05 * Math.sin(2 * Math.PI * hzFromMidi(midi) * t);
+  }
+  const out = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 8, pickupBeats: 0, music: true, fastest: "8", diatonic: false });
+  assert.equal(out.leak.leak, true, "o clique continua sendo achado, mesmo com a harmonia por baixo");
+  assert.equal(out.shift, 0);
+  assert.equal(score(out.events, take.truth).accuracy, 1);
+  assert.equal(out.events.length, take.truth.length);
 });

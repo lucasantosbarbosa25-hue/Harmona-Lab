@@ -145,6 +145,34 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   meio tom de uma nota, apagar nota). **Usar como Voz** põe a melodia no projeto (campo "Voz", em "Sobre esta progressão"),
   com o BPM e o compasso do canto e compassos vazios se ela não couber. A Voz toca na escuta (com o som da frase, no banco de
   sons) e sai no MIDI numa faixa própria, **"Voz"** (canal 4). O interruptor **Voz cantada** (aparece quando há uma Voz, junto de "Ouvir e exportar") liga e desliga a melodia ao ouvir, para ouvir só o solo do app depois da harmonia importada; a Voz continua guardada no projeto. **Gerar MIDI** abre uma lista com as partes que o projeto tem (Acordes, Voz cantada, Solo, Baixo, Bateria, Percussão): marque qualquer combinação, ou todas; cada parte sai numa faixa e o BPM, o compasso e os nomes dos acordes vão sempre. A escolha fica lembrada no aparelho e o nome do arquivo diz as partes (ex.: `minha-musica-voz-baixo.mid`). O pedido copiado para a IA leva a melodia (cada nota com compasso, tempo e duração) para ela harmonizar. Próxima fase: o app harmonizar sozinho a partir da Voz.
+
+  **Partes da música (A, B, C...).** Acima da lista de acordes fica a faixa **Partes da música**: um bloco por parte, na
+  ordem em que tocam. **Arraste** um bloco para mudar a ordem; **toque** nele para repetir, renomear, juntar à anterior ou
+  apagar; o bloco **+** cria uma parte vazia. A melodia (Voz) que está em cima de cada parte vai junto quando o bloco se
+  move, é repetido ou apagado, e tudo tem Desfazer. Em cada acorde, "Nova parte aqui" começa uma parte naquele ponto. No
+  projeto, a parte é o campo `section` no primeiro acorde dela (lógica em `web/partes.js`).
+
+  **Cantar a parte seguinte.** Com música no projeto, a janela do canto pergunta onde a melodia entra: **Parte nova**
+  (depois da que existe) ou **Música toda**. Na parte nova, a contagem tem 2 compassos e o app toca neles os **2 últimos
+  compassos da música** (acordes, baixo e voz), para você entrar cantando na sequência; o BPM e o compasso do projeto não
+  mudam (a Voz fica em figuras, então dá para cantar mais devagar). O tom é identificado de novo em cada gravação, então
+  uma parte que modula é ajustada à escala dela. **Anacruse** (interruptor): a contagem passa a ter 2 compassos e o canto
+  já vale no segundo; o atraso do clique é medido só no primeiro. Na parte nova, a anacruse entra por cima do fim da parte
+  anterior (com anacruse e sem fone, só o clique toca, para o trecho não vazar por cima da voz).
+
+  **Usar um MIDI no lugar do canto.** O botão "Usar um MIDI" lê um arquivo .mid (`web/engine/midi-read.js`): o BPM e o
+  compasso vêm do arquivo, a faixa mais provável é escolhida (dá para trocar), acordes viram a nota mais aguda, e o ritmo é
+  encaixado em semicolcheias. O resto é igual ao canto: conferir, ajustar e usar (como música toda ou como parte nova).
+
+  **Continuar com a IA.** Depois de cantar uma parte nova, o assistente ganha o modo **Continuar (parte B)**: o pedido leva
+  o projeto, a melodia e a tarefa (harmonizar a parte nova, podendo retocar os 2 últimos acordes da parte anterior para
+  ligar as duas, e devolver o projeto completo com as partes marcadas: `section` no JSON, `sec=A.1,B.9` no link). O texto
+  do pedido é opcional nesse modo. A Voz continua no projeto quando a resposta é carregada.
+
+  **Pad.** O interruptor "Pad" (em "Ritmo e frases") acrescenta uma camada de sustentação: cada acorde aberto e parado,
+  do começo ao fim dele (a nota mais grave, a quinta acima e as outras notas na oitava seguinte; nota igual no acorde
+  seguinte fica ligada). No MIDI sai na faixa **"Pad"** (canal 5), para usar com strings ou pad na DAW; na escuta, toca
+  com um timbre de pad do próprio app. Campo `pad: true` no projeto.
 - **Estilo:** Jazz swing, Blues, Jazz fusion, Neo-soul, **Lo-fi**, Gospel americano, Funk, Salsa, Samba, Bossa nova, Rock ou Ska.
 - **Lo-fi** (70 a 90 BPM): Rhodes com levadas que respiram (acordes soltos, síncope suave, arpejo rolado) e ostinatos de piano;
   **bateria "arrastada"**: caixa, bumbo e contratempos do chimbal tocam um pouquinho depois do tempo (atraso fino, notação `>`
@@ -351,10 +379,12 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].comment` | não (a IA sempre preenche) | A frase de função do acorde: o que ele faz ali e por quê. Aparece sob o nome do acorde. |
 | `chords[].phrase` | não | Frase melódica: notas em ordem, cada uma `NOTA/DURAÇÃO` e, se quiser, um papel depois de `*`. Ex.: `"G5/8 F5/8 Eb5/4*alvo D5/8 C5/8 B4/4*alvo"`. Duração = valor da figura (4 semínima, 8 colcheia, 16 semicolcheia, 32 fusa; `t` tercina, `q` quiáltera de 5, `.` ponto, `+` ligadura, como em `8+4`); `r/8` é pausa. O início de cada nota é a soma das durações anteriores e a soma não pode passar do acorde. Dueto: duas notas ligadas por `&` soam juntas (`C5&A4/8`). |
 | `chords[].phrase_scale` | não (a IA sempre preenche) | Notas da escala do acorde, sem oitava (`"B C D Eb F G A"`): o app escreve e confere as frases com ela, e avisa se ela não contém as notas do acorde. |
+| `chords[].section` | não | Começa aqui uma **parte** da música com este nome (`"A"`, `"B"`, `"Refrão"`); vale até a próxima marca. Só o primeiro acorde de cada parte leva. |
 | `chords[].phrase_color` | não | Cor da frase pedida para o acorde: `"dentro"`, `"cromatico"` ou `"outside"`. Vazio = costume do estilo. |
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
 | `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO` (dinâmica opcional depois da peça: `!!` forte, `!` acento, `?` leve, `??` fantasma; e, depois dela, atraso fino opcional: `>` toca um pouquinho depois do tempo, ≈ 19 ms a 80 BPM, e `>>` um pouco mais, ≈ 38 ms; ex.: `S!>/4`). Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
+| `pad` | não | `true` liga o **pad**: cada acorde aberto e parado, numa faixa própria ("Pad", canal 5). |
 | `voice` | não | A **Voz**: uma melodia (por exemplo, a que você cantou) para a música inteira, a partir do tempo 0, na notação da frase (`NOTA/DURAÇÃO`, `r/` pausa). Ex.: `"r/4 A4/4 C5/8 D5/8 E5/2"`. Não pode durar mais que a progressão. Sai no MIDI numa faixa própria, "Voz". |
 | `percussion` | não | Percussão da progressão, na mesma notação da bateria, em faixa própria. Peças extras: U conga muda, V/W bongô agudo e grave, Y/Z timbal agudo e grave, J/I güiro curto e longo, D agogô. |
 | `chords[].symbol`, `omitted` | não | Informativos. |

@@ -168,6 +168,11 @@ CASES = [
     {"voice": 42, "chords": [{"duration_beats": 4}]},
     {"voice": "A4/2 C5/2 E5/1", "chords": [{"duration_beats": 4}, {"symbol": "Pausa", "duration_beats": 4}]},  # só a Voz, sem acordes ainda
     {"voice": "E4/4 G4/4 B4/2", "drums": "K/4 S/4 K/4 S/4", "chords": [{"notes": "E3 G3 B3", "duration_beats": 4}]},
+    # pad (canal 5, faixa própria): aberto, parado, notas comuns ligadas; e as partes da música (section)
+    {"pad": True, "chords": [{"symbol": "Cmaj9", "section": "A", "left_hand": "C3 G3", "right_hand": "B3 D4 E4"}, {"symbol": "Am7", "left_hand": "A2", "right_hand": "G3 C4 E4", "duration_beats": 2},
+                             {"symbol": "Pausa", "duration_beats": 2}, {"symbol": "F#m7b5/C", "section": "B", "bass": "C2", "notes": "F#3 A3 E4", "velocity": 15}, {"notes": "C5", "section": 7}]},
+    {"pad": True, "voice": "E4/2", "drums": "K/4 S/4", "chords": [{"notes": "E3 G3 B3", "phrase": "B4/4", "bass_line": "E2/2", "duration_beats": 4}, {"notes": "E3 G3 B3 D4", "duration_beats": 4}]},
+    {"pad": "sim", "chords": [{"notes": "C4 E4 G4"}]},  # só true liga o pad
     {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
     {"drums": 5, "chords": [{"notes": "C4"}]},
     {"drums": " | ; ", "chords": [{"notes": "C4"}]},

@@ -33,6 +33,8 @@ CHANNEL = 0
 PHRASE_CHANNEL = 1
 BASS_CHANNEL = 2
 VOICE_CHANNEL = 3  # a Voz (melodia cantada)
+PAD_CHANNEL = 4  # o pad: o acorde aberto e parado
+PAD_SOFTER = 20  # o pad toca mais leve que os acordes (velocity a menos)
 DRUM_CHANNEL = 9
 #: O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase).
 PHRASE_MODES = ("both", "chords", "line")
@@ -164,6 +166,48 @@ def drum_notes(project: Project, total: int, ticks_per_beat: int = TICKS_PER_BEA
     return _merge_same_keys(notes)
 
 
+def pad_pitches(chord) -> list[int]:
+    """As notas do pad para um acorde: sempre abertas. A nota mais grave do acorde vai para a região de Sol 2 a Fá# 3,
+    a quinta (se o acorde tiver) logo acima, e as outras notas na oitava seguinte."""
+    sounding = chord.sounding()
+    if not sounding:
+        return []
+    root = sounding[0][0].midi
+    base = 36 + root % 12
+    if base < 43:
+        base += 12
+    intervals = sorted({(note.midi - root) % 12 for note, _ in sounding} - {0})
+    fifth = next((i for i in (7, 6, 8) if i in intervals), None)
+    out = [base] + ([base + fifth] if fifth is not None else [])
+    out += [base + 12 + i for i in intervals if i != fifth]
+    return sorted(set(out))
+
+
+def pad_notes(project: Project, ticks_per_beat: int = TICKS_PER_BEAT) -> list[list[int]]:
+    """Notas do pad: [[início, fim, nota, velocity]]. Cada acorde soa inteiro; nota igual no acorde seguinte fica ligada."""
+    if not project.pad:
+        return []
+    notes: list[list[int]] = []
+    last: dict[int, list[int]] = {}
+    tick = 0
+    for chord in project.chords:
+        length = beats_to_ticks(chord.duration_beats, ticks_per_beat)
+        velocity = max(1, min(127, project.velocity_for(chord) - PAD_SOFTER))
+        current: dict[int, list[int]] = {}
+        for pitch in pad_pitches(chord):
+            held = last.get(pitch)
+            if held is not None and held[1] == tick:
+                held[1] = tick + length
+                current[pitch] = held
+            else:
+                note = [tick, tick + length, pitch, velocity]
+                notes.append(note)
+                current[pitch] = note
+        last = current
+        tick += length
+    return notes
+
+
 def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, markers: bool = True,
                phrase_mode: str = "both") -> mido.MidiFile:
     """Gera o MidiFile exatamente com as notas, oitavas e durações do projeto."""
@@ -194,6 +238,9 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
                                mido.Message("note_off", channel=PHRASE_CHANNEL, note=pitch, velocity=0)))
         tick += length
     end_tick = tick
+    for start, end, pitch, vel in pad_notes(project, ticks_per_beat):
+        events.append((start, 2, pitch, PAD_CHANNEL, mido.Message("note_on", channel=PAD_CHANNEL, note=pitch, velocity=vel)))
+        events.append((end, 0, pitch, PAD_CHANNEL, mido.Message("note_off", channel=PAD_CHANNEL, note=pitch, velocity=0)))
     for e in project.voice_events:
         if e.start >= end_tick:
             continue
@@ -213,7 +260,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     phrase = [e for e in events if e[3] == PHRASE_CHANNEL]
     bass = [e for e in events if e[3] == BASS_CHANNEL]
     voice = [e for e in events if e[3] == VOICE_CHANNEL]
-    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL)]
+    pad = [e for e in events if e[3] == PAD_CHANNEL]
+    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL, PAD_CHANNEL)]
 
     def make_track(name: str, items: list, header: bool) -> mido.MidiTrack:
         track = mido.MidiTrack()
@@ -230,7 +278,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         return track
 
     title = project.title or "Harmona Lab"
-    if not phrase and not drums and not bass and not percussion and not voice:
+    if not phrase and not drums and not bass and not percussion and not voice and not pad:
         midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
         midi.tracks.append(make_track(title, chords, True))
         return midi
@@ -242,6 +290,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         midi.tracks.append(make_track("Frase", phrase, False))
     if bass:
         midi.tracks.append(make_track("Baixo", bass, False))
+    if pad:
+        midi.tracks.append(make_track("Pad", pad, False))
     if drums:
         midi.tracks.append(make_track("Bateria", drums, False))
     if percussion:

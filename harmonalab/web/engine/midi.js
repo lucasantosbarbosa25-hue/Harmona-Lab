@@ -14,6 +14,8 @@ const CHANNEL = 0;
 const PHRASE_CHANNEL = 1;
 export const BASS_CHANNEL = 2;
 export const VOICE_CHANNEL = 3; // a Voz (melodia cantada)
+export const PAD_CHANNEL = 4; // o pad: o acorde aberto e parado
+const PAD_SOFTER = 20; // o pad toca mais leve que os acordes (velocity a menos)
 export const DRUM_CHANNEL = 9;
 /** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
 export const PHRASE_MODES = ["both", "chords", "line"];
@@ -169,6 +171,49 @@ export function drumNotes(project, total, ticksPerBeat = TICKS_PER_BEAT, bars = 
 }
 
 /**
+ * As notas do pad para um acorde: sempre abertas. A nota mais grave do acorde vai para a região de Sol 2 a Fá# 3, a quinta
+ * (se o acorde tiver) logo acima, e as outras notas na oitava seguinte.
+ */
+export function padPitches(chord) {
+  const voices = sounding(chord);
+  if (!voices.length) return [];
+  const root = voices[0].note.midi;
+  let base = 36 + (root % 12);
+  if (base < 43) base += 12;
+  const intervals = [...new Set(voices.map((v) => (((v.note.midi - root) % 12) + 12) % 12))].filter((i) => i !== 0).sort((a, b) => a - b);
+  const fifth = [7, 6, 8].find((i) => intervals.includes(i)) ?? null;
+  const out = [base, ...(fifth !== null ? [base + fifth] : []), ...intervals.filter((i) => i !== fifth).map((i) => base + 12 + i)];
+  return [...new Set(out)].sort((a, b) => a - b);
+}
+
+/** Notas do pad: [[início, fim, nota, velocity]]. Cada acorde soa inteiro; nota igual no acorde seguinte fica ligada. */
+export function padNotes(project, ticksPerBeat = TICKS_PER_BEAT) {
+  if (!project.pad) return [];
+  const notes = [];
+  let last = new Map();
+  let tick = 0;
+  for (const chord of project.chords) {
+    const length = beatsToTicks(chord.duration_beats, ticksPerBeat);
+    const velocity = Math.max(1, Math.min(127, velocityFor(project, chord) - PAD_SOFTER));
+    const current = new Map();
+    for (const pitch of padPitches(chord)) {
+      const held = last.get(pitch);
+      if (held && held[1] === tick) {
+        held[1] = tick + length;
+        current.set(pitch, held);
+      } else {
+        const note = [tick, tick + length, pitch, velocity];
+        notes.push(note);
+        current.set(pitch, note);
+      }
+    }
+    last = current;
+    tick += length;
+  }
+  return notes;
+}
+
+/**
  * Todas as notas do projeto, com tempo: { notes: [{start, end, pitch, velocity, channel, chord}], starts (tick de cada
  * acorde), end }. É a lista de onde sai o arquivo .mid, e a pré-escuta do app toca a mesma lista.
  */
@@ -194,6 +239,9 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     }
     tick += length;
   });
+  for (const [start, end, pitch, velocity] of padNotes(project, ticksPerBeat)) {
+    notes.push({ start, end, pitch, velocity, channel: PAD_CHANNEL, chord: -1, pad: true });
+  }
   for (const e of project.voice_events ?? []) {
     if (e.start >= tick) continue;
     notes.push({ start: e.start, end: Math.min(e.start + e.length, tick), pitch: e.note.midi, velocity: project.default_velocity, channel: VOICE_CHANNEL, chord: -1, voice: true });
@@ -213,6 +261,7 @@ export const MIDI_PARTS = [
   { id: "voz", label: "Voz cantada" },
   { id: "solo", label: "Solo (frases)" },
   { id: "baixo", label: "Baixo" },
+  { id: "pad", label: "Pad" },
   { id: "bateria", label: "Bateria" },
   { id: "percussao", label: "Percussão" },
 ];
@@ -220,6 +269,7 @@ export const MIDI_PARTS = [
 /** A que parte pertence uma nota de noteEvents. */
 export function notePart(n) {
   if (n.voice) return "voz";
+  if (n.pad) return "pad";
   if (n.percussion) return "percussao";
   if (n.channel === DRUM_CHANNEL) return "bateria";
   if (n.channel === BASS_CHANNEL) return "baixo";
@@ -245,7 +295,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   const { starts, end: endTick } = all;
   const notes = keep ? all.notes.filter((n) => keep.has(notePart(n))) : all.notes;
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
@@ -290,6 +340,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   if (events[VOICE_CHANNEL].length) tracks.push(trackBytes("Voz", events[VOICE_CHANNEL], false));
   if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
   if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
+  if (events[PAD_CHANNEL].length) tracks.push(trackBytes("Pad", events[PAD_CHANNEL], false));
   if (events[DRUM_CHANNEL].length) tracks.push(trackBytes("Bateria", events[DRUM_CHANNEL], false));
   if (events.percussion.length) tracks.push(trackBytes("Percussão", events.percussion, false));
   const u32 = (n) => [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];

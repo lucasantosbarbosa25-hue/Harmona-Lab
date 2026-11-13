@@ -6,10 +6,14 @@ import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
+import {
+  appendSection, emptyLastSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
+  sectionBlocks, splitSection,
+} from "./partes.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
 import { INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
-import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents, MIDI_PARTS, partsPresent } from "./engine/midi.js";
+import { DRUM_CHANNEL, TICKS_PER_BEAT, midiBytes, noteEvents, MIDI_PARTS, padNotes, partsPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
@@ -137,7 +141,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", section: "", ...extra,
   };
 }
 
@@ -172,6 +176,7 @@ function toEditable(data) {
       omitted: text(c.omitted), comment: text(c.comment), function: text(c.function), scale: text(c.scale),
       phrase: text(c.phrase), phrase_scale: text(c.phrase_scale), phrase_color: text(c.phrase_color), bass_line: text(c.bass_line),
       comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
+      section: text(c.section).trim(),
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -192,6 +197,7 @@ function toEditable(data) {
     percussion: Array.isArray(data.percussion) ? data.percussion.join(" | ") : typeof data.percussion === "string" ? data.percussion : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     voice: Array.isArray(data.voice) ? data.voice.join(" ") : typeof data.voice === "string" ? data.voice : "",
+    pad: data.pad === true,
     chords,
   };
 }
@@ -534,6 +540,10 @@ function chordCard(chord, index, total) {
     h("button", { type: "button", class: "btn ghost small icon-only", "aria-label": `Mover acorde ${n} para cima`, title: "Mover para cima", disabled: index === 0, onclick: () => moveChord(chord, -1) }, icon("up")),
     h("button", { type: "button", class: "btn ghost small icon-only", "aria-label": `Mover acorde ${n} para baixo`, title: "Mover para baixo", disabled: index === total - 1, onclick: () => moveChord(chord, 1) }, icon("down")),
     h("span", { class: "spacer" }),
+    index > 0 && !String(chord.section || "").trim() ? h("button", {
+      type: "button", class: "btn ghost small", title: "Começar uma parte nova da música neste acorde",
+      onclick: () => { const next = splitSection(state.project.chords, state.project.chords.indexOf(chord)); changeSections(next && { chords: next }, "Parte nova começando neste acorde."); },
+    }, "Nova parte aqui") : null,
     h("button", { type: "button", class: "btn ghost small", onclick: () => duplicateChord(chord) }, icon("copy"), "Duplicar"),
     h("button", { type: "button", class: "btn ghost small danger", onclick: () => removeChord(chord) }, icon("trash"), "Remover"),
   );
@@ -605,8 +615,157 @@ function toggleLock(chord) {
 
 function renderChords() {
   const chords = state.project.chords;
-  $("#chords").replaceChildren(...chords.map((c, i) => chordCard(c, i, chords.length)));
+  const blocks = sectionBlocks(chords);
+  const starts = new Map(blocks.map((b, i) => [b.from, { ...b, index: i }]));
+  const items = [];
+  chords.forEach((c, i) => {
+    const block = starts.get(i);
+    if (block && blocks.length > 1) {
+      items.push(h("li", { class: "section-divider", style: `--hue:${sectionHue(block.name)}`, dataset: { section: block.index } },
+        `Parte ${block.name}`, h("small", null, barsText(block.beats))));
+    }
+    items.push(chordCard(c, i, chords.length));
+  });
+  $("#chords").replaceChildren(...items);
+  renderForm();
   renderAnalysis();
+}
+
+// ---------------------------------------------------------------- partes da música (A, B, C...)
+/** A cor de uma parte: a mesma letra tem sempre a mesma cor (A repetido aparece igual). */
+const sectionHue = (name) => {
+  const text = String(name || "A").toUpperCase();
+  const index = text.length === 1 && text >= "A" && text <= "Z" ? text.charCodeAt(0) - 65 : [...text].reduce((n, ch) => n + ch.charCodeAt(0), 0);
+  return [28, 205, 140, 280, 350, 95, 245, 55][index % 8];
+};
+let formSelected = -1; // o bloco escolhido na faixa das partes
+
+/** A faixa das partes: um bloco por parte, na ordem da música. Arrastar muda a ordem; tocar abre as opções. */
+function renderForm() {
+  const chords = state.project.chords;
+  const blocks = sectionBlocks(chords);
+  const strip = $("#form-strip");
+  strip.hidden = chords.length < 2 && blocks.length < 2;
+  if (formSelected >= blocks.length) formSelected = -1;
+  const tiles = blocks.map((b, i) => {
+    const tile = h("button", {
+      type: "button", class: "form-block", style: `--hue:${sectionHue(b.name)}`, "aria-pressed": String(i === formSelected),
+      "aria-label": `Parte ${b.name}, ${barsText(b.beats)}`, dataset: { index: i },
+    }, h("strong", null, b.name), h("small", null, barsText(b.beats) || "vazia"));
+    bindFormDrag(tile, i);
+    return tile;
+  });
+  tiles.push(h("button", { type: "button", class: "form-block add", "aria-label": "Acrescentar uma parte vazia", onclick: addEmptySection },
+    h("strong", null, "+"), h("small", null, "parte")));
+  $("#form-blocks").replaceChildren(...tiles);
+  const actions = $("#form-actions");
+  const b = blocks[formSelected];
+  actions.hidden = !b;
+  if (!b) return;
+  const i = formSelected;
+  const button = (label, run, { disabled = false, danger = false, iconName = null } = {}) => h("button", {
+    type: "button", class: `btn ghost small${danger ? " danger" : ""}`, disabled, onclick: run,
+  }, iconName ? icon(iconName) : null, label);
+  actions.replaceChildren(
+    h("span", { class: "who" }, `Parte ${b.name}:`),
+    button("◀ Antes", () => changeSections(moveSection(state.project, i, i - 1), `Parte ${b.name} foi para antes.`, i - 1), { disabled: i === 0 }),
+    button("Depois ▶", () => changeSections(moveSection(state.project, i, i + 1), `Parte ${b.name} foi para depois.`, i + 1), { disabled: i === blocks.length - 1 }),
+    button("Repetir", () => changeSections(repeatSection(state.project, i), `Parte ${b.name} repetida (acordes e melodia).`, i + 1), { iconName: "copy" }),
+    button("Renomear", () => {
+      const name = window.prompt("Nome da parte (uma letra ou uma palavra curta, como Refrão):", b.name);
+      if (name == null) return;
+      const chordsNow = renameSection(state.project.chords, i, name);
+      changeSections(chordsNow && { chords: chordsNow }, `Parte renomeada para ${String(name).trim()}.`, i);
+    }),
+    button("Juntar à anterior", () => {
+      const chordsNow = joinSection(state.project.chords, i);
+      changeSections(chordsNow && { chords: chordsNow }, `Parte ${b.name} juntada à anterior.`, i - 1);
+    }, { disabled: i === 0 }),
+    button("Apagar", () => changeSections(removeSection(state.project, i), `Parte ${b.name} apagada (acordes e melodia).`, -1), { disabled: blocks.length < 2, danger: true, iconName: "trash" }),
+  );
+}
+
+/** Aplica uma mudança nas partes ({ chords, voice? }), com Desfazer. `select`: o bloco que fica escolhido depois. */
+function changeSections(result, message, select = -1) {
+  if (!result) {
+    toast("Não deu para mudar as partes. Se a Voz tiver um erro de escrita, corrija-o primeiro (em “Sobre esta progressão”).", { error: true });
+    return;
+  }
+  const undo = snapshot();
+  stopPlayback();
+  state.project.chords = result.chords.map((c) => ({ ...c, id: c.id ?? nextId++ }));
+  if (result.voice !== undefined) state.project.voice = result.voice;
+  formSelected = select;
+  renderAll();
+  toast(message, { action: { label: "Desfazer", run: undo } });
+}
+
+function addEmptySection() {
+  const chords = state.project.chords;
+  const name = nextSectionName(chords);
+  const bpb = beatsPerBar();
+  const next = chords.map((c, i) => (i === 0 && !String(c.section || "").trim() ? { ...c, section: "A" } : c));
+  for (let k = 0; k < 4; k++) next.push(blankChord({ duration_beats: bpb, section: k === 0 ? name : "" }));
+  changeSections({ chords: next }, `Parte ${name} criada com 4 compassos vazios. Cante a melodia dela (ou escreva os acordes).`, sectionBlocks(next).length - 1);
+}
+
+/** Arrastar um bloco para o lugar de outro (dedo ou mouse). Um toque sem arrastar escolhe o bloco. */
+function bindFormDrag(tile, index) {
+  let start = null;
+  let dragging = false;
+  let target = null;
+  const clear = () => document.querySelectorAll(".form-block.drop-target").forEach((el) => el.classList.remove("drop-target"));
+  tile.addEventListener("pointerdown", (event) => {
+    if (event.button > 0) return;
+    start = { x: event.clientX, y: event.clientY };
+    dragging = false;
+    target = null;
+    tile.setPointerCapture?.(event.pointerId);
+  });
+  tile.addEventListener("pointermove", (event) => {
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (!dragging && Math.hypot(dx, dy) < 10) return;
+    dragging = true;
+    tile.classList.add("dragging");
+    tile.style.transform = `translate(${dx}px, ${dy}px)`;
+    tile.style.pointerEvents = "none"; // para achar o bloco que está embaixo do dedo
+    const under = document.elementFromPoint(event.clientX, event.clientY)?.closest?.(".form-block:not(.add)");
+    tile.style.pointerEvents = "";
+    clear();
+    target = under && under !== tile ? Number(under.dataset.index) : null;
+    if (target !== null) under.classList.add("drop-target");
+  });
+  const end = (event) => {
+    if (!start) return;
+    const wasDragging = dragging;
+    start = null;
+    dragging = false;
+    tile.classList.remove("dragging");
+    tile.style.transform = "";
+    clear();
+    try { tile.releasePointerCapture?.(event.pointerId); } catch { /* já solto */ }
+    if (wasDragging) {
+      if (target !== null && target !== index) {
+        const name = sectionBlocks(state.project.chords)[index]?.name;
+        changeSections(moveSection(state.project, index, target), `Parte ${name} mudou de lugar.`, target);
+      }
+      return;
+    }
+    if (event.type === "pointercancel") return;
+    formSelected = formSelected === index ? -1 : index;
+    renderForm();
+    if (formSelected >= 0) $(`.section-divider[data-section="${index}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  };
+  tile.addEventListener("pointerup", end);
+  tile.addEventListener("pointercancel", end);
+  tile.addEventListener("keydown", (event) => { // teclado: Enter/espaço escolhe (o arrasto fica nos botões Antes/Depois)
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    formSelected = formSelected === index ? -1 : index;
+    renderForm();
+  });
 }
 
 function renderAll() {
@@ -746,6 +905,7 @@ function moveChord(chord, delta) {
   const j = i + delta;
   if (j < 0 || j >= list.length) return;
   [list[i], list[j]] = [list[j], list[i]];
+  [list[i].section, list[j].section] = [list[j].section, list[i].section]; // as marcas das partes ficam onde estavam
   renderChords();
   validateNow();
   saveDraftSoon();
@@ -789,7 +949,7 @@ function revoiceChords({ kind = null, pedal = null }, only = null) {
 
 function duplicateChord(chord) {
   const list = state.project.chords;
-  const copy = { ...chord, id: nextId++ };
+  const copy = { ...chord, id: nextId++, section: "" };
   list.splice(list.indexOf(chord) + 1, 0, copy);
   const entry = state.byId.get(chord.id);
   if (entry) state.byId.set(copy.id, { chord: entry.chord, issues: [] });
@@ -803,7 +963,9 @@ function removeChord(chord) {
   const undo = snapshot();
   const list = state.project.chords;
   const index = list.indexOf(chord);
+  const mark = String(chord.section || "").trim();
   list.splice(index, 1);
+  if (mark && list[index] && !String(list[index].section || "").trim()) list[index].section = mark; // a parte continua, a partir do acorde seguinte
   renderChords();
   validateNow();
   saveDraftSoon();
@@ -835,7 +997,7 @@ function playSimple(project, index, { onEnd }) {
   const seconds = 60 / project.tempo / TICKS_PER_BEAT;
   const { notes, starts, end } = noteEvents(project, { phraseMode: state.phraseMode });
   player.play(
-    notes.map((n) => ({ midi: n.pitch, start: n.start * seconds, length: (n.end - n.start) * seconds, velocity: n.velocity, drum: n.channel === DRUM_CHANNEL })),
+    notes.map((n) => ({ midi: n.pitch, start: n.start * seconds, length: (n.end - n.start) * seconds, velocity: n.velocity, drum: n.channel === DRUM_CHANNEL, pad: Boolean(n.pad) })),
     {
       steps: starts.map((tick, i) => ({ time: tick * seconds, index: index >= 0 ? index : i })),
       total: end * seconds, onStep: (i) => setPlaying(i), onEnd,
@@ -963,6 +1125,7 @@ function renderGroove() {
   $("#groove-percussion").value = percValue;
   $("#groove-fill-row").hidden = !((hasDrums && drumValue !== CUSTOM_COMP) || (hasBass && bassValue !== CUSTOM_COMP));
 
+  $("#groove-pad").checked = Boolean(state.project.pad);
   const phrases = anyChord("phrase");
   $("#groove-phrases").checked = phrases;
   $("#groove-again").hidden = !phrases;
@@ -1096,6 +1259,12 @@ function bindGroove() {
     const bass = anyChord("bass_line") && g.bass && g.bass !== CUSTOM_COMP ? g.bass : undefined;
     applyGroove({ drums, bass }, "Outras viradas sorteadas.");
   });
+  $("#groove-pad").addEventListener("change", (e) => {
+    state.project.pad = e.target.checked;
+    if (state.playing) stopPlayback();
+    scheduleValidate();
+    toast(e.target.checked ? "Pad ligado: o acorde aberto e parado sustenta a música." : "Pad desligado.");
+  });
   $("#groove-phrases").addEventListener("change", (e) => {
     if (e.target.checked) applyGroove({ phrases: true }, `Frases escritas em ${grooveStyle().label}.`);
     else applyGroove({ phrases: false }, "Frases apagadas.");
@@ -1120,7 +1289,8 @@ async function playWithSoundFont(only = null, onEnd = null) {
     return false;
   }
   const { project, index } = previewProject(only);
-  const bytes = midiBytes(project, { phraseMode: state.phraseMode });
+  // o pad não vem dos bancos de sons: quem toca é o timbre de pad do próprio app, junto com o banco
+  const bytes = midiBytes(project, { phraseMode: state.phraseMode, parts: project.pad ? MIDI_PARTS.map((p) => p.id).filter((id) => id !== "pad") : null });
   const fresh = [state.sound.chords, state.sound.phrase, (project.drum_bars.length || project.percussion_bars.length) ? state.sound.drums : ""]
     .map(parsePatchValue).filter((patch) => patch && patch.bank !== "aparelho");
   const slow = setTimeout(() => toast(fresh.length ? "Baixando o banco de sons (só na primeira vez)…" : "Carregando o banco de sons…"), 500);
@@ -1136,6 +1306,12 @@ async function playWithSoundFont(only = null, onEnd = null) {
     return true;
   }
   clearTimeout(slow);
+  if (project.pad) {
+    const seconds = 60 / project.tempo / TICKS_PER_BEAT;
+    const pads = padNotes(project);
+    player.play(pads.map(([from, to, pitch, velocity]) => ({ midi: pitch, start: from * seconds, length: (to - from) * seconds, velocity, pad: true })),
+      { total: Math.max(0, ...pads.map((n) => n[1])) * seconds + 1.5 });
+  }
   // destaca o acorde que está soando (os tempos vêm do próprio projeto, como no arquivo)
   const secondsPerBeat = 60 / project.tempo;
   let start = 0;
@@ -1540,18 +1716,61 @@ function bindUi() {
   bindGroove();
   bindSound();
   setupCanto({
-    defaults: () => ({ bpm: toNumber(state.project.tempo) || 80, timeSignature: state.project.time_signature, middleC: state.project.middle_c }),
+    defaults: () => ({
+      bpm: toNumber(state.project.tempo) || 80, timeSignature: state.project.time_signature, middleC: state.project.middle_c,
+      // dá para acrescentar uma parte quando já existe música (acordes de verdade ou uma Voz)
+      canAppend: hasProgression() || Boolean(String(state.project.voice || "").trim()),
+      hasVoice: Boolean(String(state.project.voice || "").trim()), nextSection: nextSectionName(state.project.chords),
+    }),
     onUse: useVoice,
+    preroll: prerollNotes,
     play: (notes, total, options = {}) => { stopPlayback(); player.play(notes, { total, ...options }); },
     stop: () => stopPlayback(),
   });
 }
 
-/** A melodia cantada vira a camada Voz: BPM e compasso do canto; compassos vazios no fim, se ela não couber. */
-function useVoice({ text, bpm, timeSignature, beats }) {
+/**
+ * O fim da música (os últimos `bars` compassos: acordes, baixo e Voz, sem bateria) como notas em segundos, no andamento
+ * do canto, para tocar na contagem antes de a pessoa cantar a parte seguinte. O tempo 0 é o primeiro clique da contagem.
+ */
+function prerollNotes({ bpm, bars }) {
+  try {
+    const { project } = readProject(toPayload());
+    const { notes, end } = noteEvents(project, { phraseMode: "chords", drums: false });
+    const span = Math.min(end, Math.round(bars * beatsPerBar() * TICKS_PER_BEAT));
+    const from = end - span;
+    const seconds = 60 / bpm / TICKS_PER_BEAT;
+    const lead = (bars * beatsPerBar() * TICKS_PER_BEAT - span) * seconds; // música mais curta que a contagem: entra depois
+    return notes.filter((n) => n.end > from && !n.pad)
+      .map((n) => ({ midi: n.pitch, start: lead + (Math.max(n.start, from) - from) * seconds, length: (n.end - Math.max(n.start, from)) * seconds, velocity: n.velocity }));
+  } catch {
+    return []; // projeto com erro: só a contagem
+  }
+}
+
+/**
+ * A melodia (cantada ou de um MIDI) vai para o projeto. target "toda": vira a Voz da música inteira, com o BPM e o compasso
+ * dela, e compassos vazios no fim se não couber. target "nova": vira uma parte nova, no fim (o BPM e o compasso do projeto
+ * não mudam; a anacruse entra por cima do fim da parte anterior).
+ */
+function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [], pickup = 0, spell = null }) {
   const undo = snapshot();
   stopPlayback();
   const p = state.project;
+  if (target === "nova") {
+    const result = appendSection(p, { events, pickup, beatsPerBar: beatsPerBar(), spell, blankChord });
+    if (!result) { toast("Não deu para acrescentar a parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }
+    p.chords = result.chords;
+    p.voice = result.voice;
+    formSelected = sectionBlocks(p.chords).length - 1;
+    renderAll();
+    validateNow();
+    saveDraftSoon();
+    assistant?.setMode("continue");
+    toast(`Parte ${result.section} criada: ${result.bars} compasso${result.bars > 1 ? "s" : ""} com a melodia. Agora peça a harmonia dela: no assistente, “Continuar (parte ${result.section})”.`,
+      { action: { label: "Desfazer", run: undo }, timeout: 9000 });
+    return;
+  }
   p.tempo = bpm;
   p.time_signature = timeSignature;
   p.voice = text;
@@ -1605,6 +1824,21 @@ function currentProjectJson() {
 
 /** A melodia cantada (a Voz) do projeto, para o pedido à IA. */
 const getVoice = () => (state.project.voice ? { text: state.project.voice, tempo: state.project.tempo, timeSignature: state.project.time_signature } : null);
+
+/** A parte nova que espera a harmonia (a última, só com pausas): o que a IA precisa saber para continuar a música. */
+function getContinuation() {
+  const report = state.report;
+  if (!report?.chords?.length) return null;
+  const chords = state.project.chords;
+  const last = emptyLastSection(chords, (c) => report.chords[chords.indexOf(c)]?.is_rest ?? true);
+  if (!last) return null;
+  const blocks = sectionBlocks(chords);
+  const bpb = beatsPerBar();
+  return {
+    section: last.name, previous: blocks[last.index - 1].name, beats: last.beats,
+    fromBar: Math.floor(last.startBeat / bpb + 1e-9) + 1, toBar: Math.ceil((last.startBeat + last.beats) / bpb - 1e-9),
+  };
+}
 
 const hasProgression = () => Boolean(state.report?.chords?.some((c) => !c.is_rest));
 
@@ -1660,7 +1894,7 @@ async function init() {
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, hasProgression, applyGenerated,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getContinuation, hasProgression, applyGenerated,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);

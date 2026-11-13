@@ -98,6 +98,7 @@ class ChordEvent:
     phrase_color: str = ""  # cor pedida para a frase: "dentro", "cromatico" ou "outside" (só informativa para o motor)
     comp: str = ""  # levada: o ritmo em que o voicing é tocado ("E/4 D/8 D/8 ..."; ver phrase.py)
     bass_line: str = ""  # linha de baixo, na notação da frase ("E2/4. B1/8+4 E2/4"); vai para o canal 3
+    section: str = ""  # começa aqui uma parte da música com este nome ("A", "B", "Refrão"); vale até a próxima marca
     bass_events: list[PhraseEvent] = field(default_factory=list)  # derivado de bass_line
     comp_layers: list[tuple[list[CompHit], int]] = field(default_factory=list)  # derivado de comp
     # Derivados da frase e da escala, preenchidos na leitura (não fazem parte do JSON).
@@ -166,6 +167,8 @@ class ChordEvent:
             d["comp"] = self.comp
         if self.bass_line:
             d["bass_line"] = self.bass_line
+        if self.section:
+            d["section"] = self.section
         return d
 
 
@@ -185,6 +188,7 @@ class Project:
     percussion_bars: list = field(default_factory=list)  # derivado de percussion
     voice: str = ""  # a Voz: uma melodia (cantada) na notação da frase, valendo para a música inteira, do tempo 0
     voice_events: list = field(default_factory=list)  # derivado de voice
+    pad: bool = False  # pad: cada acorde aberto e parado, do começo ao fim dele, numa faixa própria (canal 5)
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
     chords: list[ChordEvent] = field(default_factory=list)
@@ -230,6 +234,8 @@ class Project:
             d["percussion"] = self.percussion
         if self.voice:
             d["voice"] = self.voice
+        if self.pad:
+            d["pad"] = True
         if self.comment:
             d["comment"] = self.comment
         return d
@@ -309,6 +315,7 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
         project.comment = str(data["comment"])
     if isinstance(data.get("key"), str):
         project.key = data["key"].strip()
+    project.pad = data.get("pad") is True
     if isinstance(data.get("style"), str):
         project.style = data["style"].strip()
     for key, label in (("drums", "A bateria"), ("percussion", "A percussão")):
@@ -420,7 +427,7 @@ def _load_chord(raw: Any, index: int, project: Project, issues: list[Issue]) -> 
 
     chord.symbol = str(raw.get("symbol") or "").strip()
     chord.comment = str(raw.get("comment") or "")
-    for name in ("function", "scale", "phrase_color"):
+    for name in ("function", "scale", "phrase_color", "section"):
         if isinstance(raw.get(name), str):
             setattr(chord, name, raw[name].strip())
 

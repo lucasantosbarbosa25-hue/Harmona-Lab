@@ -38,7 +38,7 @@ export function newChord(beatsPerBar) {
   return {
     symbol: "", duration_beats: beatsPerBar, bass: [], left_hand: [], right_hand: [], notes: [],
     top_note: null, velocity: null, strum: null, function: "", scale: "", omitted: [], comment: "",
-    phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "",
+    phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", section: "",
     phrase_events: [], phrase_extra: [], phrase_pcs: [], comp_layers: [], bass_events: [], // derivados da frase, da escala e da levada, preenchidos na leitura
   };
 }
@@ -76,6 +76,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
   if (chord.phrase_color) d.phrase_color = chord.phrase_color;
   if (chord.comp) d.comp = chord.comp;
   if (chord.bass_line) d.bass_line = chord.bass_line;
+  if (chord.section) d.section = chord.section;
   return d;
 }
 
@@ -84,7 +85,7 @@ export function chordToDict(chord, middleC = DEFAULT_MIDDLE_C) {
 export function newProject() {
   return {
     title: "Progressão", tempo: 80, time_signature: [4, 4], middle_c: DEFAULT_MIDDLE_C,
-    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], percussion: "", percussion_bars: [], voice: "", voice_events: [], strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
+    default_velocity: 80, key: "", references: [], style: "", drums: "", drum_bars: [], percussion: "", percussion_bars: [], voice: "", voice_events: [], pad: false, strum_direction: "off", strum_delay_ms: DEFAULT_STRUM_DELAY_MS, chords: [], comment: "",
   };
 }
 
@@ -112,6 +113,7 @@ export function projectToDict(project) {
   if (project.drums) d.drums = project.drums;
   if (project.percussion) d.percussion = project.percussion;
   if (project.voice) d.voice = project.voice;
+  if (project.pad) d.pad = true;
   if (project.comment) d.comment = project.comment;
   return d;
 }
@@ -163,6 +165,7 @@ export function loadProject(data) {
   if (has(data, "title")) project.title = String(data.title);
   if (data.comment) project.comment = String(data.comment);
   if (typeof data.key === "string") project.key = data.key.trim();
+  project.pad = data.pad === true;
   if (typeof data.style === "string") project.style = data.style.trim();
   for (const [key, label] of [["drums", "A bateria"], ["percussion", "A percussão"]]) {
     const value = data[key];
@@ -253,7 +256,7 @@ function loadChord(raw, index, project, issues) {
   }
   chord.symbol = String(raw.symbol || "").trim();
   chord.comment = String(raw.comment || "");
-  for (const name of ["function", "scale", "phrase_color"]) if (typeof raw[name] === "string") chord[name] = raw[name].trim();
+  for (const name of ["function", "scale", "phrase_color", "section"]) if (typeof raw[name] === "string") chord[name] = raw[name].trim();
 
   if (has(raw, "duration_beats")) {
     const beats = toNumber(raw.duration_beats);

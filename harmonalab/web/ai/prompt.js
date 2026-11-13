@@ -88,7 +88,7 @@ FORMATO DA RESPOSTA (a pessoa lê isto no chat: capriche e seja didática)
 
 FORMATO DO PROJETO (JSON)
 - Campos do projeto: title, key (tom, ex.: "Em"), references (lista de artistas ou músicas), tempo (BPM, 10 a 999), time_signature ("4/4"), middle_c (sempre "C4"), default_velocity (1 a 127), strum (só se o pedido falar: {"direction": "up" | "down" | "off", "delay_ms": 20}), chords.
-- Cada acorde em chords: symbol (a cifra, só rótulo; as notas é que valem), function (função em graus, ex.: "V7alt/ii"), scale (escala ou modo), duration_beats (em tempos de semínima: 4 = um compasso de 4/4), left_hand e right_hand (listas de notas), bass (opcional, baixo ou pedal), top_note (a nota mais aguda do acorde), comment (obrigatório em TODOS os acordes, também nos de passagem e nas variações: uma frase curta que diz a função do acorde ali e por quê, com as suas palavras e o que for verdade para ele, por exemplo: dominante, substituto, diminuto de passagem, aproximação cromática, empréstimo modal, variação do acorde anterior em outro voicing, pedal. Os exemplos são só ilustração: nada aqui é uma lista fechada), phrase_scale (obrigatório em TODOS os acordes: as notas da escala daquele acorde, sem oitava, como "B C D Eb F G A"; ela precisa conter as notas do acorde, e é com ela que o app escreve as frases), phrase_color (só quando o pedido falar do caráter das frases: "dentro" para ficar na escala, "cromatico" para aproximações cromáticas, "outside" para tocar fora e resolver. Marque exatamente os acordes que o pedido indicar, por exemplo só os dominantes; se o pedido não falar disso, não preencha).
+- Cada acorde em chords: symbol (a cifra, só rótulo; as notas é que valem), function (função em graus, ex.: "V7alt/ii"), scale (escala ou modo), duration_beats (em tempos de semínima: 4 = um compasso de 4/4), left_hand e right_hand (listas de notas), bass (opcional, baixo ou pedal), top_note (a nota mais aguda do acorde), comment (obrigatório em TODOS os acordes, também nos de passagem e nas variações: uma frase curta que diz a função do acorde ali e por quê, com as suas palavras e o que for verdade para ele, por exemplo: dominante, substituto, diminuto de passagem, aproximação cromática, empréstimo modal, variação do acorde anterior em outro voicing, pedal. Os exemplos são só ilustração: nada aqui é uma lista fechada), phrase_scale (obrigatório em TODOS os acordes: as notas da escala daquele acorde, sem oitava, como "B C D Eb F G A"; ela precisa conter as notas do acorde, e é com ela que o app escreve as frases), section (só em música com partes: o nome da parte, como "A" ou "B", no PRIMEIRO acorde dela; os outros acordes não levam), phrase_color (só quando o pedido falar do caráter das frases: "dentro" para ficar na escala, "cromatico" para aproximações cromáticas, "outside" para tocar fora e resolver. Marque exatamente os acordes que o pedido indicar, por exemplo só os dominantes; se o pedido não falar disso, não preencha).
 - Notas são textos com letra, acidente e oitava, com C4 = dó central (MIDI 60): "F#2", "Eb4", "C5". Use a grafia correta no contexto. O app não reorganiza nada: vale exatamente o que você escrever. Nenhuma nota repetida em duas mãos nem acima da top_note.
 - Exemplo válido:
 ${FENCE}json
@@ -104,6 +104,7 @@ O LINK
 ${appUrl}#... abre a progressão no app. Monte assim, tudo numa linha só, parâmetros separados por &:
 - t=título  k=tom  bpm=80  ts=4/4  ref=Artista1,Artista2  x=explicação curta (opcional)
 - p=acorde;acorde;... onde cada acorde é cifra:notas:duração:função:escala:comentário::notas_da_escala (são dois ":" seguidos antes das notas da escala; função e escala podem ficar vazias, mas o comentário e as notas da escala são obrigatórios em todo acorde). As notas da escala vão separadas por _ e com s no lugar do sustenido: B_C_D_Eb_F_G_A, E_Fs_G_A_B_C_D. Se o pedido marcou a cor das frases, acrescente mais um campo no fim: ...:notas_da_escala:outside. Em notas, mão esquerda e direita ficam separadas por "/" (sem barra = só mão direita): B2,A3/D4,Eb4,G4,C5.
+- Em música com partes, acrescente sec=A.1,B.9 (a parte A começa no acorde 1, a parte B no acorde 9).
 - Em NOTAS escreva o sustenido como s (F#4 vira Fs4). Nos TEXTOS troque espaço por _, codifique # como %23, "(" como %28 e ")" como %29 (acentos podem ir normais) e não use & = ; : dentro deles.
 - Exemplo do mesmo projeto: ${appUrl}${EXAMPLE_LINK_PATH}
 Entregue o link como link clicável ([▶ Abrir no Harmona Lab](...)) e repita a URL dentro de um bloco de código, para a pessoa poder copiar se o chat quebrar o link. Se não conseguir montar o link com segurança, entregue só o JSON.
@@ -148,12 +149,36 @@ export function describeVoice(voice) {
   ].join("\n");
 }
 
+/**
+ * A tarefa da continuação: a última parte da música está vazia (só a melodia cantada) e a IA harmoniza essa parte.
+ * continuation: { section (nome da parte nova), previous (nome da anterior), fromBar, toBar, beats }.
+ */
+export function describeContinuation(c) {
+  if (!c) return "";
+  const bars = c.toBar - c.fromBar + 1;
+  return [
+    `CONTINUAÇÃO DA MÚSICA: a parte "${c.section}". O projeto abaixo já tem a harmonia pronta até a parte "${c.previous}". `
+    + `A parte "${c.section}" vai do compasso ${c.fromBar} ao ${c.toBar} (${bars} compasso${bars === 1 ? "" : "s"}, ${c.beats} tempos) e está vazia: `
+    + "a pessoa cantou a melodia dela (está na lista da melodia, nesses compassos). O que fazer:",
+    `1. Crie os acordes da parte "${c.section}" para harmonizar a melodia dela, somando exatamente ${c.beats} tempos, no lugar dos compassos vazios. `
+    + "Ela deve soar como continuação da música: mesma linguagem, mas com contraste (outra região, outro caminho, ou uma modulação, se a melodia pedir).",
+    `2. Você pode RETOCAR O FIM da parte "${c.previous}" (no máximo os 2 últimos acordes) para ligar melhor na parte nova: `
+    + "um dominante, um II-V, um acorde pivô. Diga na explicação o que mudou. Todo o resto da música fica IGUAL, nota por nota.",
+    '3. Devolva o projeto COMPLETO, com todas as partes. Marque o começo de cada parte com o campo "section" no primeiro acorde dela '
+    + `(no link: sec=${c.previous}.1,${c.section}.N, onde N é o número do acorde em que a parte começa).`,
+  ].join("\n");
+}
+
 /** A mensagem do pedido. O pedido fica entre aspas triplas para ficar claramente separado das instruções. */
-export function buildUserMessage({ request, mode, currentProject, voice }) {
-  const parts = [`PEDIDO (pode ter sido ditado por voz):\n"""\n${request.trim()}\n"""`];
+export function buildUserMessage({ request, mode, currentProject, voice, continuation = null }) {
+  const asked = request.trim() || (mode === "continue" ? "Harmonize a parte nova da música." : "");
+  const parts = [`PEDIDO (pode ter sido ditado por voz):\n"""\n${asked}\n"""`];
   const sung = describeVoice(voice);
   if (sung) parts.push(sung);
-  if (mode === "adjust" && currentProject) {
+  if (mode === "continue" && currentProject && continuation) {
+    parts.push(describeContinuation(continuation));
+    parts.push("PROJETO ATUAL (JSON do Harmona Lab):\n" + JSON.stringify(currentProject));
+  } else if (mode === "adjust" && currentProject) {
     parts.push(
       "PROGRESSÃO ATUAL (JSON do Harmona Lab). Ajuste-a conforme o pedido e devolva o projeto COMPLETO:\n"
       + JSON.stringify(currentProject),

@@ -26,7 +26,7 @@ const loadResearch = () => { try { return localStorage.getItem(RESEARCH_KEY) ===
 const saveResearch = (on) => { try { localStorage.setItem(RESEARCH_KEY, on ? "1" : "0"); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
-  const { $, h, icon, toast, getProjectJson, getVoice, hasProgression, applyGenerated } = api;
+  const { $, h, icon, toast, getProjectJson, getVoice, getContinuation, hasProgression, applyGenerated } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
     mic: $("#ai-mic"), mode: $("#ai-mode"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
@@ -34,6 +34,7 @@ export function initAssistant(api) {
     research: $("#ai-research"),
   };
   let mode = "new";
+  const basePlaceholder = els.prompt.placeholder;
   let chatRequest = ""; // o pedido que foi copiado (vai para as notas do projeto)
   let pending = null; // resposta recusada pela conferência: { project, explanation, problems }
   let dictation = null;
@@ -54,9 +55,17 @@ export function initAssistant(api) {
 
   function refresh() {
     const canAdjust = hasProgression();
+    const next = canAdjust ? getContinuation?.() ?? null : null; // há uma parte nova, vazia, esperando a harmonia?
     els.mode.hidden = !canAdjust;
     if (!canAdjust) mode = "new";
+    if (mode === "continue" && !next) mode = "adjust";
+    const button = els.mode.querySelector('[data-mode="continue"]');
+    button.hidden = !next;
+    if (next) button.textContent = `Continuar (parte ${next.section})`;
     els.mode.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
+    els.prompt.placeholder = mode === "continue"
+      ? `Opcional: diga como quer a parte ${next.section} (ex.: "refrão mais aberto, modulando um tom acima"). Vazio = a IA decide.`
+      : basePlaceholder;
   }
 
   function setStatus(kind, text) {
@@ -80,7 +89,8 @@ export function initAssistant(api) {
   // ------------------------------------------------------------ copiar o pedido
   async function copyForChat() {
     const request = els.prompt.value.trim();
-    if (!request) {
+    const continuation = mode === "continue" && hasProgression() ? getContinuation?.() ?? null : null;
+    if (!request && !continuation) {
       setStatus("error", "Escreva ou dite o que você quer, por exemplo: “6 acordes, 72 BPM, estilo Jesús Molina”.");
       els.prompt.focus();
       return;
@@ -89,7 +99,8 @@ export function initAssistant(api) {
     savePrompt(request);
     const adjust = mode === "adjust" && hasProgression();
     const text = buildChatPrompt({
-      request, mode: adjust ? "adjust" : "new", currentProject: adjust ? getProjectJson() : null, appUrl: appUrl(), research: els.research.checked, voice: getVoice?.() ?? null,
+      request, mode: continuation ? "continue" : adjust ? "adjust" : "new", currentProject: adjust || continuation ? getProjectJson() : null,
+      appUrl: appUrl(), research: els.research.checked, voice: getVoice?.() ?? null, continuation,
     });
     chatRequest = request;
     els.chatPrompt.hidden = true;
@@ -214,5 +225,7 @@ export function initAssistant(api) {
   els.mic.append(icon("mic"));
 
   refresh();
-  return { refresh, openLink };
+  /** Escolhe o modo de fora (depois de cantar uma parte nova, o app já deixa em "Continuar"). */
+  const setMode = (next) => { mode = next; refresh(); };
+  return { refresh, openLink, setMode };
 }

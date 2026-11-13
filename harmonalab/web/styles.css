@@ -542,3 +542,23 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .export-part small { color: var(--muted); margin-left: auto; font-size: .8rem; }
 .export-quick, .export-actions { display: flex; gap: 8px; margin: 0 8px; }
 .export-actions { justify-content: flex-end; margin-top: 4px; }
+.form-strip { display: grid; gap: 8px; margin: 0 0 14px; }
+.form-strip[hidden] { display: none; }
+.form-blocks { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
+.form-block { --hue: 30; min-width: 64px; min-height: 60px; padding: 8px 12px; border-radius: 12px; border: 2px solid hsl(var(--hue) 55% 45% / .55);
+  background: hsl(var(--hue) 60% 50% / .14); color: var(--text); font: inherit; display: grid; gap: 2px; justify-items: center; align-content: center;
+  cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; transition: transform .12s, box-shadow .12s; }
+.form-block strong { font-size: 1.25rem; line-height: 1.1; }
+.form-block small { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.form-block[aria-pressed="true"] { border-color: hsl(var(--hue) 65% 42%); background: hsl(var(--hue) 65% 50% / .3); box-shadow: 0 0 0 3px hsl(var(--hue) 65% 50% / .25); }
+.form-block.dragging { cursor: grabbing; z-index: 5; box-shadow: 0 8px 20px rgb(0 0 0 / .3); transition: none; opacity: .92; }
+.form-block.drop-target { outline: 3px dashed var(--primary); outline-offset: 2px; }
+.form-block.add { border-style: dashed; border-color: var(--border); background: transparent; color: var(--muted); cursor: pointer; touch-action: auto; }
+.form-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.form-actions[hidden] { display: none; }
+.form-actions .who { font-weight: 700; margin-right: 4px; }
+.section-divider { --hue: 30; display: flex; align-items: baseline; gap: 8px; padding: 6px 12px; border-left: 5px solid hsl(var(--hue) 60% 45%);
+  background: hsl(var(--hue) 60% 50% / .12); border-radius: 8px; font-weight: 700; }
+.section-divider small { font-weight: 400; color: var(--muted); }
+#canto-target-box { display: grid; gap: 4px; }
+#canto-target-box[hidden] { display: none; }
