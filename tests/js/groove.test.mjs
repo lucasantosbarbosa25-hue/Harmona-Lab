@@ -874,7 +874,8 @@ test("virtuoso: as corridas seguem o andamento (fusas a 60 BPM, semicolcheias a 
       const mean = (list) => list.reduce((n, r) => n + r.mean, 0) / list.length;
       const peak = Math.max(...runs.map((r) => r.peak));
       assert.ok(peak >= 8, `${style.id} a ${tempo} BPM: o pico do virtuoso é de ${peak} notas por segundo`);
-      assert.ok(mean(runs) > mean(calm) * 1.25, `${style.id} a ${tempo} BPM: virtuoso ${mean(runs).toFixed(1)} x equilibrado ${mean(calm).toFixed(1)} notas por segundo`);
+      // em andamento lento a diferença é grande; no rápido, o equilibrado já é denso e ela encolhe
+      assert.ok(mean(runs) > mean(calm) * (tempo <= 100 ? 1.25 : 1.08), `${style.id} a ${tempo} BPM: virtuoso ${mean(runs).toFixed(1)} x equilibrado ${mean(calm).toFixed(1)} notas por segundo`);
       // o teto: nenhuma nota mais curta que ~1/13 de segundo (acima disso ninguém toca com clareza)
       for (const r of runs) assert.ok(r.shortest >= 1 / 13.5, `${style.id} a ${tempo} BPM: nota de ${(r.shortest * 1000).toFixed(0)} ms`);
       const jumps = runs.reduce((n, r) => n + r.jumps, 0);
@@ -882,6 +883,35 @@ test("virtuoso: as corridas seguem o andamento (fusas a 60 BPM, semicolcheias a 
       assert.ok(jumps <= fast * 0.02, `${style.id} a ${tempo} BPM: ${jumps} saltos grandes em ${fast} notas de corrida`);
     }
   }
+  // varreduras: de vez em quando uma corrida corre duas oitavas (24 semitons) de uma vez; a maioria fica em torno de uma
+  const spans = [];
+  for (const style of STYLES) {
+    if (style.phrase.shift) continue;
+    for (const tempo of [70, 120]) {
+      for (let variation = 0; variation < 4; variation++) {
+        const out = generateGroove({ ...structuredClone(song), tempo }, { style, phrases: true, variation, intensity: "virtuoso" });
+        const beat = 60 / tempo;
+        let at = 0;
+        let run = [];
+        let last = -9;
+        const close = () => { if (run.length >= 6) spans.push(Math.max(...run) - Math.min(...run)); run = []; };
+        out.chords.forEach((made, i) => {
+          for (const e of parsePhraseText(made.phrase || "", "C4").events) {
+            if (e.voice !== 0) continue;
+            const t = at + (e.start / 480) * beat;
+            if (t - last >= 0.2) close();
+            run.push(e.note.midi);
+            last = t;
+          }
+          at += song.chords[i].duration_beats * beat;
+        });
+        close();
+      }
+    }
+  }
+  const share = (k) => spans.filter((x) => x >= k).length / spans.length;
+  assert.ok(share(24) >= 0.05 && share(24) <= 0.3, `corridas de duas oitavas: ${(100 * share(24)).toFixed(0)}%`);
+  assert.ok(share(12) >= 0.5, `corridas de uma oitava ou mais: ${(100 * share(12)).toFixed(0)}%`);
   const slow = measure(findStyle("gospel"), 60, "virtuoso", 0).text;
   const quick = measure(findStyle("gospel"), 170, "virtuoso", 0).text;
   assert.ok(/\/32/.test(slow), "a 60 BPM o virtuoso usa fusas");

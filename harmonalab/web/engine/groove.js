@@ -362,13 +362,21 @@ export const INTENSITIES = [
   { id: "equilibrado", label: "Equilibrado" },
   { id: "virtuoso", label: "Virtuoso" },
 ];
-const INTENSITY_NPS = [2.2, 3.4, 5, 6.5, 10]; // notas por segundo de cada intensidade (0 calmo ... 3 rápido, 4 corrida de virtuose)
-const LEVEL_CURVE = { contido: [-0.6, 1.7], equilibrado: [0.1, 2.3], virtuoso: [1.9, 2.4] }; // [base, altura do arco]
+// As velocidades do virtuoso vêm de medidas no Weimar Jazz Database (8.398 corridas em 456 solos): em qualquer andamento,
+// uma corrida tem em torno de 8,5 notas por segundo (mediana de 7,2 a 9,2 conforme a faixa de BPM), 10 a 12,6 nas mais
+// rápidas (os 10% do topo) e 16 só como exceção. Em figuras: fusas a 40-80 BPM, semicolcheias (às vezes quiálteras de 5 ou 6)
+// a 80-140, semicolcheias e tercinas de colcheia a 140-180, colcheias e tercinas acima de 180.
+const INTENSITY_NPS = [2.2, 3.4, 5, 6.5, 8.6]; // notas por segundo de cada intensidade (0 calmo ... 3 rápido, 4 corrida de virtuose)
+const LEVEL_CURVE = { contido: [-0.6, 1.7], equilibrado: [0.1, 2.3], virtuoso: [1.75, 2.35] }; // [base, altura do arco]
 // As corridas do virtuoso são escolhidas pelo ANDAMENTO: a figura que der a velocidade certa em notas por segundo. A 60 BPM
 // são fusas e sextinas de fusa; a 100, sextinas de semicolcheia; a 160, semicolcheias; a 200, tercinas de colcheia.
 // [figura, notas por tempo]
 const RUN_FIGURES = [["8", 2], ["8t", 3], ["16", 4], ["16q", 5], ["16t", 6], ["32", 8], ["32t", 12]];
-const RUN_SPEED = { 3: [5.6, 8.4], 4: [8, 12.6] }; // notas por segundo de cada nível (o teto é o que a mão toca com clareza)
+const RUN_SPEED = { 3: [5.6, 8.4], 4: [7, 12.6] }; // notas por segundo de cada nível (o teto: os 10% mais rápidos das corridas reais)
+// Varredura: de vez em quando uma corrida longa do virtuoso corre o teclado numa direção só, até duas oitavas, e volta
+// para a chegada. Nos solos reais, 13% das corridas cobrem uma oitava e meia ou mais, e 5%, duas oitavas.
+const SWEEP_CHANCE = 0.3;
+const SWEEP_MIN_NOTES = 11;
 const MAX_INTENSITY = { contido: 3, equilibrado: 3, virtuoso: 4 };
 const DUET_MIN_SECONDS = 0.35; // nota mais curta que ganha oitava ou sexta (vozes só em notas longas)
 const TRIAD_MIN_SECONDS = 0.45; // e tríade
@@ -687,6 +695,40 @@ function chordContext(chord, { style, color, scales, profile }) {
  * O caminho de `a` até `b` em `count` notas, grau a grau na lista `pool` (alturas em ordem): direto, em arco (passa e
  * volta) ou com um mergulho antes (vai para o outro lado e volta). Nunca repete nota seguida.
  */
+/** `n` movimentos (em graus da escala) que somam `delta`: por graus conjuntos; se não couber, com terças; se sobrar, com uma bordadura. */
+function legMoves(delta, n, rng) {
+  if (n <= 0) return [];
+  const s = delta > 0 ? 1 : delta < 0 ? -1 : rng.chance(0.5) ? 1 : -1;
+  let left = Math.abs(delta);
+  const out = [];
+  if (left >= n) {
+    for (let i = 0; i < n; i++) {
+      const step = Math.min(Math.max(1, Math.ceil(left / (n - i))), 3);
+      out.push(s * step);
+      left -= step;
+    }
+    return out;
+  }
+  let spare = n - left;
+  const direct = Array(left).fill(s);
+  if (spare % 2) {
+    if (direct.length) { direct[0] = 2 * s; direct.push(-s); spare -= 1; }
+    else if (spare >= 3) { direct.push(2 * s, -s, -s); spare -= 3; }
+    else { direct.push(s); spare -= 1; }
+  }
+  // o que sobra vira ondas curtas (2 a 4 graus) antes de fechar no destino
+  let pairs = spare / 2;
+  let way = -s;
+  while (pairs > 0) {
+    const half = Math.min(pairs, rng.pick([2, 3, 4]));
+    out.push(...Array(half).fill(way), ...Array(half).fill(-way));
+    pairs -= half;
+    way = -way;
+  }
+  out.push(...direct);
+  return out;
+}
+
 function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
   const ia = pool.indexOf(nearest(pool, a));
   const ib = pool.indexOf(nearest(pool, b));
@@ -694,8 +736,32 @@ function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
   let d = ib - ia;
   if (d === 0) d = pool[ia] === b ? 0 : b > pool[ia] ? 1 : -1;
   const sign = d > 0 ? 1 : d < 0 ? -1 : rng.chance(0.5) ? 1 : -1;
-  const list = [];
-  if (Math.abs(d) >= moves) {
+  // nas corridas do virtuoso a linha fica entre o Lá 3 e o Sol 6: ao chegar na beirada, ela volta em vez de insistir
+  const floor = waves ? Math.max(0, pool.findIndex((m) => m >= LOW - 3)) : 0;
+  const lastInside = waves ? pool.findLastIndex((m) => m <= HIGH + 3) : -1;
+  const ceiling = lastInside >= floor ? lastInside : pool.length - 1;
+  let list = [];
+  let swept = false;
+  if (waves && count >= SWEEP_MIN_NOTES && rng.chance(SWEEP_CHANCE)) {
+    // varredura: corre numa direção só, até duas oitavas (14 graus), e depois vem para a chegada
+    const room = (w) => (w > 0 ? ceiling - ia : ia - floor);
+    let way = rng.chance(0.5) ? 1 : -1;
+    if (room(way) < 9 && room(-way) > room(way)) way = -way;
+    const reach = Math.min(room(way), rng.pick([10, 12, 14, 14]));
+    if (reach >= 8) {
+      const apex = ia + way * reach;
+      const back = Math.abs(apex - ib);
+      // a ida usa os movimentos que der (com terças, se faltarem); a volta fica com o bastante para chegar por graus ou terças
+      const out = Math.max(Math.ceil(reach / 2), Math.min(reach, moves - Math.ceil(back / 2)));
+      if (moves - out >= Math.ceil(back / 3) && moves - out >= 1) {
+        list = [...legMoves(way * reach, out, rng), ...legMoves(ib - apex, moves - out, rng)];
+        swept = true;
+      }
+    }
+  }
+  if (swept) {
+    // já está montada
+  } else if (Math.abs(d) >= moves) {
     // distância grande: passos de terça (arpejo) até caber
     let left = Math.abs(d);
     for (let i = 0; i < moves; i++) {
@@ -726,18 +792,14 @@ function stepPath(pool, a, b, count, rng, { waves = false } = {}) {
       }
       list.push(...direct);
     } else {
-    const shape = rng.pick(["arco", "mergulho", "volta"]);
-    if (shape === "arco") list.push(...Array(extra).fill(sign), ...direct, ...Array(extra).fill(-sign));
-    else if (shape === "mergulho") list.push(...Array(extra).fill(-sign), ...Array(extra).fill(sign), ...direct);
-    else { for (let i = 0; i < extra; i++) list.push(sign, -sign); list.push(...direct); }
+      const shape = rng.pick(["arco", "mergulho", "volta"]);
+      if (shape === "arco") list.push(...Array(extra).fill(sign), ...direct, ...Array(extra).fill(-sign));
+      else if (shape === "mergulho") list.push(...Array(extra).fill(-sign), ...Array(extra).fill(sign), ...direct);
+      else { for (let i = 0; i < extra; i++) list.push(sign, -sign); list.push(...direct); }
     }
   }
   const path = [];
   let index = ia;
-  // nas corridas do virtuoso a linha fica entre o Lá 3 e o Sol 6: ao chegar na beirada, ela volta em vez de insistir
-  const floor = waves ? Math.max(0, pool.findIndex((m) => m >= LOW - 3)) : 0;
-  const lastInside = waves ? pool.findLastIndex((m) => m <= HIGH + 3) : -1;
-  const ceiling = lastInside >= floor ? lastInside : pool.length - 1;
   for (let i = 0; i < count; i++) {
     let move = list[i] || sign;
     if (waves && (index + move < floor || index + move > ceiling) && index - move >= floor && index - move <= ceiling) move = -move;
