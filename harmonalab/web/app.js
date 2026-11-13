@@ -747,6 +747,9 @@ function renderForm() {
     h("label", { class: "who" }, "Parte", rename),
     button("Ouvir", () => playRange(b.from, b.to), { iconName: "play" }),
     button("Ouvir daqui", () => playRange(b.from, chords.length), { disabled: i === blocks.length - 1 }),
+    // tocar no bloco não rola a tela: quem quiser ir até o pedido ou até os acordes da parte usa estes botões
+    button("Pedido à IA", () => selectPart(i, { focus: true })),
+    button("Ver acordes", () => $(`.section-divider[data-section="${i}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" })),
     button("◀ Antes", () => changeSections(moveSection(state.project, i, i - 1), `Parte ${b.name} foi para antes.`, i - 1), { disabled: i === 0 }),
     button("Depois ▶", () => changeSections(moveSection(state.project, i, i + 1), `Parte ${b.name} foi para depois.`, i + 1), { disabled: i === blocks.length - 1 }),
     button("Repetir", () => changeSections(repeatSection(state.project, i), `Parte ${b.name} repetida (acordes e melodia).`, i + 1), { iconName: "copy" }),
@@ -906,7 +909,6 @@ function bindFormDrag(tile, index) {
     formAdding = false;
     if (formSelected >= 0) selectPart(index);
     renderForm();
-    if (formSelected >= 0) $(`.section-divider[data-section="${index}"]`)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   };
   tile.addEventListener("pointerup", end);
   tile.addEventListener("pointercancel", end);
