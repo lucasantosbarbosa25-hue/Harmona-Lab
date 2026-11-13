@@ -1,7 +1,21 @@
-# Bancos de sons (.sf2)
+# Bancos de sons do Harmona Lab
 
-Coloque aqui os SoundFonts que o Harmona Lab vai oferecer (piano, teclados, kits de bateria). Pode misturar tudo:
-cada arquivo traz por dentro a lista de instrumentos, e o app separa o que é bateria do que não é.
+Cada arquivo é baixado só quando alguém escolhe aquele som, e fica guardado no aparelho. A lista (nome, tipo, tamanho,
+crédito e licença de cada um) está em `harmonalab/web/kb/sons.js`.
 
-- Até 25 MB por arquivo (limite do GitHub pelo site e do Cloudflare Pages).
+## Instrumentos do MuseScore General (`ms-*.sf3`)
+
+Um arquivo SF3 por instrumento, separados do `MuseScore_General.sf3` (versão 0.2.0) por `design/split_soundfont.mjs`.
+Licença **MIT**: o texto completo, com os créditos, está em `MuseScore_General_License.md` (ele tem de acompanhar os
+arquivos). Origem: https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
+
+## Outros
+
+- `SF-3007-Drum-Kit-Public.sf2`: bateria Sonor Force 3007, domínio público.
+- `FreeRhodes_ff_layer.SF2`, `yahama U1.SF2`: licença a confirmar.
+
+## Para acrescentar um som
+
+- Até 25 MB por arquivo (limite do Cloudflare Pages).
 - O repositório é público: só suba bancos cuja licença permita redistribuir, e anote de onde cada um veio.
+- Acrescente a linha em `kb/sons.js` (o teste confere o tamanho, o crédito e a licença).

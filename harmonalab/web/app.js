@@ -19,7 +19,7 @@ import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 import { VOICINGS, revoiceChord } from "./engine/voicing.js";
-import { BUILTIN_BANKS } from "./kb/sons.js";
+import { BUILTIN_BANKS, DEFAULT_SOUNDS } from "./kb/sons.js";
 import { LARGE_BANK_BYTES, NO_DRUMS, SAME, SIMPLE, SoundFontPlayer, builtinValue, formatSize, parsePatchValue, patchValue, suggestedPreset } from "./sound.js";
 
 const DRAFT_KEY = "harmonalab:draft:v1";
@@ -107,7 +107,12 @@ const state = {
   mix: {}, // mixer da escuta: { parte: { on, gain } } (parte que não está aqui = ligada, volume normal)
   clock: null, // enquanto toca: { start (ms), secondsPerBeat, fromBeat, beats } para a linha que corre na melodia
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
-  sound: { chords: SIMPLE, phrase: SAME, drums: builtinValue("sonor3007") }, // som da pré-escuta: timbre simples ou um instrumento do banco ("sf:MSB:LSB:programa")
+  // som da pré-escuta de cada camada: um instrumento do app ("kb:id"), do banco do aparelho ("sf:MSB:LSB:programa"), ou
+  // o timbre simples (acordes), o mesmo dos acordes (frase, baixo), o pad sintético do app (pad), sem bateria
+  sound: {
+    chords: builtinValue(DEFAULT_SOUNDS.chords), phrase: SAME, drums: builtinValue(DEFAULT_SOUNDS.drums),
+    bass: builtinValue(DEFAULT_SOUNDS.bass), pad: builtinValue(DEFAULT_SOUNDS.pad),
+  },
   groove: { style: STYLES[0].id, variation: 0, drumVariation: 0 }, // estilo do ritmo e das frases, e as variações das frases e das viradas
   listen: { loop: false, rate: 1, range: null }, // só para ouvir: repetir e andamento de estudo (não muda o projeto nem o MIDI exportado)
 };
@@ -1582,6 +1587,7 @@ function bindGroove() {
 }
 
 // ---------------------------------------------------------------- banco de sons (.sf2)
+const APP_PAD = "app"; // o pad sintético do próprio app (sem banco de sons)
 const usingSoundFont = () => parsePatchValue(state.sound.chords) !== null && (parsePatchValue(state.sound.chords).bank !== "aparelho" || Boolean(soundFont.bank));
 
 /**
@@ -1594,27 +1600,34 @@ async function playWithSoundFont(only = null, onEnd = null) {
     return false;
   }
   const { project, index, offset, fromBeat } = previewProject(only);
-  // o pad não vem dos bancos de sons: quem toca é o timbre de pad do próprio app, junto com o banco. O mixer vale aqui também.
+  // o pad toca com o som escolhido (cordas ou pad do banco) ou, em "Pad do app", com o timbre sintético do próprio app,
+  // junto com o banco. O mixer vale aqui também.
   const ids = MIDI_PARTS.map((p) => p.id);
+  const padPatch = project.pad && state.sound.pad !== APP_PAD && parsePatchValue(state.sound.pad) ? state.sound.pad : null;
+  const hasBass = project.chords.some((c) => c.bass_events.length);
   const bytes = midiBytes(project, {
-    phraseMode: state.phraseMode, parts: ids.filter((id) => id !== "pad" && mixGain(id) > 0), gains: Object.fromEntries(ids.map((id) => [id, mixGain(id)])),
+    phraseMode: state.phraseMode, parts: ids.filter((id) => (id !== "pad" || padPatch) && mixGain(id) > 0), gains: Object.fromEntries(ids.map((id) => [id, mixGain(id)])),
   });
-  const fresh = [state.sound.chords, state.sound.phrase, (project.drum_bars.length || project.percussion_bars.length) ? state.sound.drums : ""]
+  const hasDrums = project.drum_bars.length || project.percussion_bars.length;
+  const fresh = [state.sound.chords, state.sound.phrase, hasDrums ? state.sound.drums : "", hasBass ? state.sound.bass : "", padPatch ?? ""]
     .map(parsePatchValue).filter((patch) => patch && patch.bank !== "aparelho");
   const slow = setTimeout(() => toast(fresh.length ? "Baixando o banco de sons (só na primeira vez)…" : "Carregando o banco de sons…"), 500);
   try {
     await soundFont.play(bytes, {
-      chords: state.sound.chords, phrase: state.sound.phrase, drums: (project.drum_bars.length || project.percussion_bars.length) ? state.sound.drums : NO_DRUMS,
+      chords: state.sound.chords, phrase: state.sound.phrase, drums: hasDrums ? state.sound.drums : NO_DRUMS,
+      bass: hasBass ? state.sound.bass : SAME, pad: padPatch,
       onEnd: onEnd ?? (() => (only ? setPlaying(-1) : stopPlayback())),
     });
   } catch (err) {
+    // sem os sons (sem internet na primeira vez, arquivo que não abriu): a música toca assim mesmo, com o timbre simples
     clearTimeout(slow);
-    toast(err.message, { error: true, timeout: 8000 });
-    stopPlayback();
-    return true;
+    soundFont.stop();
+    const why = err instanceof TypeError ? "Não consegui baixar os sons (sem internet?)." : err.message;
+    toast(`${why} Tocando com o timbre simples do app.`, { error: true, timeout: 8000 });
+    return false;
   }
   clearTimeout(slow);
-  if (project.pad && mixGain("pad") > 0) {
+  if (project.pad && !padPatch && mixGain("pad") > 0) {
     const seconds = 60 / project.tempo / TICKS_PER_BEAT;
     const pads = padNotes(project);
     const level = (velocity) => Math.max(1, Math.min(127, Math.round(velocity * mixGain("pad"))));
@@ -1642,7 +1655,10 @@ function loadSoundChoice() {
     if (saved && typeof saved.chords === "string") {
       state.sound = {
         chords: saved.chords, phrase: typeof saved.phrase === "string" ? saved.phrase : SAME,
-        drums: typeof saved.drums === "string" ? saved.drums : builtinValue("sonor3007"),
+        drums: typeof saved.drums === "string" ? saved.drums : builtinValue(DEFAULT_SOUNDS.drums),
+        // escolhas novas: quem já usava o app ganha o baixo e as cordas de verdade
+        bass: typeof saved.bass === "string" ? saved.bass : builtinValue(DEFAULT_SOUNDS.bass),
+        pad: typeof saved.pad === "string" ? saved.pad : builtinValue(DEFAULT_SOUNDS.pad),
       };
     }
   } catch { /* fica o padrão */ }
@@ -1654,19 +1670,29 @@ function renderSound() {
   const presets = bank?.presets ?? [];
   const keys = BUILTIN_BANKS.filter((b) => b.kind === "teclado");
   const kits = BUILTIN_BANKS.filter((b) => b.kind === "bateria");
+  const basses = BUILTIN_BANKS.filter((b) => b.kind === "baixo");
+  const pads = BUILTIN_BANKS.filter((b) => b.kind === "pad");
   const melodic = new Set([...keys.map((b) => builtinValue(b.id)), ...presets.filter((p) => !p.isDrum).map(patchValue)]);
   const drums = new Set([...kits.map((b) => builtinValue(b.id)), ...presets.filter((p) => p.isDrum).map(patchValue)]);
   if (soundRestored) {
     if (state.sound.chords !== SIMPLE && !melodic.has(state.sound.chords)) state.sound.chords = SIMPLE;
     if (state.sound.phrase !== SAME && !melodic.has(state.sound.phrase)) state.sound.phrase = SAME;
     if (state.sound.drums !== NO_DRUMS && !drums.has(state.sound.drums)) state.sound.drums = kits[0] ? builtinValue(kits[0].id) : NO_DRUMS;
+    const device = new Set(presets.filter((p) => !p.isDrum).map(patchValue));
+    if (state.sound.bass !== SAME && !device.has(state.sound.bass) && !basses.some((b) => builtinValue(b.id) === state.sound.bass) && !melodic.has(state.sound.bass)) state.sound.bass = builtinValue(DEFAULT_SOUNDS.bass);
+    if (state.sound.pad !== APP_PAD && !device.has(state.sound.pad) && !pads.some((b) => builtinValue(b.id) === state.sound.pad) && !melodic.has(state.sound.pad)) state.sound.pad = builtinValue(DEFAULT_SOUNDS.pad);
   }
-  const builtinOptions = (list) => list.map((b) => h("option", { value: builtinValue(b.id) }, `${b.label} · ${formatSize(b.size)}`));
+  // os sons do app, agrupados por família (Teclados, Sopros e vozes...); os antigos, sem grupo, ficam em "Outros do app"
+  const builtinOptions = (list) => {
+    const groups = new Map();
+    for (const b of list) { const g = b.group || "Outros do app"; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(b); }
+    return [...groups].map(([label, items]) => h("optgroup", { label }, ...items.map((b) => h("option", { value: builtinValue(b.id) }, `${b.label} · ${formatSize(b.size)}`))));
+  };
   const deviceGroup = (drum) => {
     const list = presets.filter((p) => Boolean(p.isDrum) === drum);
     return list.length ? [h("optgroup", { label: `Do aparelho: ${bank.name}` }, ...list.map((p) => h("option", { value: patchValue(p) }, p.name)))] : [];
   };
-  const melodicOptions = () => [h("optgroup", { label: "Do app" }, ...builtinOptions(keys)), ...deviceGroup(false)];
+  const melodicOptions = () => [...builtinOptions(keys), ...deviceGroup(false)];
   const chords = $("#sound-chords");
   chords.replaceChildren(h("option", { value: SIMPLE }, "Timbre simples do app"), ...melodicOptions());
   chords.value = state.sound.chords;
@@ -1676,10 +1702,16 @@ function renderSound() {
   const drumSelect = $("#sound-drums");
   drumSelect.replaceChildren(
     h("option", { value: NO_DRUMS }, "Sem bateria na escuta"),
-    ...(kits.length ? [h("optgroup", { label: "Do app" }, ...builtinOptions(kits))] : []),
+    ...builtinOptions(kits),
     ...deviceGroup(true),
   );
   drumSelect.value = state.sound.drums;
+  const bassSelect = $("#sound-bass");
+  bassSelect.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...builtinOptions(basses), ...deviceGroup(false));
+  bassSelect.value = state.sound.bass;
+  const padSelect = $("#sound-pad");
+  padSelect.replaceChildren(h("option", { value: APP_PAD }, "Pad do app (sintético)"), ...builtinOptions(pads), ...deviceGroup(false));
+  padSelect.value = state.sound.pad;
   updateSoundPhraseField();
   $("#sound-remove").hidden = !bank;
   $("#sound-load").textContent = bank ? "Trocar o banco do aparelho" : "Carregar banco do aparelho (.sf2)";
@@ -1698,6 +1730,8 @@ function updateSoundPhraseField() {
   const anyPhrase = (state.report?.chords || []).some((c) => c.phrase);
   $("#sound-phrase-field").hidden = !banks || !anyPhrase;
   $("#sound-drums-field").hidden = !banks || !String(state.project?.drums || state.project?.percussion || "").trim();
+  $("#sound-bass-field").hidden = !banks || !(state.project?.chords || []).some((c) => String(c.bass_line || "").trim());
+  $("#sound-pad-field").hidden = !banks || !state.project?.pad;
   $("#sound-simple-hint").hidden = banks;
 }
 
@@ -1713,7 +1747,7 @@ async function chooseSoundFile(file) {
     soundRestored = true;
     const preset = suggestedPreset(bank.presets);
     const kit = bank.presets.find((p) => p.isDrum);
-    state.sound = { chords: preset ? patchValue(preset) : SIMPLE, phrase: SAME, drums: kit ? patchValue(kit) : state.sound.drums };
+    state.sound = { ...state.sound, chords: preset ? patchValue(preset) : SIMPLE, phrase: SAME, drums: kit ? patchValue(kit) : state.sound.drums };
     saveSoundChoice();
     renderSound();
     toast(saved
@@ -1743,6 +1777,13 @@ function bindSound() {
     if (state.playing) stopPlayback();
     saveSoundChoice();
   });
+  for (const key of ["bass", "pad"]) {
+    $(`#sound-${key}`).addEventListener("change", (e) => {
+      state.sound[key] = e.target.value;
+      if (state.playing) stopPlayback();
+      saveSoundChoice();
+    });
+  }
   $("#sound-load").addEventListener("click", () => $("#sound-file").click());
   $("#sound-file").addEventListener("change", (e) => {
     const [file] = e.target.files;

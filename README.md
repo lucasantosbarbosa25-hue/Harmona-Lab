@@ -204,6 +204,14 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   nota não escolhida, só rola o desenho. **Editar melodia** (no cartão Melodia e partes, quando há uma Voz) abre o mesmo
   desenho com a melodia do projeto: "Salvar a melodia" grava só o texto dela, sem mexer no BPM nem nos acordes.
 
+  **Sons de verdade em todas as camadas.** O app traz 27 instrumentos do **MuseScore General** (licença MIT), um arquivo
+  SF3 por instrumento (`web/sons/ms-*.sf3`, de 20 KB a 1,3 MB; o piano de cauda tem 14 MB), separados do original por
+  `design/split_soundfont.mjs`. Cada um é baixado só quando é usado e fica guardado no aparelho. Por padrão, os acordes
+  tocam com o piano elétrico, o **baixo com um baixo elétrico**, o **pad com cordas** e a bateria com um kit acústico; em
+  "Som da pré-escuta" dá para trocar cada um (teclados, violão e guitarra, sopros e vozes, 4 baixos, cordas e pads, 6
+  baterias), usar o timbre simples, ou carregar um banco do aparelho. Se os sons não puderem ser baixados (sem internet na
+  primeira vez), a música toca com o timbre simples e o app avisa. Os sons só valem para a escuta: o MIDI não muda.
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e

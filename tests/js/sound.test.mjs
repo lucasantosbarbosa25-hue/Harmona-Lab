@@ -62,6 +62,13 @@ test("os bancos que vêm com o app existem na pasta sons/, cabem no limite e tê
     const size = statSync(new URL(`../../harmonalab/web/sons/${bank.file}`, import.meta.url)).size;
     assert.equal(size, bank.size, bank.file);
     assert.ok(size <= 25 * 1024 * 1024, `${bank.file}: até 25 MB`);
-    assert.ok(bank.credit && bank.license && ["teclado", "bateria"].includes(bank.kind), bank.id);
+    assert.ok(bank.credit && bank.license && ["teclado", "baixo", "pad", "bateria"].includes(bank.kind), bank.id);
   }
+  // os sons padrão existem e são do tipo certo; os instrumentos do MuseScore General têm a licença junto
+  const { DEFAULT_SOUNDS } = await import("../../harmonalab/web/kb/sons.js");
+  const kindOf = (id) => BUILTIN_BANKS.find((b) => b.id === id)?.kind;
+  assert.deepEqual([kindOf(DEFAULT_SOUNDS.chords), kindOf(DEFAULT_SOUNDS.bass), kindOf(DEFAULT_SOUNDS.pad), kindOf(DEFAULT_SOUNDS.drums)], ["teclado", "baixo", "pad", "bateria"]);
+  assert.ok(statSync(new URL("../../harmonalab/web/sons/MuseScore_General_License.md", import.meta.url)).size > 1000);
+  assert.equal(new Set(BUILTIN_BANKS.map((b) => b.id)).size, BUILTIN_BANKS.length, "ids únicos");
+  assert.ok(BUILTIN_BANKS.length <= 60, "o deslocamento de banco de cada som (64 + posição) tem de caber em 127");
 });
