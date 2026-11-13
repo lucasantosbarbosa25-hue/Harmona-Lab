@@ -177,6 +177,22 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   bloco tem **Ouvir** (só aquela parte; com "Repetir", em laço) e **Ouvir daqui**. O nome da parte é editado no próprio
   campo. Na janela do canto, o que é menos usado fica em "Mais opções". Em telas de toque, os botões pequenos têm 44 px.
 
+  **Segunda voz.** Com uma Voz no projeto, "Ritmo e frases" ganha o campo **Segunda voz** (`web/engine/segunda.js`):
+  **Dueto (sexta abaixo)**, a mesma rítmica da Voz, uma sexta da escala do acorde abaixo (nas notas de repouso, de 2 tempos
+  ou mais, procura uma nota do acorde); ou **Contracanto**, uma linha própria que segura as notas-guia do acorde (3ª e 7ª)
+  enquanto a Voz se mexe e responde, por graus conjuntos, quando a Voz segura uma nota longa ou respira, sempre abaixo dela.
+  Cada estilo tem o seu jeito (`SECOND_VOICE_STYLES`): no swing, fusion e lo-fi o dueto não articula as notas rápidas; no
+  funk, blues, samba, salsa, rock e ska o contracanto cala enquanto a Voz canta (pergunta e resposta); a figura e o tamanho
+  da resposta mudam (semínimas na bossa e no lo-fi, semicolcheias no funk). "Outro contracanto" sorteia outro desenho. A
+  segunda voz é reescrita quando a Voz, a harmonia, as partes ou o estilo mudam; fica no campo `voice2` e sai no MIDI na
+  faixa **"Voz 2"** (canal 6), um pouco mais leve que a Voz. Entra no mixer e na lista de partes do MIDI.
+
+  **Viradas.** Com bateria ou baixo ligados, o painel **Viradas** tem, para cada um, **quantas** (Sem, Poucas, Normal,
+  Muitas) e a **liberdade** (Contidas, Normal, Soltas). Na bateria: sem viradas; só no fim (e a cada 8 compassos); o costume
+  (fim e a cada 4); a cada 2 compassos; contidas usam só as viradas curtas do estilo, soltas preferem as longas e não
+  repetem a mesma em seguida. No baixo: a chance da virada na chegada dos acordes; contidas ficam na chegada por semitom,
+  de 1 tempo; soltas usam todos os desenhos (subida, descida, arco), 2 tempos e mais agudo. "Normal" é igual ao de antes.
+
   **Pad.** O interruptor "Pad" (em "Ritmo e frases") acrescenta uma camada de sustentação: cada acorde aberto e parado,
   do começo ao fim dele (a nota mais grave, a quinta acima e as outras notas na oitava seguinte; nota igual no acorde
   seguinte fica ligada). No MIDI sai na faixa **"Pad"** (canal 5), para usar com strings ou pad na DAW; na escuta, toca
@@ -392,6 +408,7 @@ A interface, a linha de comando e o gerador MIDI usam este mesmo modelo:
 | `chords[].comp` | não | Levada: o ritmo em que o voicing é tocado. Toques `PARTE/DURAÇÃO` (T = todas as notas, E = esquerda e baixo, D = direita, B = a mais grave, P = a ponta, 1 a 9 = a enésima nota, S1 a S9 = graus da escala a partir do baixo, M1 a M9 = graus da escala a partir da mão direita; `!` acento, `?` leve, `r` pausa); camadas separadas por `;` soam juntas. Ex.: `"B/4. B/8+2 ; r/8 D/8 r/4 D/4. D/8"`. Cada camada se repete até o fim do acorde. |
 | `style` | não | Nome do estilo do ritmo e das frases (`"Blues"`): aparece em destaque na progressão. |
 | `drums` | não | Bateria da progressão: compassos separados por `|`, camadas separadas por `;`, fichas `PEÇA/DURAÇÃO` (dinâmica opcional depois da peça: `!!` forte, `!` acento, `?` leve, `??` fantasma; e, depois dela, atraso fino opcional: `>` toca um pouquinho depois do tempo, ≈ 19 ms a 80 BPM, e `>>` um pouco mais, ≈ 38 ms; ex.: `S!>/4`). Peças (General MIDI): K bumbo, S caixa, X aro, H/O/P chimbal fechado, aberto e de pé, R condução, E cúpula, C ataque, T/M/F tons, B cowbell, L clave, A pandeirola, Q ganzá, G/N congas. Ex.: `"H/8 H/8 H/8 H/8 H/8 H/8 H/8 H/8 ; K/4 r/4 K/4 r/4 ; r/4 S!/4 r/4 S!/4"`. Os compassos se repetem até o fim. |
+| `voice2` | não | A **segunda voz** (dueto ou contracanto da Voz), na mesma notação e com as mesmas regras de `voice`. Sai no MIDI na faixa "Voz 2" (canal 6). O app a escreve sozinho. |
 | `pad` | não | `true` liga o **pad**: cada acorde aberto e parado, numa faixa própria ("Pad", canal 5). |
 | `voice` | não | A **Voz**: uma melodia (por exemplo, a que você cantou) para a música inteira, a partir do tempo 0, na notação da frase (`NOTA/DURAÇÃO`, `r/` pausa). Ex.: `"r/4 A4/4 C5/8 D5/8 E5/2"`. Não pode durar mais que a progressão. Sai no MIDI numa faixa própria, "Voz". |
 | `percussion` | não | Percussão da progressão, na mesma notação da bateria, em faixa própria. Peças extras: U conga muda, V/W bongô agudo e grave, Y/Z timbal agudo e grave, J/I güiro curto e longo, D agogô. |

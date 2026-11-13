@@ -596,3 +596,10 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
   .btn.small { min-height: 44px; padding: 0 12px; }
   .tag, .chip-button { min-height: 44px; }
 }
+.fills { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; }
+.fills[hidden] { display: none; }
+.fills summary { cursor: pointer; font-weight: 700; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.fills summary small { font-weight: 400; color: var(--muted); }
+.fills-body { display: grid; gap: 12px; padding: 8px 0 6px; }
+.fills-group { display: grid; gap: 4px; }
+.fills-group[hidden] { display: none; }

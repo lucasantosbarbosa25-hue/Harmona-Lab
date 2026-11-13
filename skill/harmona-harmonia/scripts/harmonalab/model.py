@@ -188,6 +188,8 @@ class Project:
     percussion_bars: list = field(default_factory=list)  # derivado de percussion
     voice: str = ""  # a Voz: uma melodia (cantada) na notação da frase, valendo para a música inteira, do tempo 0
     voice_events: list = field(default_factory=list)  # derivado de voice
+    voice2: str = ""  # a segunda voz (dueto ou contracanto da Voz), na mesma notação; faixa própria, "Voz 2" (canal 6)
+    voice2_events: list = field(default_factory=list)  # derivado de voice2
     pad: bool = False  # pad: cada acorde aberto e parado, do começo ao fim dele, numa faixa própria (canal 5)
     strum_direction: str = "off"  # strum padrão dos acordes (cada acorde pode trocar)
     strum_delay_ms: float = DEFAULT_STRUM_DELAY_MS  # atraso entre notas vizinhas
@@ -234,6 +236,8 @@ class Project:
             d["percussion"] = self.percussion
         if self.voice:
             d["voice"] = self.voice
+        if self.voice2:
+            d["voice2"] = self.voice2
         if self.pad:
             d["pad"] = True
         if self.comment:
@@ -374,25 +378,29 @@ def load_project(data: Any) -> tuple[Project, list[Issue]]:
     for index, raw in enumerate(raw_chords):
         project.chords.append(_load_chord(raw, index, project, issues))
     _load_voice(data.get("voice"), project, issues)
+    _load_voice(data.get("voice2"), project, issues, "voice2")
     return project, issues
 
 
-def _load_voice(value: Any, project: Project, issues: list[Issue]) -> None:
-    """A Voz: uma linha melódica (cantada) para a música inteira, na notação da frase, a partir do tempo 0."""
+def _load_voice(value: Any, project: Project, issues: list[Issue], key: str = "voice") -> None:
+    """A Voz: uma linha melódica (cantada) para a música inteira, na notação da frase, a partir do tempo 0.
+    Com key="voice2", a segunda voz (dueto ou contracanto), nas mesmas regras."""
     if value in (None, ""):
         return
+    name, label = ("voz", "Voz") if key == "voice" else ("segunda voz", "Segunda voz")
     if not isinstance(value, (str, list, tuple)):
-        issues.append(Issue("error", 'A voz ("voice") deve ser um texto, por exemplo "E4/8 G4/8 A4/4 r/4".', None, "voice"))
+        issues.append(Issue("error", f'A {name} ("{key}") deve ser um texto, por exemplo "E4/8 G4/8 A4/4 r/4".', None, key))
         return
-    project.voice = phrase_text(value)
-    events, total, errors = parse_phrase(project.voice, project.middle_c)
+    text = phrase_text(value)
+    setattr(project, key, text)
+    events, total, errors = parse_phrase(text, project.middle_c)
     for message in errors:
-        issues.append(Issue("error", message.replace("Frase:", "Voz:").replace("na frase", "na voz"), None, "voice"))
+        issues.append(Issue("error", message.replace("Frase:", f"{label}:").replace("na frase", f"na {name}"), None, key))
     length = beats_to_ticks(project.total_beats)
     if total > length:
-        issues.append(Issue("error", f"A voz dura {total / TICKS_PER_BEAT:g} tempos, mais que os {project.total_beats:g} da "
-                                     "progressão. Acrescente compassos (ou acordes) até caber.", None, "voice"))
-    project.voice_events = events
+        issues.append(Issue("error", f"A {name} dura {total / TICKS_PER_BEAT:g} tempos, mais que os {project.total_beats:g} da "
+                                     "progressão. Acrescente compassos (ou acordes) até caber.", None, key))
+    setattr(project, f"{key}_events", events)
 
 
 _STRUM_HINT = 'Use "off", "up" (grave → agudo) ou "down" (agudo → grave).'
@@ -551,6 +559,7 @@ def rename_project_notes(data: dict[str, Any], to_middle_c: str) -> dict[str, An
                 c[key] = rename_phrase_text(c[key], from_middle_c, to_middle_c)
         chords.append(c)
     out["chords"] = chords
-    if out.get("voice") not in (None, ""):
-        out["voice"] = rename_phrase_text(out["voice"], from_middle_c, to_middle_c)
+    for key in ("voice", "voice2"):
+        if out.get(key) not in (None, ""):
+            out[key] = rename_phrase_text(out[key], from_middle_c, to_middle_c)
     return out

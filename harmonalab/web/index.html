@@ -177,9 +177,31 @@
         <label class="field" for="groove-drums"><span class="label">Bateria</span><select id="groove-drums"></select></label>
         <label class="field" for="groove-percussion"><span class="label">Percussão</span><select id="groove-percussion"></select></label>
         <label class="field" for="groove-bass"><span class="label">Baixo <small>(segue a levada)</small></span><select id="groove-bass"></select></label>
-        <div class="groove-row" id="groove-fill-row" hidden>
-          <span class="ai-help">Viradas de bateria no último compasso (e a cada quatro); de baixo, na chegada dos acordes.</span>
-          <button type="button" class="btn secondary small" id="groove-fill">Outra virada</button>
+        <details class="fills" id="groove-fill-row" hidden>
+          <summary>Viradas <small id="fills-summary"></small></summary>
+          <div class="fills-body">
+            <div class="fills-group" id="fills-drums">
+              <span class="label">Bateria: quantas viradas</span>
+              <div class="segmented" id="fill-drum-frequency" role="group" aria-label="Quantas viradas de bateria"></div>
+              <span class="label">Bateria: liberdade</span>
+              <div class="segmented" id="fill-drum-freedom" role="group" aria-label="Liberdade das viradas de bateria"></div>
+            </div>
+            <div class="fills-group" id="fills-bass">
+              <span class="label">Baixo: quantas viradas</span>
+              <div class="segmented" id="fill-bass-frequency" role="group" aria-label="Quantas viradas de baixo"></div>
+              <span class="label">Baixo: liberdade</span>
+              <div class="segmented" id="fill-bass-freedom" role="group" aria-label="Liberdade das viradas de baixo"></div>
+            </div>
+            <div class="groove-row">
+              <span class="ai-help">Contidas: curtas e seguras. Soltas: mais longas, mais agudas (no baixo) e mais variadas.</span>
+              <button type="button" class="btn secondary small" id="groove-fill">Outra virada</button>
+            </div>
+          </div>
+        </details>
+        <label class="field" for="groove-voice2" id="groove-voice2-field" hidden><span class="label">Segunda voz <small>(escrita a partir da Voz)</small></span><select id="groove-voice2"></select></label>
+        <div class="groove-row" id="groove-voice2-row" hidden>
+          <span class="ai-help" id="groove-voice2-hint"></span>
+          <button type="button" class="btn secondary small" id="groove-voice2-again">Outro contracanto</button>
         </div>
         <div class="groove-row">
           <label class="switch" for="groove-pad">

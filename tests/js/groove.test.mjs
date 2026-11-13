@@ -782,3 +782,30 @@ test("lo-fi e o rollback do Weimar: o lo-fi tem perfil próprio e não muda com 
   assert.ok(PERFIS.lofi.tensoes.alterada > PERFIS.anterior.tensoes.alterada && PERFIS.lofi.tensoes.alterada < PERFIS.weimar.tensoes.alterada);
   assert.ok(PERFIS.lofi.repousoNaTensao > 1 && PERFIS.lofi.repousoNaTensao < PERFIS.weimar.repousoNaTensao);
 });
+
+test("controles das viradas: a frequência e a liberdade mudam a bateria e o baixo; o padrão não muda nada", async () => {
+  const { generateGroove: gen } = await import("../../harmonalab/web/engine/groove.js");
+  const { STYLES: all } = await import("../../harmonalab/web/kb/estilos.js");
+  const style = all.find((s) => s.id === "gospel");
+  const chords = Array.from({ length: 16 }, (_, i) => ({ symbol: i % 2 ? "F" : "C", duration_beats: 4, left_hand: [i % 2 ? "F2" : "C3"], right_hand: i % 2 ? ["A3", "C4", "E4"] : ["E4", "G4", "B4"], phrase_scale: i % 2 ? "F G A Bb C D E" : "C D E F G A B" }));
+  const data = { tempo: 90, time_signature: "4/4", chords };
+  const run = (bassFill, drumFill) => gen(data, { style, drums: style.beats[0].id, bass: style.bass[0].id, bassFill, drumFill });
+  const base = run({}, {});
+  assert.deepEqual(run({ frequency: "normal", freedom: "normal" }, { frequency: "normal", freedom: "normal" }), base, "normal = como sempre foi");
+  const beat = (r) => r.drums.split("|").map((b) => b.trim());
+  const fillBars = (r) => { const plain = beat(run({}, { frequency: "sem" })); return beat(r).filter((b, i) => b.replace(/ ; C!\/4 r\/\S+$/, "") !== plain[i]).length; };
+  assert.equal(fillBars(run({}, { frequency: "sem" })), 0);
+  assert.ok(fillBars(run({}, { frequency: "poucas" })) < fillBars(base), "poucas < normal");
+  assert.ok(fillBars(run({}, { frequency: "muitas" })) > fillBars(base), "muitas > normal");
+  assert.notEqual(run({}, { freedom: "contido" }).drums, run({}, { freedom: "solto" }).drums);
+  const notes = (r) => r.chords.reduce((n, c) => n + c.bass_line.split(" ").length, 0);
+  const top = (r) => Math.max(...r.chords.flatMap((c) => c.bass_line.split(" ").filter((t) => !t.startsWith("r/")).map((t) => Number(t.match(/-?\d+(?=\/)/)[0]))));
+  assert.ok(notes(run({ frequency: "sem" }, {})) < notes(base), "sem viradas, o baixo tem menos notas");
+  assert.ok(notes(run({ frequency: "muitas" }, {})) >= notes(base));
+  assert.ok(top(run({ frequency: "muitas", freedom: "solto" }, {})) >= top(run({ frequency: "muitas", freedom: "contido" }, {})), "solto chega mais agudo que contido");
+  // baixo de 4 cordas: nada abaixo do Mi 1, mesmo com as viradas soltas
+  const { loadProject } = await import("../../harmonalab/web/engine/model.js");
+  const wild = run({ frequency: "muitas", freedom: "solto" }, {});
+  const { project } = loadProject({ ...data, chords: chords.map((c, i) => ({ ...c, bass_line: wild.chords[i].bass_line })) });
+  assert.ok(project.chords.every((c) => c.bass_events.every((e) => e.note.midi >= 28)), "nenhuma nota abaixo do E1");
+});

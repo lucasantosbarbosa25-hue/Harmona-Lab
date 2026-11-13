@@ -16,6 +16,8 @@ export const BASS_CHANNEL = 2;
 export const VOICE_CHANNEL = 3; // a Voz (melodia cantada)
 export const PAD_CHANNEL = 4; // o pad: o acorde aberto e parado
 const PAD_SOFTER = 20; // o pad toca mais leve que os acordes (velocity a menos)
+export const VOICE2_CHANNEL = 5; // a segunda voz (dueto ou contracanto da Voz)
+const VOICE2_SOFTER = 12; // a segunda voz fica um pouco atrás da Voz
 export const DRUM_CHANNEL = 9;
 /** O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase). */
 export const PHRASE_MODES = ["both", "chords", "line"];
@@ -246,6 +248,11 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
     if (e.start >= tick) continue;
     notes.push({ start: e.start, end: Math.min(e.start + e.length, tick), pitch: e.note.midi, velocity: project.default_velocity, channel: VOICE_CHANNEL, chord: -1, voice: true });
   }
+  const secondVelocity = Math.max(1, Math.min(127, project.default_velocity - VOICE2_SOFTER));
+  for (const e of project.voice2_events ?? []) {
+    if (e.start >= tick) continue;
+    notes.push({ start: e.start, end: Math.min(e.start + e.length, tick), pitch: e.note.midi, velocity: secondVelocity, channel: VOICE2_CHANNEL, chord: -1, voice2: true });
+  }
   for (const [start, end, pitch, velocity] of drums ? drumNotes(project, tick, ticksPerBeat) : []) {
     notes.push({ start, end, pitch, velocity, channel: DRUM_CHANNEL, chord: -1 });
   }
@@ -259,6 +266,7 @@ export function noteEvents(project, { ticksPerBeat = TICKS_PER_BEAT, phraseMode 
 export const MIDI_PARTS = [
   { id: "acordes", label: "Acordes" },
   { id: "voz", label: "Voz cantada" },
+  { id: "voz2", label: "Segunda voz" },
   { id: "solo", label: "Solo (frases)" },
   { id: "baixo", label: "Baixo" },
   { id: "pad", label: "Pad" },
@@ -269,6 +277,7 @@ export const MIDI_PARTS = [
 /** A que parte pertence uma nota de noteEvents. */
 export function notePart(n) {
   if (n.voice) return "voz";
+  if (n.voice2) return "voz2";
   if (n.pad) return "pad";
   if (n.percussion) return "percussao";
   if (n.channel === DRUM_CHANNEL) return "bateria";
@@ -297,7 +306,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   // gains: volume de cada parte só para a escuta do app ({ voz: 0.6, ... }); multiplica a velocity
   if (gains) notes = notes.map((n) => ({ ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity * (gains[notePart(n)] ?? 1)))) }));
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
-  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
+  const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [VOICE2_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: [] };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
@@ -340,6 +349,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   const title = project.title || "Harmona Lab";
   const tracks = [trackBytes(title, events[CHANNEL], true)];
   if (events[VOICE_CHANNEL].length) tracks.push(trackBytes("Voz", events[VOICE_CHANNEL], false));
+  if (events[VOICE2_CHANNEL].length) tracks.push(trackBytes("Voz 2", events[VOICE2_CHANNEL], false));
   if (events[PHRASE_CHANNEL].length) tracks.push(trackBytes("Frase", events[PHRASE_CHANNEL], false));
   if (events[BASS_CHANNEL].length) tracks.push(trackBytes("Baixo", events[BASS_CHANNEL], false));
   if (events[PAD_CHANNEL].length) tracks.push(trackBytes("Pad", events[PAD_CHANNEL], false));

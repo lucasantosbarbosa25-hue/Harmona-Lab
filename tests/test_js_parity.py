@@ -173,6 +173,11 @@ CASES = [
                              {"symbol": "Pausa", "duration_beats": 2}, {"symbol": "F#m7b5/C", "section": "B", "bass": "C2", "notes": "F#3 A3 E4", "velocity": 15}, {"notes": "C5", "section": 7}]},
     {"pad": True, "voice": "E4/2", "drums": "K/4 S/4", "chords": [{"notes": "E3 G3 B3", "phrase": "B4/4", "bass_line": "E2/2", "duration_beats": 4}, {"notes": "E3 G3 B3 D4", "duration_beats": 4}]},
     {"pad": "sim", "chords": [{"notes": "C4 E4 G4"}]},  # só true liga o pad
+    # segunda voz (canal 6, faixa "Voz 2"): mesma notação e mesmas regras da Voz
+    {"voice": "E5/4 G5/4 A5/2", "voice2": "G4/4 B4/4 C5/2", "default_velocity": 90, "chords": [{"notes": "C4 E4 G4", "duration_beats": 4}]},
+    {"voice2": "r/2 A3/4 C4/1", "middle_c": "C3", "pad": True, "chords": [{"notes": "A2 C3 E3", "duration_beats": 4}]},  # sem a Voz; passa do fim
+    {"voice2": "A4/4 Hx/4", "chords": [{"duration_beats": 4}]},
+    {"voice2": 3, "voice": "A4/4", "default_velocity": 5, "chords": [{"notes": "C4"}]},
     {"drums": {"a": 1}, "chords": [{"notes": "C4"}]},
     {"drums": 5, "chords": [{"notes": "C4"}]},
     {"drums": " | ; ", "chords": [{"notes": "C4"}]},

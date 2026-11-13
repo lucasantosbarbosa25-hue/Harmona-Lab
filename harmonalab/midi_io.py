@@ -35,6 +35,8 @@ BASS_CHANNEL = 2
 VOICE_CHANNEL = 3  # a Voz (melodia cantada)
 PAD_CHANNEL = 4  # o pad: o acorde aberto e parado
 PAD_SOFTER = 20  # o pad toca mais leve que os acordes (velocity a menos)
+VOICE2_CHANNEL = 5  # a segunda voz (dueto ou contracanto da Voz)
+VOICE2_SOFTER = 12  # a segunda voz fica um pouco atrás da Voz
 DRUM_CHANNEL = 9
 #: O que entra no arquivo: acorde + frase, só os acordes, ou mão esquerda/baixo + frase (a mão direita canta a frase).
 PHRASE_MODES = ("both", "chords", "line")
@@ -248,6 +250,14 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         events.append((e.start, 2, pitch, VOICE_CHANNEL, mido.Message("note_on", channel=VOICE_CHANNEL, note=pitch, velocity=project.default_velocity)))
         events.append((min(e.start + e.length, end_tick), 0, pitch, VOICE_CHANNEL, mido.Message("note_off", channel=VOICE_CHANNEL, note=pitch, velocity=0)))
 
+    second_velocity = max(1, min(127, project.default_velocity - VOICE2_SOFTER))
+    for e in project.voice2_events:
+        if e.start >= end_tick:
+            continue
+        pitch = e.note.midi
+        events.append((e.start, 2, pitch, VOICE2_CHANNEL, mido.Message("note_on", channel=VOICE2_CHANNEL, note=pitch, velocity=second_velocity)))
+        events.append((min(e.start + e.length, end_tick), 0, pitch, VOICE2_CHANNEL, mido.Message("note_off", channel=VOICE2_CHANNEL, note=pitch, velocity=0)))
+
     drums = [(start, 2, pitch, DRUM_CHANNEL, mido.Message("note_on", channel=DRUM_CHANNEL, note=pitch, velocity=vel))
              for start, _, pitch, vel in drum_notes(project, end_tick, ticks_per_beat)]
     drums += [(end, 0, pitch, DRUM_CHANNEL, mido.Message("note_off", channel=DRUM_CHANNEL, note=pitch, velocity=0))
@@ -261,7 +271,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     bass = [e for e in events if e[3] == BASS_CHANNEL]
     voice = [e for e in events if e[3] == VOICE_CHANNEL]
     pad = [e for e in events if e[3] == PAD_CHANNEL]
-    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL, PAD_CHANNEL)]
+    voice2 = [e for e in events if e[3] == VOICE2_CHANNEL]
+    chords = [e for e in events if e[3] not in (PHRASE_CHANNEL, BASS_CHANNEL, VOICE_CHANNEL, PAD_CHANNEL, VOICE2_CHANNEL)]
 
     def make_track(name: str, items: list, header: bool) -> mido.MidiTrack:
         track = mido.MidiTrack()
@@ -278,7 +289,7 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
         return track
 
     title = project.title or "Harmona Lab"
-    if not phrase and not drums and not bass and not percussion and not voice and not pad:
+    if not phrase and not drums and not bass and not percussion and not voice and not pad and not voice2:
         midi = mido.MidiFile(type=0, ticks_per_beat=ticks_per_beat)
         midi.tracks.append(make_track(title, chords, True))
         return midi
@@ -286,6 +297,8 @@ def build_midi(project: Project, *, ticks_per_beat: int = TICKS_PER_BEAT, marker
     midi.tracks.append(make_track(title, chords, True))
     if voice:
         midi.tracks.append(make_track("Voz", voice, False))
+    if voice2:
+        midi.tracks.append(make_track("Voz 2", voice2, False))
     if phrase:
         midi.tracks.append(make_track("Frase", phrase, False))
     if bass:

@@ -129,7 +129,19 @@ const padLayer = (layer, ticks) => {
  * compasso (e a cada quatro, nas progressões longas). A virada (que pode ter várias camadas, como bumbo por baixo)
  * substitui o fim do compasso; a do fim prefere as de dois tempos. Depois dela, o beat volta no tempo 1 com um ataque de prato.
  */
-export function drumsFor(style, beatId, project, variation = 0) {
+/** Os níveis dos controles das viradas (bateria e baixo): frequência e liberdade. */
+export const FILL_FREQUENCIES = [{ id: "sem", label: "Sem" }, { id: "poucas", label: "Poucas" }, { id: "normal", label: "Normal" }, { id: "muitas", label: "Muitas" }];
+export const FILL_FREEDOMS = [{ id: "contido", label: "Contidas" }, { id: "normal", label: "Normal" }, { id: "solto", label: "Soltas" }];
+const fillLevel = (list, id) => (list.some((x) => x.id === id) ? id : "normal");
+
+/**
+ * fill: { frequency ("sem" | "poucas" | "normal" | "muitas"), freedom ("contido" | "normal" | "solto") }. Frequência: sem
+ * viradas; só no fim (e a cada 8, nas longas); o costume (fim e a cada 4); a cada 2 compassos. Liberdade: só as viradas
+ * curtas do estilo; o costume; as longas quase sempre, sem repetir a mesma duas vezes seguidas.
+ */
+export function drumsFor(style, beatId, project, variation = 0, fill = {}) {
+  const frequency = fillLevel(FILL_FREQUENCIES, fill.frequency);
+  const freedom = fillLevel(FILL_FREEDOMS, fill.freedom);
   const beat = style?.beats.find((b) => b.id === beatId);
   if (!beat) return "";
   const barTicks = Math.round(beatsPerBar(project) * TICKS_PER_BEAT);
@@ -145,13 +157,26 @@ export function drumsFor(style, beatId, project, variation = 0) {
   }).filter((f) => f.ticks <= barTicks / 2);
   const out = [];
   let crash = false;
+  let lastFill = null;
   for (let i = 0; i < bars; i++) {
     let layers = dynamic(beat.bars[i % beat.bars.length]).split(";").map((l) => l.trim());
     const last = i === bars - 1;
-    const isFill = fills.length && (last || (bars >= 8 && i % 4 === 3));
+    const due = frequency === "sem" ? false
+      : frequency === "poucas" ? last || (bars >= 16 && i % 8 === 7)
+        : frequency === "muitas" ? last || (bars >= 4 && i % 2 === 1)
+          : last || (bars >= 8 && i % 4 === 3);
+    const isFill = Boolean(fills.length && due);
     if (isFill) {
-      const long = fills.filter((f) => f.ticks === Math.max(...fills.map((x) => x.ticks)));
-      const fill = rng.pick((last || i % 8 === 7) && long.length ? long : fills);
+      const longest = Math.max(...fills.map((x) => x.ticks));
+      const shortest = Math.min(...fills.map((x) => x.ticks));
+      const long = fills.filter((f) => f.ticks === longest);
+      const short = fills.filter((f) => f.ticks === shortest);
+      let pool = (last || i % 8 === 7) && long.length ? long : fills;
+      if (freedom === "contido") pool = short;
+      else if (freedom === "solto") pool = last || rng.chance(0.75) ? long : fills;
+      if (freedom === "solto" && pool.length > 1 && lastFill) pool = pool.filter((f) => f !== lastFill); // sem repetir a mesma em seguida
+      const fill = rng.pick(pool);
+      lastFill = fill;
       const cut = barTicks - fill.ticks;
       layers = [...layers.map((l) => cutLayer(l, cut, barTicks)), ...fill.layers.map((l) => `r/${ticksText(cut)} ${l}`)];
     }
@@ -209,7 +234,7 @@ function scaleStep(from, steps, dir, scale) {
  *   subida: sobe correndo até uma nota aguda do próximo acorde, e o acorde seguinte cai no grave (bem gospel);
  *   arco: sobe até o agudo e desce até a aproximação.
  */
-function composeBass({ style, lineId, chord, next, length, rng, previous }) {
+function composeBass({ style, lineId, chord, next, length, rng, previous, fill = {} }) {
   const line = style.bass.find((b) => b.id === lineId) ?? style.bass[0];
   const voices = sounding(chord);
   const rootPc = pitchClass(voices[0].note);
@@ -219,6 +244,18 @@ function composeBass({ style, lineId, chord, next, length, rng, previous }) {
   const nextVoices = next ? sounding(next) : [];
   const nextRoot = nextVoices.length ? bassRootMidi(pitchClass(nextVoices[0].note), root) : null;
   const params = { chance: 0, figure: "8", beats: 1, high: 12, shapes: ["chegada"], pop: 0, ...style.bassFill };
+  // os controles das viradas do baixo: a frequência mexe na chance; a liberdade, no desenho, no alcance e no tamanho
+  const frequency = fillLevel(FILL_FREQUENCIES, fill.frequency);
+  const freedom = fillLevel(FILL_FREEDOMS, fill.freedom);
+  if (frequency === "sem") params.chance = 0;
+  else if (frequency === "poucas") params.chance *= 0.4;
+  else if (frequency === "muitas") params.chance = Math.min(0.95, params.chance * 1.6 + 0.15);
+  if (freedom === "contido") Object.assign(params, { shapes: ["chegada"], beats: 1, long: 0, high: Math.min(params.high, 7), pop: 0 });
+  else if (freedom === "solto") {
+    Object.assign(params, {
+      shapes: ["subida", "descida", "arco", "chegada"], beats: 2, long: 0.9, high: params.high + 5, pop: Math.min(0.4, (params.pop || 0) + 0.1),
+    });
+  }
   const figureTicks = durationTicks(params.figure);
   const wantFill = nextRoot != null && length >= 2 * TICKS_PER_BEAT && rng.chance(params.chance);
   const fillBeats = wantFill ? Math.min(rng.chance(params.long ?? 0.5) ? params.beats : 1, length / TICKS_PER_BEAT - 1) : 0;
@@ -921,7 +958,7 @@ function extraVoices(notes, { scalePcs, chordPcs, tempo, avoid = new Set() }) {
 }
 
 /** Nome da nota com a grafia da escala ou do acorde (Eb, não D#, quando a escala diz Eb). */
-function speller(chord, middleC) {
+export function speller(chord, middleC) {
   const names = new Map();
   for (const { pc, name } of chord.phrase_pcs) names.set(pc, name);
   for (const { note } of sounding(chord)) if (!names.has(pitchClass(note))) names.set(pitchClass(note), pitchClassName(note));
@@ -942,6 +979,7 @@ function speller(chord, middleC) {
 export function generateGroove(data, {
   style, comp = null, phrases = false, variation = 0, drums = null, drumVariation = 0,
   phraseStyles = null, scales = null, color: globalColor = "", bass = null, percussion = null, intensity = "equilibrado",
+  bassFill = {}, drumFill = {}, // controles das viradas: { frequency, freedom }
   perfil, // perfil de fraseado (kb/fraseado.js), para testes; sem ele vale o do estilo (lo-fi) ou o PERFIL_ATIVO
 } = {}) {
   const { project } = loadProject(data);
@@ -1008,14 +1046,14 @@ export function generateGroove(data, {
       const following = project.chords.slice(i + 1).find((c) => sounding(c).length) ?? null;
       const rng = makeRng(`${style.id}|baixo|${bass}|${drumVariation}|${i}`);
       const length = Math.round(chord.duration_beats * TICKS_PER_BEAT);
-      const result = composeBass({ style, lineId: bass, chord, next: following, length, rng, previous });
+      const result = composeBass({ style, lineId: bass, chord, next: following, length, rng, previous, fill: bassFill });
       previous = result.root;
       const spell = speller(chord, project.middle_c);
       out[i].bass_line = result.notes.map((n) => (n.rest ? `r/${n.dur}` : `${spell(n.midi)}/${n.dur}${n.role ? `*${n.role}` : ""}`)).join(" ");
     });
   }
   const result = { chords: out, notes: warnings };
-  if (drums) result.drums = drumsFor(style, drums, project, drumVariation);
+  if (drums) result.drums = drumsFor(style, drums, project, drumVariation, drumFill);
   if (percussion) result.percussion = percussionFor(style, percussion);
   return result;
 }

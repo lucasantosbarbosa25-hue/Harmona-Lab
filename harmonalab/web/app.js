@@ -12,7 +12,8 @@ import {
 } from "./partes.js";
 import { drawDiagrams } from "./diagram.js";
 import { analyzeData } from "./engine/analysis.js";
-import { INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
+import { FILL_FREEDOMS, FILL_FREQUENCIES, INTENSITIES, SOURCE_SCALES, bassForComp, bassOptions, beatOptions, compOptions, generateGroove, percussionOptions } from "./engine/groove.js";
+import { SECOND_VOICE_MODES, generateSecondVoice } from "./engine/segunda.js";
 import { DRUM_CHANNEL, TICKS_PER_BEAT, beatsToTicks, midiBytes, noteEvents, notePart, MIDI_PARTS, padNotes, partsPresent } from "./engine/midi.js";
 import { STYLES, findStyle, styleByLabel } from "./kb/estilos.js";
 import { loadProject as readProject, renameProjectNotes } from "./engine/model.js";
@@ -148,6 +149,11 @@ function blankChord(extra = {}) {
   };
 }
 
+const fillSettings = (raw) => ({
+  frequency: FILL_FREQUENCIES.some((x) => x.id === raw?.frequency) ? raw.frequency : "normal",
+  freedom: FILL_FREEDOMS.some((x) => x.id === raw?.freedom) ? raw.freedom : "normal",
+});
+
 /** As escolhas do painel de ritmo guardadas no projeto (levada, bateria, tags e cor das frases). */
 function grooveSettings(raw) {
   const g = raw && typeof raw === "object" ? raw : {};
@@ -156,6 +162,9 @@ function grooveSettings(raw) {
     comp: String(g.comp || ""), drums: String(g.drums || ""), bass: String(g.bass || ""), percussion: String(g.percussion || ""),
     phraseStyles: list(g.phraseStyles), scales: list(g.scales), color: ["dentro", "cromatico", "outside"].includes(g.color) ? g.color : "",
     intensity: INTENSITIES.some((i) => i.id === g.intensity) ? g.intensity : "equilibrado",
+    // as viradas (quantas e com que liberdade) e a segunda voz (dueto ou contracanto, e a variação do contracanto)
+    drumFill: fillSettings(g.drumFill), bassFill: fillSettings(g.bassFill),
+    voice2: ["dueto", "contracanto"].includes(g.voice2) ? g.voice2 : "", voice2Variation: Number.isInteger(g.voice2Variation) ? g.voice2Variation : 0,
   };
 }
 
@@ -200,6 +209,7 @@ function toEditable(data) {
     percussion: Array.isArray(data.percussion) ? data.percussion.join(" | ") : typeof data.percussion === "string" ? data.percussion : "",
     references: Array.isArray(data.references) ? data.references.join(", ") : typeof data.references === "string" ? data.references : "",
     voice: Array.isArray(data.voice) ? data.voice.join(" ") : typeof data.voice === "string" ? data.voice : "",
+    voice2: Array.isArray(data.voice2) ? data.voice2.join(" ") : typeof data.voice2 === "string" ? data.voice2 : "",
     pad: data.pad === true,
     chords,
   };
@@ -334,7 +344,7 @@ function bindSettings() {
   bind("#project-key", "key", renderMeta);
   bind("#project-refs", "references", renderMeta);
   bind("#project-style", "style", renderMeta);
-  bind("#project-voice", "voice");
+  bind("#project-voice", "voice", () => { refreshSecondVoice(); renderGroove(); });
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
@@ -799,6 +809,7 @@ function changeSections(result, message, select = -1) {
   stopPlayback();
   state.project.chords = result.chords.map((c) => ({ ...c, id: c.id ?? nextId++ }));
   if (result.voice !== undefined) state.project.voice = result.voice;
+  refreshSecondVoice();
   formSelected = select;
   renderAll();
   toast(message, { action: { label: "Desfazer", run: undo } });
@@ -1269,6 +1280,25 @@ async function playOne(chord) {
   if (!playSimple(project, index, { onEnd: () => setPlaying(-1) })) { player.stop(); toast("Este acorde ainda não tem notas válidas."); }
 }
 
+/**
+ * Reescreve a segunda voz a partir da Voz, dos acordes e do estilo de agora (ou apaga, se estiver desligada ou sem a Voz).
+ * É chamada sempre que um deles muda. Devolve os avisos do gerador.
+ */
+function refreshSecondVoice() {
+  const p = state.project;
+  const mode = p.groove?.voice2 || "";
+  if (!mode || !String(p.voice || "").trim()) { p.voice2 = ""; return []; }
+  try {
+    const { voice2, ...data } = toPayload();
+    const result = generateSecondVoice(data, { mode, style: grooveStyle(), variation: p.groove.voice2Variation || 0 });
+    p.voice2 = result.text;
+    return result.notes;
+  } catch {
+    p.voice2 = ""; // projeto com erro de escrita: a segunda voz volta quando ele for corrigido
+    return [];
+  }
+}
+
 // ---------------------------------------------------------------- ritmo e frases (escritos pelo app, sem IA)
 const grooveStyle = () => findStyle(state.groove.style) ?? STYLES[0];
 const anyChord = (key) => state.project.chords.some((c) => String(c[key] || "").trim());
@@ -1338,7 +1368,42 @@ function renderGroove() {
     ...(percValue === CUSTOM_COMP ? [h("option", { value: CUSTOM_COMP }, "Personalizada (do projeto)")] : []),
   );
   $("#groove-percussion").value = percValue;
-  $("#groove-fill-row").hidden = !((hasDrums && drumValue !== CUSTOM_COMP) || (hasBass && bassValue !== CUSTOM_COMP));
+  const drumFills = hasDrums && drumValue !== CUSTOM_COMP;
+  const bassFills = hasBass && bassValue !== CUSTOM_COMP;
+  $("#groove-fill-row").hidden = !(drumFills || bassFills);
+  $("#fills-drums").hidden = !drumFills;
+  $("#fills-bass").hidden = !bassFills;
+  const fills = state.project.groove;
+  const labelOf = (list, id) => list.find((x) => x.id === id)?.label.toLowerCase() ?? "normal";
+  $("#fills-summary").textContent = [
+    drumFills ? `bateria: ${labelOf(FILL_FREQUENCIES, fills.drumFill.frequency)}, ${labelOf(FILL_FREEDOMS, fills.drumFill.freedom)}` : "",
+    bassFills ? `baixo: ${labelOf(FILL_FREQUENCIES, fills.bassFill.frequency)}, ${labelOf(FILL_FREEDOMS, fills.bassFill.freedom)}` : "",
+  ].filter(Boolean).join(" · ");
+  const segmented = (selector, list, key, field, what) => $(selector).replaceChildren(...list.map((x) => h("button", {
+    type: "button", "aria-pressed": String(fills[key][field] === x.id),
+    onclick: () => {
+      const g = state.project.groove;
+      const drums = key === "drumFill" && g.drums && g.drums !== CUSTOM_COMP ? g.drums : undefined;
+      const bass = key === "bassFill" && g.bass && g.bass !== CUSTOM_COMP ? g.bass : undefined;
+      applyGroove({ drums, bass, settings: { [key]: { ...g[key], [field]: x.id } } }, `Viradas ${what}: ${x.label.toLowerCase()}.`);
+    },
+  }, x.label)));
+  segmented("#fill-drum-frequency", FILL_FREQUENCIES, "drumFill", "frequency", "de bateria");
+  segmented("#fill-drum-freedom", FILL_FREEDOMS, "drumFill", "freedom", "de bateria");
+  segmented("#fill-bass-frequency", FILL_FREQUENCIES, "bassFill", "frequency", "de baixo");
+  segmented("#fill-bass-freedom", FILL_FREEDOMS, "bassFill", "freedom", "de baixo");
+
+  // segunda voz: só aparece quando há uma Voz
+  const hasVoice = Boolean(String(state.project.voice || "").trim());
+  const second = hasVoice ? fills.voice2 : "";
+  $("#groove-voice2-field").hidden = !hasVoice;
+  $("#groove-voice2").replaceChildren(...SECOND_VOICE_MODES.map((m) => h("option", { value: m.id }, m.label)));
+  $("#groove-voice2").value = second;
+  $("#groove-voice2-row").hidden = !second;
+  $("#groove-voice2-again").hidden = second !== "contracanto";
+  $("#groove-voice2-hint").textContent = second === "dueto"
+    ? `Acompanha a Voz uma sexta abaixo, no jeito do estilo (${style.label}). Sai no MIDI na faixa “Voz 2”.`
+    : second === "contracanto" ? `Segura as notas-guia e responde quando a Voz descansa, no jeito do estilo (${style.label}). Sai no MIDI na faixa “Voz 2”.` : "";
 
   $("#groove-pad").checked = Boolean(state.project.pad);
   const phrases = anyChord("phrase");
@@ -1382,6 +1447,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
     phraseStyles: (state.project.groove?.phraseStyles || []).map(findStyle).filter(Boolean),
     scales: state.project.groove?.scales || [], color: state.project.groove?.color || "",
     intensity: state.project.groove?.intensity || "equilibrado",
+    bassFill: state.project.groove?.bassFill, drumFill: state.project.groove?.drumFill,
   });
   if (bass !== undefined) {
     state.project.chords.forEach((chord, i) => { chord.bass_line = bass ? result.chords[i]?.bass_line ?? "" : ""; });
@@ -1407,6 +1473,7 @@ function applyGroove({ comp, phrases, drums, bass, percussion, settings, before 
   });
   if (comp !== undefined) state.project.groove = { ...state.project.groove, comp: comp || "" };
   if (comp || drums || bass || percussion || phrases === true) state.project.style = style.label;
+  refreshSecondVoice(); // o estilo dá o jeito da segunda voz
   renderSettings();
   renderChords();
   validateNow();
@@ -1474,6 +1541,24 @@ function bindGroove() {
     const drums = String(state.project.drums || "").trim() && g.drums && g.drums !== CUSTOM_COMP ? g.drums : undefined;
     const bass = anyChord("bass_line") && g.bass && g.bass !== CUSTOM_COMP ? g.bass : undefined;
     applyGroove({ drums, bass }, "Outras viradas sorteadas.");
+  });
+  $("#groove-voice2").addEventListener("change", (e) => {
+    const undo = snapshot();
+    const mode = e.target.value;
+    state.project.groove = { ...state.project.groove, voice2: mode };
+    stopPlayback();
+    const notes = refreshSecondVoice();
+    renderAll();
+    const label = SECOND_VOICE_MODES.find((m) => m.id === mode).label;
+    toast([mode ? `Segunda voz: ${label}.` : "Segunda voz desligada.", ...notes].join(" "), { action: { label: "Desfazer", run: undo } });
+  });
+  $("#groove-voice2-again").addEventListener("click", () => {
+    const undo = snapshot();
+    state.project.groove = { ...state.project.groove, voice2Variation: (state.project.groove.voice2Variation || 0) + 1 };
+    stopPlayback();
+    refreshSecondVoice();
+    renderAll();
+    toast(`Outro contracanto (${state.project.groove.voice2Variation + 1}).`, { action: { label: "Desfazer", run: undo } });
   });
   $("#groove-pad").addEventListener("change", (e) => {
     state.project.pad = e.target.checked;
@@ -1998,6 +2083,7 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     if (!result) { toast("Não deu para acrescentar a parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }
     p.chords = result.chords;
     p.voice = result.voice;
+    refreshSecondVoice();
     formSelected = sectionBlocks(p.chords).length - 1;
     renderAll();
     validateNow();
@@ -2019,6 +2105,7 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     have += bpb;
     added += 1;
   }
+  refreshSecondVoice();
   renderAll();
   validateNow();
   saveDraftSoon();
@@ -2085,7 +2172,11 @@ function applyGenerated(data, { comment, message }) {
   const mc = state.project.middle_c;
   const converted = mc === "C4" ? project : renameProjectNotes(project, mc);
   if (!converted.voice && state.project.voice) converted.voice = state.project.voice; // a Voz cantada (já na convenção daqui) continua no projeto
+  // as escolhas da segunda voz e das viradas também continuam; a segunda voz é reescrita em cima da harmonia nova
+  const kept = state.project.groove || {};
+  converted.groove = { ...(converted.groove || {}), voice2: kept.voice2, voice2Variation: kept.voice2Variation, drumFill: kept.drumFill, bassFill: kept.bassFill };
   loadProject(converted, message);
+  if (state.project.groove.voice2) { refreshSecondVoice(); renderAll(); }
   $("#progression-heading").scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
