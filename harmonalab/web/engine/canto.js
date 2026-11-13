@@ -44,6 +44,26 @@ export const CLICK_MIDI = { normal: 82.5, accent: 86.5 };
  * O clique do metrônomo: um "woodblock" curto e seco (duas parciais que morrem rápido e um estalo de 2 ms). O tempo 1
  * (accent) é mais agudo. O mesmo som toca no app e serve nos testes.
  */
+/**
+ * O tique das colcheias (entre os tempos), como um chimbal fechado: um chiado agudo de ~25 ms, sem altura definida (não
+ * tem nota, então a detecção não o confunde com a voz) e bem mais baixo que o woodblock.
+ */
+export function hatTickSamples(sampleRate) {
+  const length = Math.round(sampleRate * 0.025);
+  const out = new Float32Array(length);
+  let seed = 98765;
+  let previous = 0;
+  for (let i = 0; i < length; i++) {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    const white = seed / 0x3fffffff - 1;
+    const bright = white - previous; // tira o grave do ruído: fica o "tss" do chimbal
+    previous = white;
+    const t = i / sampleRate;
+    out[i] = 0.35 * bright * Math.exp(-t / 0.006) * Math.min(1, t / 0.0005);
+  }
+  return out;
+}
+
 export function woodblockSamples(sampleRate, accent = false) {
   const length = Math.round(sampleRate * 0.06);
   const out = new Float32Array(length);
@@ -123,21 +143,27 @@ export function trackPitch(samples, sampleRate, { masks = [], reject = null, cli
   const size = Math.round(FRAME_SECONDS * rate);
   const step = Math.round(HOP_SECONDS * rate);
   const frames = [];
+  const short = Math.round(0.016 * rate); // janela curta: mostra o respiro entre duas sílabas, que a janela longa borra
   for (let start = 0; start + size <= x.length; start += step) {
     let energy = 0;
     for (let i = start; i < start + size; i++) energy += x[i] * x[i];
     const t = (start + size / 2) / rate;
+    const middle = start + Math.round(size / 2);
+    let near = 0;
+    for (let i = middle - (short >> 1); i < middle + (short >> 1); i++) near += x[i] * x[i];
+    const half = 0.008;
     frames.push({
-      start, t, rms: Math.sqrt(energy / size), midi: null, clarity: 0,
+      start, t, rms: Math.sqrt(energy / size), rmsShort: Math.sqrt(near / short), midi: null, clarity: 0,
       masked: masks.some(([a, b]) => t >= a && t <= b),
-      click: clickWindows.some(([a, b]) => t >= a && t <= b), // um clique está soando aqui: o volume deste quadro não é da voz
+      // um clique soa dentro da janela curta deste quadro: o volume dele não é da voz
+      click: clickWindows.some(([a, b]) => t + half >= a && t - half <= b),
     });
   }
-  // volume da voz, suavizado em 3 quadros, sem a energia dos cliques (quadro com clique repete o último volume da voz)
+  // volume da voz (janela curta), suavizado em 3 quadros, sem a energia dos cliques (quadro com clique repete o último)
   let lastLevel = 0;
   frames.forEach((f, i) => {
     if (f.click) { f.level = lastLevel; return; }
-    const around = [frames[i - 1], f, frames[i + 1]].filter((g) => g && !g.click).map((g) => g.rms);
+    const around = [frames[i - 1], f, frames[i + 1]].filter((g) => g && !g.click).map((g) => g.rmsShort);
     f.level = around.reduce((a, b) => a + b, 0) / around.length;
     lastLevel = f.level;
   });
@@ -204,6 +230,9 @@ export function segmentNotes(track, { minDur = 0.08, jump = 0.8, persist = 4, ma
     gap = 0;
     if (!cur) { cur = open([f]); continue; }
     const center = median(cur.frames.slice(-12).map((g) => g.midi));
+    // durante um clique, a mistura com a voz pode enganar a altura (lê uma oitava ou mais abaixo): um desvio grande assim
+    // é ignorado. Um passo de melodia (até uma 4ª) não: pode ser a nota nova começando junto com o clique.
+    if (f.click && Math.abs(f.midi - center) > 5.5) continue;
     if (Math.abs(f.midi - center) > jump) {
       pending.push(f);
       if (pending.length >= persist) { finish(cur); cur = open(pending); pending = []; }
@@ -465,13 +494,14 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
 
 /**
  * Da gravação às notas. options: { bpm, beatsPerBar, clickTimes (s, na linha do tempo da gravação: os agendados),
+ * tickTimes (s: os tiques das colcheias, entre os tempos),
  * countInBeats (quantos cliques são da contagem), latencyFallback (s, quando não dá para medir pelo vazamento), middleC,
  * fastest ("8": colcheia, o padrão, para melodias simples; "16": semicolcheia), maskClicks (apagar da análise os instantes dos cliques que vazaram; false: nos testes, apagar atrapalhou as notas curtas que
  * começam junto do clique, e a nota é lida bem mesmo com o clique por cima) }. O clique (e o eco dele) é descartado pela
  * altura: ele soa entre dois semitons (CLICK_MIDI), onde nenhuma nota cantada afinada cai.
  * Devolve { events, text, key, tuning, leak, latency, shift, notes (brutas), warnings }.
  */
-export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "8" } = {}) {
+export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "8" } = {}) {
   const warnings = [];
   const countIn = clickTimes.slice(0, countInBeats);
   const leak = countIn.length ? measureClicks(samples, sampleRate, countIn) : { leak: false, latency: null, found: 0, total: 0 };
@@ -484,7 +514,10 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
     midis: [CLICK_MIDI.normal, CLICK_MIDI.accent, CLICK_MIDI.normal - 12, CLICK_MIDI.accent - 12],
     tolerance: 0.25,
   } : null;
-  const clickWindows = leak.leak ? clickTimes.map((t) => [t + latency - 0.01, t + latency + 0.09]) : [];
+  // onde um clique ou um tique de colcheia soa: o volume desses quadros não é da voz (não separa sílabas)
+  const clickWindows = leak.leak
+    ? [...clickTimes.map((t) => [t + latency - 0.01, t + latency + 0.09]), ...tickTimes.map((t) => [t + latency - 0.008, t + latency + 0.05])]
+    : [];
   const track = trackPitch(samples, sampleRate, { masks, reject, clickWindows });
   const raw = segmentNotes(track);
   const notes = raw;

@@ -1,6 +1,6 @@
 // Cantar uma melodia: metrônomo amadeirado, um compasso de contagem, a gravação (só no aparelho) e as notas que o app
 // ouviu, para conferir, ajustar e usar como a camada Voz do projeto. A análise está em engine/canto.js.
-import { speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
+import { hatTickSamples, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
 
 const COUNT_IN_BARS = 1;
 // Cantar devagar acerta mais (para quem não é cantor profissional). A Voz fica guardada em figuras, então depois o BPM do
@@ -15,7 +15,7 @@ const MODES = {
 
 /** Grava a voz com o metrônomo no mesmo relógio: sabe, amostra por amostra, onde caiu cada clique. */
 export class CantoRecorder {
-  async start({ bpm, beatsPerBar, mode, volume, onBeat, onLimit }) {
+  async start({ bpm, beatsPerBar, mode, volume, eighths = true, onBeat, onLimit }) {
     const Ctx = window.AudioContext || window.webkitAudioContext;
     this.ctx = new Ctx({ latencyHint: "interactive" });
     if (this.ctx.state === "suspended") await this.ctx.resume();
@@ -50,6 +50,15 @@ export class CantoRecorder {
       buffer.copyToChannel(data, 0);
       return buffer;
     });
+    // o tique das colcheias, como um chimbal fechado, bem mais baixo que o woodblock
+    const hat = hatTickSamples(this.ctx.sampleRate);
+    this.hatBuffer = this.ctx.createBuffer(1, hat.length, this.ctx.sampleRate);
+    this.hatBuffer.copyToChannel(hat, 0);
+    this.hatGain = this.ctx.createGain();
+    this.hatGain.gain.value = 0.6;
+    this.hatGain.connect(this.clickGain);
+    this.eighths = eighths;
+    this.ticks = [];
     this.beat = 60 / bpm;
     this.beatsPerBar = beatsPerBar;
     this.countIn = Math.round(beatsPerBar * COUNT_IN_BARS);
@@ -78,6 +87,14 @@ export class CantoRecorder {
         source.connect(this.clickGain);
         source.start(time);
         this.clicks.push(time);
+        if (this.eighths) {
+          // a colcheia entre este tempo e o próximo: o "tsss" do chimbal
+          const tick = this.ctx.createBufferSource();
+          tick.buffer = this.hatBuffer;
+          tick.connect(this.hatGain);
+          tick.start(time + this.beat / 2);
+          this.ticks.push(time + this.beat / 2);
+        }
       }
       this.next += 1;
     }
@@ -102,7 +119,10 @@ export class CantoRecorder {
     const samples = new Float32Array(last.frame + last.samples.length - first);
     for (const c of chunks) if (c.frame - first + c.samples.length <= samples.length) samples.set(c.samples, c.frame - first);
     const start = first / rate;
-    return { samples, sampleRate: rate, clickTimes: this.clicks.map((t) => t - start), countInBeats: this.countIn, latencyFallback };
+    return {
+      samples, sampleRate: rate, clickTimes: this.clicks.map((t) => t - start), tickTimes: this.ticks.map((t) => t - start),
+      countInBeats: this.countIn, latencyFallback,
+    };
   }
 
   cancel() {
@@ -172,7 +192,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     state.signature = signature;
     try {
       await state.recorder.start({
-        bpm, beatsPerBar, mode: state.mode, volume: Number($("#canto-volume").value),
+        bpm, beatsPerBar, mode: state.mode, volume: Number($("#canto-volume").value), eighths: $("#canto-eighths").checked,
         onBeat: (index, sung) => {
           renderDots(beatsPerBar, ((index % beatsPerBar) + beatsPerBar) % beatsPerBar);
           const countIn = beatsPerBar * COUNT_IN_BARS;
@@ -205,7 +225,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast }) {
     if (!take) { status("A gravação veio vazia. Tente de novo.", true); return; }
     await new Promise((resolve) => setTimeout(resolve, 30)); // deixa a tela mostrar "Analisando" antes da conta
     const result = transcribe(take.samples, take.sampleRate, {
-      bpm: state.bpm, beatsPerBar: beatsPerBarOf(state.signature), clickTimes: take.clickTimes, countInBeats: take.countInBeats,
+      bpm: state.bpm, beatsPerBar: beatsPerBarOf(state.signature), clickTimes: take.clickTimes, tickTimes: take.tickTimes, countInBeats: take.countInBeats,
       latencyFallback: take.latencyFallback, middleC: defaults().middleC, fastest: state.fastest,
     });
     if (!result.events.length) { status(result.warnings[0] || "Não encontrei notas cantadas.", true); return; }

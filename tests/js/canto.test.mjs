@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { CLICK_MIDI, simplifyNotes, estimateKey, estimateTuning, measureClicks, midiFromHz, quantize, snapPitch, transcribe, voiceText, woodblockSamples, yin } from "../../harmonalab/web/engine/canto.js";
+import { CLICK_MIDI, hatTickSamples, simplifyNotes, estimateKey, estimateTuning, measureClicks, midiFromHz, quantize, snapPitch, transcribe, voiceText, woodblockSamples, yin } from "../../harmonalab/web/engine/canto.js";
 import { loadProject } from "../../harmonalab/web/engine/model.js";
 import { MELODY, RATE, score, singMelody } from "./canto_fixture.mjs";
 
@@ -135,5 +135,23 @@ test("quem vai desafinando aos poucos (comum em quem não é cantor profissional
     assert.equal(s.hits, s.total, `deriva de ${drift} centésimos: ${result.text}`);
     assert.equal(s.extra, 0);
     if (Math.abs(drift) >= 50) assert.ok(result.warnings.some((w) => w.includes("mudando aos poucos")), `avisa a deriva de ${drift}`);
+  }
+});
+
+test("tique de chimbal nas colcheias: sem altura definida, e vazando junto com o clique não troca nem pica notas", () => {
+  const tick = hatTickSamples(16000);
+  const buf = new Float32Array(1024);
+  buf.set(tick.subarray(0, Math.min(tick.length, 1024)));
+  assert.equal(yin(buf, 16000), null, "o tique não tem nota");
+  for (const [melody, label] of [[SLOW, "lenta"], [MELODY, "com colcheias"]]) {
+    for (const bpm of [60, 80, 100]) {
+      for (const db of [-10, 0, 12]) {
+        const take = singMelody(melody, { bpm, click: db, eighths: true, latency: 0.15, vibrato: 20, jitter: 0.02, scoop: 0.08, tremolo: 0.3 });
+        const r = transcribe(take.samples, RATE, { bpm, clickTimes: take.clickTimes, tickTimes: take.tickTimes, countInBeats: 4 });
+        const s = score(r.events, take.truth);
+        assert.equal(s.hits, s.total, `${label}, ${bpm} BPM, ${db} dB: ${r.text}`);
+        assert.equal(s.extra, 0, `${label}, ${bpm} BPM, ${db} dB: notas a mais (${r.text})`);
+      }
+    }
   }
 });

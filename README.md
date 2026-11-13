@@ -129,7 +129,7 @@ desligado por padrão) decide se a IA pesquisa os artistas citados antes de comp
 Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e sem custo:
 
 - **Cantar uma melodia** (no cartão da IA): em vez de escrever, você canta. Escolha o **BPM** (obrigatório, de 60 a 100, com botão
-  para marcar no toque; cantar devagar acerta mais, e a Voz fica em figuras: depois o BPM do projeto pode subir e ela acompanha) e o compasso; um **metrônomo amadeirado** (woodblock) conta um compasso e segue tocando. Três modos:
+  para marcar no toque; cantar devagar acerta mais, e a Voz fica em figuras: depois o BPM do projeto pode subir e ela acompanha) e o compasso; um **metrônomo amadeirado** (woodblock) conta um compasso e segue tocando, com um **"tique" leve de chimbal nas colcheias** (liga e desliga), que deixa o pulso contínuo e ajuda a cantar no tempo; o tique não tem altura definida, então não se confunde com a voz. Três modos:
   **com fone** (o clique só no fone: a captação mais limpa; prefira fone com fio, porque o Bluetooth atrasa o som e às vezes
   troca o microfone), **sem fone** (clique baixinho no alto-falante) e **só a contagem** (depois, o pulso aparece só na
   tela). O áudio **não sai do aparelho**: o app acha a altura da voz (algoritmo YIN), separa as notas (o vibrato não quebra

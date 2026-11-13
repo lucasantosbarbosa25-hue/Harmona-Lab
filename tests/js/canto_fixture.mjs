@@ -1,7 +1,7 @@
 // Voz sintética para testar a detecção do canto (engine/canto.js) sem microfone: uma melodia "cantada" com harmônicos,
 // vibrato, desafinação geral, respiração (ruído), imprecisão de tempo, deslize entre notas e o clique do metrônomo
 // vazando para o microfone com atraso.
-import { hzFromMidi, woodblockSamples } from "../../harmonalab/web/engine/canto.js";
+import { hatTickSamples, hzFromMidi, woodblockSamples } from "../../harmonalab/web/engine/canto.js";
 
 export const RATE = 48000;
 
@@ -22,12 +22,13 @@ function noiseGen(seed) {
  * relação à voz; null = sem), jitter (s), glide (s), legato, click (dB do clique em relação à voz; null = sem vazamento),
  * latency (s), countIn (tempos), seed, echo (s: eco da sala no clique), scoop (s: a voz chega de baixo em cada nota),
  * tremolo (0 a 1: o volume oscila), tail (o fim da respiração depois da última nota), drift (centésimos: quanto a voz
- * desafina, aos poucos, do começo ao fim da frase) }.
+ * desafina, aos poucos, do começo ao fim da frase), eighths (tiques de colcheia entre os tempos, vazando com o clique) }.
  * Devolve { samples, clickTimes (agendados), truth (eventos esperados) }.
  */
 export function singMelody(melody = MELODY, {
   bpm = 80, transpose = 0, vibrato = 0, detune = 0, noise = null, jitter = 0, glide = 0, legato = false,
   click = null, latency = 0.08, countIn = 4, seed = 7, lead = 0.4, echo = 0, scoop = 0, tremolo = 0, tail = false, drift = 0,
+  eighths = false,
 } = {}) {
   const rnd = noiseGen(seed);
   const beat = 60 / bpm;
@@ -84,8 +85,18 @@ export function singMelody(melody = MELODY, {
       }
     });
   }
+  // tiques das colcheias (entre os tempos), vazando junto com o clique
+  const tickTimes = eighths ? clickTimes.map((t) => t + beat / 2) : [];
+  if (eighths && click != null) {
+    const gain = 0.25 * 10 ** (click / 20) / 0.7;
+    const wav = hatTickSamples(RATE);
+    for (const t of tickTimes) {
+      const at = Math.round((t + latency) * RATE);
+      for (let j = 0; j < wav.length && at + j < length; j++) out[at + j] += gain * wav[j];
+    }
+  }
   const truth = melody.map((e) => ({ ...e, midi: e.midi + transpose }));
-  return { samples: out, clickTimes, truth };
+  return { samples: out, clickTimes, tickTimes, truth };
 }
 
 /** Acerto: notas certas (mesmo tempo e mesma altura), notas faltando e notas a mais. */
