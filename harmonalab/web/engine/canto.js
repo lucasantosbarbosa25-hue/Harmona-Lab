@@ -364,6 +364,30 @@ export function singScale(key, id = "tom") {
   return { scale: new Set(steps.map((step) => mod12(key.tonic + step))), name: `${tonic} ${choice.name}` };
 }
 
+/** Quanto a voz precisa andar (em semitons) para contar como subida ou descida, e não como a mesma nota. */
+const CONTOUR_STEP = 0.5;
+
+/**
+ * A nota de uma altura cantada, respeitando o movimento da voz em relação à nota anterior: subiu, fica a nota da escala
+ * mais perto do que foi cantado entre as que estão ACIMA da nota anterior; desceu, entre as de BAIXO; ficou na mesma
+ * altura, repete a nota anterior. raw: a altura cantada (já afinada); snapped: a nota que a escala daria sozinha;
+ * before: { raw, note } da nota anterior; scale: Set de classes de altura.
+ */
+export function followContour(raw, snapped, before, scale) {
+  const move = raw - before.raw;
+  if (Math.abs(move) < CONTOUR_STEP) return before.note;
+  const up = move > 0;
+  if (up ? snapped > before.note : snapped < before.note) return snapped; // a escala já deu o movimento certo
+  let best = null;
+  for (let step = 1; step <= 12; step++) {
+    const candidate = before.note + (up ? step : -step);
+    if (!scale.has(mod12(candidate))) continue;
+    if (best === null || Math.abs(candidate - raw) < Math.abs(best - raw) - 1e-9) best = candidate;
+    else break; // as seguintes só ficam mais longe
+  }
+  return best ?? snapped;
+}
+
 /**
  * A nota MIDI de uma altura cantada: corrige a afinação e, se ficar perto do meio do caminho, prefere a da escala. Com
  * diatonic, toda nota vai para a escala do tom (no menor, a sensível também vale).
@@ -579,8 +603,16 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   // a escala em que as notas ficam travadas: a diatônica do tom, ou a que a pessoa escolheu (blues, menor melódica...)
   const lock = singScale(key, scaleId);
   let adjusted = 0;
+  let before = null; // a nota anterior: { raw (a altura cantada, já afinada), note (a nota em que ela ficou) }
   notes.forEach((n, i) => {
     n.note = snapPitch(n.midi, offsets[i], lock.scale, { diatonic });
+    // Travado numa escala, o contorno do canto manda: se a voz subiu, a nota fica acima da anterior (a nota da escala
+    // mais perto do que foi cantado, entre as de cima); se desceu, abaixo; se repetiu a altura, repete a nota.
+    if (diatonic) {
+      const raw = n.midi - offsets[i];
+      if (before) n.note = followContour(raw, n.note, before, lock.scale);
+      before = { raw, note: n.note };
+    }
     if (diatonic && n.note !== Math.round(n.midi - offsets[i])) adjusted += 1; // foi para a escala (não é a nota cromática mais perto)
   });
   const drift = offsets.length ? Math.max(...offsets) - Math.min(...offsets) : 0;

@@ -299,7 +299,9 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   música): **Diatônica do tom** (o padrão), **Pentatônica** (maior ou menor, conforme o tom), **Blues**, **Menor
   melódica**, **Menor harmônica**, **Bebop (dominante)**, **Dórico**, **Mixolídio (nordestino)** e **Frígio dominante
   (espanhol)**. Cada nota vai para a nota da escala mais perto do que foi cantado; o resultado diz a escala usada ("A
-  blues"). A escolha fica guardada e vale a partir da próxima gravação.
+  blues"). A escolha fica guardada e vale a partir da próxima gravação. O **contorno do canto manda**: se a voz
+  subiu em relação à nota anterior, a nota fica acima dela (a da escala mais perto do que foi cantado, entre as de cima);
+  se desceu, abaixo; se repetiu a altura, repete a nota. Assim uma subida cantada nunca vira descida ou nota repetida.
 
   **A tela acompanha a música.** Ao apertar o play do topo, a tela rola sozinha até o acorde que está soando, que
   **acende** (borda, brilho em volta e fundo tingido), no celular e no computador. Se o acorde está numa parte recolhida, a

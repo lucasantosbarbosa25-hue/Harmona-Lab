@@ -246,3 +246,30 @@ test("canto travado numa escala escolhida: blues, menor melódica, harmônica, b
   const plain = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: true });
   assert.equal(plain.scaleName, plain.key.name);
 });
+
+test("travado na escala, o canto mantém o contorno: subiu, sobe; desceu, desce; repetiu, repete", async () => {
+  const { followContour, singScale } = await import("../../harmonalab/web/engine/canto.js");
+  const am = { tonic: 9, mode: "menor", flats: false, name: "Am", scale: new Set([9, 11, 0, 2, 4, 5, 7, 8]) };
+  const blues = singScale(am, "blues").scale; // A C D Eb E G
+  // de um Lá (69), a voz sobe um tom (Si, 71): sozinha a escala daria o Dó (72), que já é subida
+  assert.equal(followContour(71, 72, { raw: 69, note: 69 }, blues), 72);
+  // de um Dó (72), a voz sobe meio tom (72 → 73): a escala daria o Dó de novo; pelo contorno, sobe para o Ré (74)
+  assert.equal(followContour(73, 72, { raw: 72, note: 72 }, blues), 74);
+  // de um Dó (72), a voz desce um tom (Si bemol, 70): a escala daria o Lá (69) ou voltaria ao Dó; fica abaixo: o Lá
+  assert.equal(followContour(70, 72, { raw: 72, note: 72 }, blues), 69);
+  // desceu pouco, mas desceu: do Mi (76) para 75 (Mi bemol está na escala): o Mi bemol
+  assert.equal(followContour(75, 75, { raw: 76, note: 76 }, blues), 75);
+  // quase a mesma altura (menos de um quarto de tom de diferença... até meio semitom): repete a nota
+  assert.equal(followContour(72.3, 74, { raw: 72, note: 72 }, blues), 72);
+  // a nota anterior tinha sido empurrada para cima; a voz desce: a nova fica abaixo da anterior, mesmo que a escala desse a mesma
+  assert.equal(followContour(70.6, 72, { raw: 71.4, note: 72 }, blues), 69);
+  // subida grande: vale a nota da escala mais perto do que foi cantado (não a primeira de cima)
+  assert.equal(followContour(79.2, 79, { raw: 69, note: 69 }, blues), 79);
+  // a gravação inteira: o sentido de cada passo da melodia travada é o do canto
+  const take = singMelody(MELODY, { latency: 0.08 });
+  const out = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: true, scale: "blues" });
+  for (let i = 1; i < out.notes.length; i++) {
+    const a = out.notes[i - 1], b = out.notes[i];
+    if (Math.abs(b.midi - a.midi) >= 1) assert.equal(Math.sign(b.note - a.note), Math.sign(b.midi - a.midi), `nota ${i}: cantou ${a.midi.toFixed(1)} → ${b.midi.toFixed(1)}, ficou ${a.note} → ${b.note}`);
+  }
+});
