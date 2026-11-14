@@ -294,6 +294,11 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **A caixa de colar a resposta fica sempre à vista.** Não é mais preciso copiar o pedido para ela aparecer: quem abre o
+  app com a resposta da IA em mãos cola direto (o guia, no passo 2, tem "Colar a resposta"). Alguns chats, como o Gemini,
+  passam o link por um redirecionador que corta o que vem depois do `#`, e o app abre vazio; nesse caso, cole a resposta
+  inteira ou o endereço do bloco de código. O app também lê o link quando ele chega embrulhado (`google.com/url?q=...`).
+
   **Aparência: temas de cores e fundo com músicos.** No menu ⋯ → **Aparência (cores e fundo)**. Temas: **Azul** (o padrão:
   página azul-marinho e cartões claros), **Azul noite** (tudo escuro), **Azul claro** (tudo claro) e **Âmbar** (o tema
   antigo, que segue o claro/escuro do aparelho). Ao fundo, **silhuetas de músicos** (pianista, guitarrista, cantora,

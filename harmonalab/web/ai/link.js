@@ -189,7 +189,14 @@ export async function parseLinkHash(hash) {
 
 /** Acha um link do Harmona Lab dentro de um texto colado (resposta de chat, com markdown em volta). */
 export function findLinkInText(text) {
-  for (const match of String(text || "").matchAll(/https?:\/\/[^\s<>"'`]*?(#[^\s<>"'`]+)/g)) {
+  // link que passou por um redirecionador (o Gemini manda "google.com/url?q=https%3A%2F%2F...%23t%3D..."): o endereço de
+  // verdade vem codificado dentro de um parâmetro; decodificado, ele volta a ter o "#" e o resto
+  const raw = String(text || "");
+  const wrapped = raw.match(/https?:\/\/[^\s<>"'`]*[?&](?:q|url|u)=(https?%3A%2F%2F[^\s<>"'`&]+)/i);
+  if (wrapped) {
+    try { const inner = findLinkInText(decodeURIComponent(wrapped[1])); if (inner) return inner; } catch { /* codificação quebrada: segue a busca normal */ }
+  }
+  for (const match of raw.matchAll(/https?:\/\/[^\s<>"'`]*?(#[^\s<>"'`]+)/g)) {
     let hash = match[1];
     while (/[.,;:]$/.test(hash)) hash = hash.slice(0, -1);
     // "[texto](url)": o ")" final fecha o markdown, não faz parte do link, se sobrar um a mais

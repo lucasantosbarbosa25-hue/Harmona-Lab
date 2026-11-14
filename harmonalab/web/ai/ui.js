@@ -29,7 +29,7 @@ export function initAssistant(api) {
   const { $, h, icon, toast, getProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
-    mic: $("#ai-mic"), parts: $("#ai-parts"), partsList: $("#ai-parts-list"), task: $("#ai-task"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
+    mic: $("#ai-mic"), parts: $("#ai-parts"), partsList: $("#ai-parts-list"), task: $("#ai-task"), examples: $("#ai-examples"), chatStep: $("#ai-chat-send"),
     chatPrompt: $("#ai-chat-prompt"), answer: $("#ai-answer"), fixActions: $("#ai-fix-actions"),
     research: $("#ai-research"),
   };
@@ -142,6 +142,7 @@ export function initAssistant(api) {
     asked = part ? part.index : -1;
     els.chatPrompt.hidden = true;
     els.chatStep.hidden = false;
+    $("#ai-answer-title").textContent = "3. Toque no link que ela mandar, ou cole a resposta aqui";
     els.result.hidden = true;
     const copied = await copyText(text);
     const what = part ? `Pedido da parte ${part.name} copiado!` : "Pedido copiado!";
@@ -250,7 +251,7 @@ export function initAssistant(api) {
 
   async function loadAnswer() {
     const text = els.answer.value.trim();
-    if (!text) { setStatus("error", "Cole a resposta da IA (ou o link dela) na caixa do passo 3."); els.answer.focus(); return; }
+    if (!text) { setStatus("error", "Cole a resposta da IA (ou o link dela) na caixa da resposta."); els.answer.focus(); return; }
     const hash = findLinkInText(text);
     fromBox = true;
     try {

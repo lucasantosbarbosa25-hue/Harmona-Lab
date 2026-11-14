@@ -738,3 +738,6 @@ html { scroll-padding-top: 84px; } /* o guia preso no alto não cobre o que a te
 .look-image { position: relative; aspect-ratio: 1; border-radius: 10px; background: center / cover no-repeat var(--surface-2); border: 1px solid var(--border); }
 .look-image button { position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .look-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.ai-chat-send { display: grid; gap: 10px; }
+.ai-chat-send[hidden] { display: none; }
+.ai-chat-step .ai-help { margin: -4px 0 0; }

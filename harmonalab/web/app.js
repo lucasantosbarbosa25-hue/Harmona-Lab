@@ -994,7 +994,9 @@ function renderGuide() {
       : fresh ? "Descreva a música, copie o pedido para a sua IA e abra o link que ela mandar."
         : `Escreva o pedido da parte ${name}, copie para a sua IA e abra o link que ela mandar.`;
     const open = () => { if (fresh) { go("#assistant"); $("#ai-prompt").focus({ preventScroll: true }); } else selectPart(part.index, { focus: true }); };
-    actions = [button(done[1] ? "Ajustar pelo pedido" : "Escrever o pedido", open, "primary"), ...(done[1] ? [next("Continuar")] : [])];
+    // quem já tem a resposta da IA (o link dela abriu o app vazio, por exemplo) vai direto à caixa de colar
+    const paste = () => { if (!fresh) selectPart(part.index); go("#ai-chat-step"); $("#ai-answer").focus({ preventScroll: true }); };
+    actions = [button(done[1] ? "Ajustar pelo pedido" : "Escrever o pedido", open, "primary"), button("Colar a resposta", paste), ...(done[1] ? [next("Continuar")] : [])];
   } else if (current === 2) {
     text = "Escolha o estilo, a levada dos acordes, a bateria e o baixo. Vale para a música toda.";
     actions = [button("Escolher ritmo e levada", () => { guideVisit(3, part); go("#groove"); renderGuide(); }, "primary"), next()];

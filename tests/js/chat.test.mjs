@@ -165,3 +165,12 @@ test("pedido por parte: mapa da música, ponto de ligação, tom e a frase de au
   assert.match(same, /TOM DA PARTE "B": Lá menor \(o tom da música\)/);
   assert.doesNotMatch(same, /Prepare a modulação/);
 });
+
+test("link que passou por um redirecionador (Gemini): o endereço codificado é lido", async () => {
+  const { findLinkInText } = await import("../../harmonalab/web/ai/link.js");
+  const inner = "https://harmona-lab.pages.dev/#t=Teste&k=Am&bpm=60&p=Am7:A2,G3/C4,E4:4:i7:Eólio:Tônica.::A_B_C_D_E_F_G";
+  const wrapped = `https://www.google.com/url?sa=E&q=${encodeURIComponent(inner)}&source=gmail`;
+  assert.equal(findLinkInText(`Abra: ${wrapped}`), inner.slice(inner.indexOf("#")));
+  assert.equal(findLinkInText("https://www.google.com/url?q=https%3A%2F%2Fharmona-lab.pages.dev%2F"), null); // o link cortado: sem a progressão
+  assert.equal(findLinkInText(`[▶ Abrir](${inner})`), inner.slice(inner.indexOf("#")));
+});
