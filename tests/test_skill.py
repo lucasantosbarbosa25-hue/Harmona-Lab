@@ -120,7 +120,7 @@ def test_validar_cobra_a_frase_de_funcao_e_as_notas_da_escala():
 def test_gerar_link_so_gera_com_projeto_valido():
     r = rodar("gerar_link.py", EXAMPLE, "--base", "https://meu.site")
     assert r.returncode == 0, r.stdout + r.stderr
-    assert "https://meu.site/#z=" in r.stdout and "https://meu.site/#t=" in r.stdout
+    assert "https://meu.site/?z=" in r.stdout and "https://meu.site/?t=" in r.stdout
     ruim = rodar("gerar_link.py", "-", entrada=json.dumps({"tempo": 1, "chords": []}))
     assert ruim.returncode == 1 and "PROBLEMAS" in ruim.stdout and "https://" not in ruim.stdout
 
@@ -135,8 +135,8 @@ def test_gerar_link_de_uma_parte_leva_so_os_acordes_novos():
               entrada=json.dumps(parte))
     assert r.returncode == 0, r.stdout + r.stderr
     link = [linha for linha in r.stdout.splitlines() if linha.startswith("https://")][0]
-    assert link.startswith("https://meu.site/#cont=B&ret=1&x=Parte_B_em_lá_menor&p=E7:E2/D4,Gs4:4:")
-    assert link.count(";") == 2 and "#z=" not in r.stdout and "&t=" not in link
+    assert link.startswith("https://meu.site/?cont=B&ret=1&x=Parte_B_em_lá_menor&p=E7:E2/D4,Gs4:4:")
+    assert link.count(";") == 2 and "?z=" not in r.stdout and "&t=" not in link
     errado = rodar("gerar_link.py", "-", "--parte", "B", "--retocados", "1", "--tempos", "16", entrada=json.dumps(parte))
     assert errado.returncode == 1 and "somam 8 tempos, mas o pedido pede 16" in errado.stdout and "https://" not in errado.stdout
     assert rodar("gerar_link.py", "-", "--parte", "B", "--retocados", "3", entrada=json.dumps(parte)).returncode == 1
@@ -167,7 +167,7 @@ def test_link_curto_gerado_em_python_abre_igual_no_app():
     comum = _carregar("comum", SCRIPTS / "_comum.py")
     projeto = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     projeto["references"] = ["Jesús Molina", "Dirty Loops"]
-    [lido] = app_le([comum.link_z(projeto).split("/#", 1)[1].join(["#", ""])])
+    [lido] = app_le([comum.link_z(projeto).split("/?", 1)[1].join(["#", ""])])
     assert lido["kind"] == "project"
     assert lido["project"] == comum._limpo(projeto)
 
@@ -178,7 +178,7 @@ def test_link_legivel_gerado_em_python_abre_com_as_mesmas_teclas_no_app():
     projeto = json.loads(EXAMPLE.read_text(encoding="utf-8"))
     projeto["chords"][0]["bass"] = ["F#1"]  # baixo separado também vira parte do link
     link = comum.link_compacto(projeto)
-    [lido] = app_le(["#" + link.split("/#", 1)[1]])
+    [lido] = app_le(["#" + link.split("/?", 1)[1]])
     assert lido["kind"] == "project"
     assert teclas(lido["project"]) == teclas(projeto)
     assert [c["symbol"] for c in lido["project"]["chords"]] == [c["symbol"] for c in projeto["chords"]]
@@ -189,11 +189,11 @@ def test_link_legivel_gerado_em_python_abre_com_as_mesmas_teclas_no_app():
 @pulando_sem_node
 def test_links_do_exemplo_da_skill_abrem_no_app_e_passam_na_conferencia():
     texto = (SKILL / "references" / "exemplo.md").read_text(encoding="utf-8")
-    link = re.search(r"\]\((https://\S+#z=[\w-]+)\)", texto).group(1)
+    link = re.search(r"\]\((https://\S+\?z=[\w-]+)\)", texto).group(1)
     comum = _carregar("comum", SCRIPTS / "_comum.py")
     projeto = comum.ler_link_z(link)
     assert comum.conferir(projeto)[1] == []
-    [lido] = app_le(["#" + link.split("#", 1)[1]])
+    [lido] = app_le(["#" + link.split("?", 1)[1]])
     assert lido["project"] == projeto
     json_reserva = json.loads(re.search(r"```json\n(.+?)\n```", texto, re.S).group(1))
     assert teclas(json_reserva) == teclas(projeto)  # o JSON de reserva é a mesma progressão do link

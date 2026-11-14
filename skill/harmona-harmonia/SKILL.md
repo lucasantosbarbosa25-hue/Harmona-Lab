@@ -17,7 +17,7 @@ Pedido de UMA PARTE (o pedido traz "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "
 1. Escreva em `parte.json` só esses acordes, em `{"chords": [...]}`: primeiro os reescritos do fim da parte anterior (se o pedido permitir e você reescrever), depois os da parte.
 2. Rode `python scripts/validar.py parte.json` e corrija até aparecer OK.
 3. Rode `python scripts/gerar_link.py parte.json --parte B --retocados K --explicacao "..."` (K = quantos acordes do começo do JSON reescrevem o fim da parte anterior: 0, 1 ou 2). Se o pedido disser que a parte deve somar EXATAMENTE N tempos, acrescente `--tempos N`: o script confere a soma.
-4. Entregue esse link (ele começa com `#cont=`). Não gere o link da música inteira: o app encaixa a parte e mantém o resto.
+4. Entregue esse link (ele começa com `?cont=`). Não gere o link da música inteira: o app encaixa a parte e mantém o resto.
 Sem poder rodar código, siga as instruções abaixo e monte o link à mão.
 
 ## Referências (consulte quando precisar)
@@ -75,7 +75,7 @@ HARMONIA POR ESTILO
 
 PEDIDO DE UMA PARTE
 - Quando o pedido trouxer "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "AJUSTE DA PARTE", a música já existe: o pedido traz a tarefa, o mapa das partes, o ponto de ligação, o tom e a harmonia atual (que vale mais do que qualquer versão anterior da conversa).
-- Entregue SÓ os acordes novos, no link de parte que o pedido descreve (começa com #cont=). Não devolva a música inteira nem as outras partes: o app encaixa a parte e mantém o resto.
+- Entregue SÓ os acordes novos, no link de parte que o pedido descreve (começa com ?cont=). Não devolva a música inteira nem as outras partes: o app encaixa a parte e mantém o resto.
 
 CRITÉRIOS MUSICAIS
 - Tocável e na região média: mão esquerda com 1 a 3 notas, em geral entre C3 e C4, e mão direita com 3 a 5 notas, em geral entre C4 e C6. O grave fica para a linha de baixo, que o Harmona Lab escreve; desça a mão esquerda até C2 só quando o pedido pedir baixo ou pedal na mão do tecladista; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.
@@ -83,12 +83,12 @@ CRITÉRIOS MUSICAIS
 - Sem número de acordes, faça de 4 a 8. Sem BPM, o andamento típico do estilo. Sem compasso, 4/4 com um acorde por compasso.
 
 O LINK
-https://harmona-lab.pages.dev/#... abre a progressão no app. Monte assim, tudo numa linha só, parâmetros separados por &:
+https://harmona-lab.pages.dev/?... abre a progressão no app (é "?" logo depois do endereço, e não "#"). Monte assim, tudo numa linha só, parâmetros separados por &:
 - t=título  k=tom  bpm=80  ts=4/4  ref=Artista1,Artista2  x=explicação curta (opcional)
 - p=acorde;acorde;... onde cada acorde é cifra:notas:duração:função:escala:comentário::notas_da_escala (são dois ":" seguidos antes das notas da escala; função e escala podem ficar vazias, mas o comentário e as notas da escala são obrigatórios em todo acorde). As notas da escala vão separadas por _ e com s no lugar do sustenido: B_C_D_Eb_F_G_A, E_Fs_G_A_B_C_D. Se o pedido marcou a cor das frases, acrescente mais um campo no fim: ...:notas_da_escala:outside. Em notas, mão esquerda e direita ficam separadas por "/" (sem barra = só mão direita): B2,A3/D4,Eb4,G4,C5.
 - Em música com partes, acrescente sec=A.1,B.9 (a parte A começa no acorde 1, a parte B no acorde 9).
 - Em NOTAS escreva o sustenido como s (F#4 vira Fs4). Nos TEXTOS troque espaço por _, codifique # como %23, "(" como %28 e ")" como %29 (acentos podem ir normais) e não use & = ; : dentro deles.
-- Exemplo do mesmo projeto: https://harmona-lab.pages.dev/#t=B7alt_em_Em9&k=Em&bpm=80&ts=4/4&p=F%23m7%28b5%29:Fs2,C3/E3,A3,C4,E4:4:iiø7:Lócrio:A_b5_do_iiø7_já_é_a_b9_do_B7alt,_então_ele_prepara_o_dominante.::Fs_G_A_B_C_D_E;B7alt:B2,A3/D4,Eb4,G4,C5:4:V7alt:C_menor_melódica_a_partir_de_B:Dominante_alterado,_tensão_máxima_antes_de_resolver_no_Em9.::B_C_D_Eb_F_G_A;Em9:E2,B2,D3/G3,Fs4:4:i9:Eólio:Resolução_no_acorde_de_repouso,_com_a_9_na_ponta.::E_Fs_G_A_B_C_D
+- Exemplo do mesmo projeto: https://harmona-lab.pages.dev/?t=B7alt_em_Em9&k=Em&bpm=80&ts=4/4&p=F%23m7%28b5%29:Fs2,C3/E3,A3,C4,E4:4:iiø7:Lócrio:A_b5_do_iiø7_já_é_a_b9_do_B7alt,_então_ele_prepara_o_dominante.::Fs_G_A_B_C_D_E;B7alt:B2,A3/D4,Eb4,G4,C5:4:V7alt:C_menor_melódica_a_partir_de_B:Dominante_alterado,_tensão_máxima_antes_de_resolver_no_Em9.::B_C_D_Eb_F_G_A;Em9:E2,B2,D3/G3,Fs4:4:i9:Eólio:Resolução_no_acorde_de_repouso,_com_a_9_na_ponta.::E_Fs_G_A_B_C_D
 Entregue o link como link clicável ([▶ Abrir no Harmona Lab](...)) e repita a URL dentro de um bloco de código, para a pessoa poder copiar se o chat quebrar o link. Se não conseguir montar o link com segurança, entregue só o JSON.
 
 RESPOSTA SÓ COM O JSON (quando o pedido pedir "apenas o JSON")

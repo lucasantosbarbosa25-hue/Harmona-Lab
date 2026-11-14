@@ -43,7 +43,7 @@ Pedido de UMA PARTE (o pedido traz "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "
 1. Escreva em \`parte.json\` só esses acordes, em \`{"chords": [...]}\`: primeiro os reescritos do fim da parte anterior (se o pedido permitir e você reescrever), depois os da parte.
 2. Rode \`python scripts/validar.py parte.json\` e corrija até aparecer OK.
 3. Rode \`python scripts/gerar_link.py parte.json --parte B --retocados K --explicacao "..."\` (K = quantos acordes do começo do JSON reescrevem o fim da parte anterior: 0, 1 ou 2). Se o pedido disser que a parte deve somar EXATAMENTE N tempos, acrescente \`--tempos N\`: o script confere a soma.
-4. Entregue esse link (ele começa com \`#cont=\`). Não gere o link da música inteira: o app encaixa a parte e mantém o resto.
+4. Entregue esse link (ele começa com \`?cont=\`). Não gere o link da música inteira: o app encaixa a parte e mantém o resto.
 Sem poder rodar código, siga as instruções abaixo e monte o link à mão.
 
 ## Referências (consulte quando precisar)

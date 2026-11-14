@@ -165,7 +165,7 @@ function fromJson(data) {
  * Devolve { kind: "none" } | { kind: "request", request } | { kind: "project", project, explanation } | { kind: "error", message }.
  */
 export async function parseLinkHash(hash) {
-  const raw = String(hash || "").replace(/^#/, "");
+  const raw = String(hash || "").replace(/^[#?]/, ""); // depois do "#" ou do "?": o conteúdo é o mesmo
   if (!raw) return { kind: "none" };
   if (raw.length > MAX_HASH) return { kind: "error", message: "O link é grande demais para abrir." };
   const params = readParams(raw);
@@ -196,8 +196,9 @@ export function findLinkInText(text) {
   if (wrapped) {
     try { const inner = findLinkInText(decodeURIComponent(wrapped[1])); if (inner) return inner; } catch { /* codificação quebrada: segue a busca normal */ }
   }
-  for (const match of raw.matchAll(/https?:\/\/[^\s<>"'`]*?(#[^\s<>"'`]+)/g)) {
-    let hash = match[1];
+  // a progressão vem depois do "?" (o formato que as IAs escrevem hoje) ou do "#" (o antigo, e o do "Copiar link")
+  for (const match of raw.matchAll(/https?:\/\/[^\s<>"'`?#]*([?#][^\s<>"'`]+)/g)) {
+    let hash = `#${match[1].slice(1)}`;
     while (/[.,;:]$/.test(hash)) hash = hash.slice(0, -1);
     // "[texto](url)": o ")" final fecha o markdown, não faz parte do link, se sobrar um a mais
     if (hash.endsWith(")") && (hash.match(/\)/g) || []).length > (hash.match(/\(/g) || []).length) hash = hash.slice(0, -1);

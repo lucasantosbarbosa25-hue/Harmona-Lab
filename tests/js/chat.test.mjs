@@ -100,7 +100,7 @@ test("continuação: o pedido leva só a harmonia e pede só os acordes novos; a
   assert.match(tail, /Harmonize a parte nova da música/);
   assert.match(tail, /somar EXATAMENTE 8 tempos/);
   assert.match(tail, /devolva SÓ os acordes novos/);
-  assert.match(tail, /https:\/\/x\.test\/#cont=B&ret=K/);
+  assert.match(tail, /https:\/\/x\.test\/\?cont=B&ret=K/);
   assert.match(tail, /compasso 2, tempo 1: C5 \(dura 4 tempos\) {2}<- parte B/);
   assert.doesNotMatch(tail.slice(tail.indexOf("HARMONIA ATUAL")), /bass_line|"phrase"|"voice|"drums"|"comp"/);
   assert.doesNotMatch(buildChatPrompt({ request: "x", mode: "adjust", currentProject: project }), /bass_line|"drums"/);
@@ -121,7 +121,7 @@ test("pedido por parte: ajustar mantém o tamanho; parte criada por texto tem ta
   const adjust = buildChatPrompt({ request: "mais tenso", mode: "continue", currentProject: project, continuation: { ...base, kind: "adjust", section: "A", previous: null, fixed: true }, appUrl: "https://x.test/" });
   assert.match(adjust, /AJUSTE DA PARTE "A"/);
   assert.match(adjust, /EXATAMENTE 4 tempos/);
-  assert.match(adjust, /#cont=A&ret=K/);
+  assert.match(adjust, /\?cont=A&ret=K/);
   assert.match(adjust, /mais tenso/);
   assert.doesNotMatch(adjust, /bass_line|Crie uma progressão nova/);
   const create = buildChatPrompt({ request: "refrão aberto", mode: "continue", currentProject: project, continuation: { kind: "create", section: "B", previous: "A", fromBar: 2, toBar: 5, beats: 16, fixed: false, hasNext: false }, appUrl: "https://x.test/" });

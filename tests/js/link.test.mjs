@@ -112,6 +112,14 @@ test("acha o link dentro de uma resposta colada", () => {
 });
 
 test("as instruções usam o endereço de quem está usando o app", () => {
-  assert.ok(instructions("https://meu.site/").includes("https://meu.site/#t=B7alt_em_Em9"));
+  assert.ok(instructions("https://meu.site/").includes("https://meu.site/?t=B7alt_em_Em9"));
   assert.ok(instructions().includes(DEFAULT_APP_URL));
+});
+
+test("o link com a progressão depois do ? é achado num texto colado, como o do #", () => {
+  const body = "t=Teste&bpm=80&p=Em9:E2,B2/G3,Fs4:4";
+  assert.equal(findLinkInText(`[▶ Abrir](https://harmona-lab.pages.dev/?${body})`), `#${body}`);
+  assert.equal(findLinkInText(`veja https://harmona-lab.pages.dev/?cont=B&ret=1&p=Em9:E2,B2/G3,Fs4:4.`), "#cont=B&ret=1&p=Em9:E2,B2/G3,Fs4:4");
+  assert.equal(findLinkInText(`https://harmona-lab.pages.dev/#${body}`), `#${body}`);
+  assert.equal(findLinkInText("https://exemplo.com/?q=nada"), null);
 });

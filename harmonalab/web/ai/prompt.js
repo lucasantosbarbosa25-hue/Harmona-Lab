@@ -35,8 +35,10 @@ export const EXAMPLE_PROJECT = {
 };
 
 /** Exemplo de link do mesmo projeto, no formato compacto descrito nas instruções. */
+// O link leva a progressão depois do "?" (e não do "#"): alguns chats passam o link por um redirecionador que corta o que
+// vem depois do "#", e o app abria vazio. O app continua lendo os dois formatos.
 export const EXAMPLE_LINK_PATH =
-  "#t=B7alt_em_Em9&k=Em&bpm=80&ts=4/4&p=F%23m7%28b5%29:Fs2,C3/E3,A3,C4,E4:4:iiø7:Lócrio:A_b5_do_iiø7_já_é_a_b9_do_B7alt,_então_ele_prepara_o_dominante.::Fs_G_A_B_C_D_E"
+  "?t=B7alt_em_Em9&k=Em&bpm=80&ts=4/4&p=F%23m7%28b5%29:Fs2,C3/E3,A3,C4,E4:4:iiø7:Lócrio:A_b5_do_iiø7_já_é_a_b9_do_B7alt,_então_ele_prepara_o_dominante.::Fs_G_A_B_C_D_E"
   + ";B7alt:B2,A3/D4,Eb4,G4,C5:4:V7alt:C_menor_melódica_a_partir_de_B:Dominante_alterado,_tensão_máxima_antes_de_resolver_no_Em9.::B_C_D_Eb_F_G_A"
   + ";Em9:E2,B2,D3/G3,Fs4:4:i9:Eólio:Resolução_no_acorde_de_repouso,_com_a_9_na_ponta.::E_Fs_G_A_B_C_D";
 
@@ -102,7 +104,7 @@ HARMONIA POR ESTILO
 
 PEDIDO DE UMA PARTE
 - Quando o pedido trouxer "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "AJUSTE DA PARTE", a música já existe: o pedido traz a tarefa, o mapa das partes, o ponto de ligação, o tom e a harmonia atual (que vale mais do que qualquer versão anterior da conversa).
-- Entregue SÓ os acordes novos, no link de parte que o pedido descreve (começa com #cont=). Não devolva a música inteira nem as outras partes: o app encaixa a parte e mantém o resto.
+- Entregue SÓ os acordes novos, no link de parte que o pedido descreve (começa com ?cont=). Não devolva a música inteira nem as outras partes: o app encaixa a parte e mantém o resto.
 
 CRITÉRIOS MUSICAIS
 - Tocável e na região média: mão esquerda com 1 a 3 notas, em geral entre C3 e C4, e mão direita com 3 a 5 notas, em geral entre C4 e C6. O grave fica para a linha de baixo, que o Harmona Lab escreve; desça a mão esquerda até C2 só quando o pedido pedir baixo ou pedal na mão do tecladista; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.
@@ -110,7 +112,7 @@ CRITÉRIOS MUSICAIS
 - Sem número de acordes, faça de 4 a 8. Sem BPM, o andamento típico do estilo. Sem compasso, 4/4 com um acorde por compasso.
 
 O LINK
-${appUrl}#... abre a progressão no app. Monte assim, tudo numa linha só, parâmetros separados por &:
+${appUrl}?... abre a progressão no app (é "?" logo depois do endereço, e não "#"). Monte assim, tudo numa linha só, parâmetros separados por &:
 - t=título  k=tom  bpm=80  ts=4/4  ref=Artista1,Artista2  x=explicação curta (opcional)
 - p=acorde;acorde;... onde cada acorde é cifra:notas:duração:função:escala:comentário::notas_da_escala (são dois ":" seguidos antes das notas da escala; função e escala podem ficar vazias, mas o comentário e as notas da escala são obrigatórios em todo acorde). As notas da escala vão separadas por _ e com s no lugar do sustenido: B_C_D_Eb_F_G_A, E_Fs_G_A_B_C_D. Se o pedido marcou a cor das frases, acrescente mais um campo no fim: ...:notas_da_escala:outside. Em notas, mão esquerda e direita ficam separadas por "/" (sem barra = só mão direita): B2,A3/D4,Eb4,G4,C5.
 - Em música com partes, acrescente sec=A.1,B.9 (a parte A começa no acorde 1, a parte B no acorde 9).
@@ -241,7 +243,7 @@ export function describeContinuation(c, appUrl = DEFAULT_APP_URL) {
   const where = `do compasso ${c.fromBar} ao ${c.toBar} (${bars} compasso${bars === 1 ? "" : "s"}, ${c.beats} tempos)`;
   const delivery = (retouch) => [
     `   - Link: use cont=${c.section} e ret=K no lugar de t=, k= e bpm= (${retouch ? `K = quantos acordes do fim da parte "${c.previous}" você reescreveu: 0, 1 ou 2` : "K = 0"}). `
-    + `Formato: ${appUrl}#cont=${c.section}&ret=K&x=explicação_curta&p=acorde;acorde;... (cada acorde como nas instruções).`,
+    + `Formato: ${appUrl}?cont=${c.section}&ret=K&x=explicação_curta&p=acorde;acorde;... (cada acorde como nas instruções).`,
     `   - JSON de reserva: {"explicacao": "...", "continuacao": {"parte": "${c.section}", "retocados": K}, "projeto": {"chords": [ ...só os acordes novos... ]}}.`,
     "   - A explicação acorde a acorde, no chat, também é só dos acordes novos.",
     APP_LAYERS,

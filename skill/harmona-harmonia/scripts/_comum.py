@@ -84,11 +84,11 @@ def link_z(projeto: dict, base: str = BASE_PADRAO) -> str:
     bruto = json.dumps(_limpo(projeto), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     comp = zlib.compressobj(9, zlib.DEFLATED, -15)
     dados = comp.compress(bruto) + comp.flush()
-    return f"{base}#z={base64.urlsafe_b64encode(dados).rstrip(b'=').decode('ascii')}"
+    return f"{base}?z={base64.urlsafe_b64encode(dados).rstrip(b'=').decode('ascii')}"
 
 
 def ler_link_z(link: str) -> dict:
-    texto = link.split("#z=", 1)[1].split("&", 1)[0]
+    texto = re.split(r"[?#]z=", link, maxsplit=1)[1].split("&", 1)[0]
     dados = base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
     return json.loads(zlib.decompress(dados, -15).decode("utf-8"))
 
@@ -157,18 +157,18 @@ def link_compacto(projeto: dict, base: str = BASE_PADRAO) -> str:
             campos.pop()
         acordes.append(":".join(campos))
     partes.append("p=" + ";".join(acordes))
-    return f"{base}#" + "&".join(partes)
+    return f"{base}?" + "&".join(partes)  # depois do "?": o "#" é cortado por alguns chats (redirecionador)
 
 
 def link_parte(projeto: dict, parte: str, retocados: int = 0, explicacao: str = "", base: str = BASE_PADRAO) -> str:
     """Link de UMA PARTE (#cont=B&ret=K&p=...): leva só os acordes novos. O app encaixa na parte e mantém o resto da música."""
-    acordes = link_compacto({"chords": projeto.get("chords", [])}, base).split("#p=", 1)[1]
+    acordes = link_compacto({"chords": projeto.get("chords", [])}, base).split("?p=", 1)[1]
     texto = lambda t: _codificar(str(t).strip().replace(" ", "_"))  # noqa: E731
     partes = [f"cont={texto(parte)}", f"ret={int(retocados)}"]
     if explicacao.strip():
         partes.append(f"x={texto(explicacao)}")
     partes.append(f"p={acordes}")
-    return f"{base}#" + "&".join(partes)
+    return f"{base}?" + "&".join(partes)
 
 
 def tempos_da_parte(projeto: dict, retocados: int = 0) -> float:

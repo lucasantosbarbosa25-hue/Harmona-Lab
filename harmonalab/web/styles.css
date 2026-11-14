@@ -587,8 +587,15 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .export-part { display: flex; align-items: center; gap: 12px; padding: 10px 8px; border-radius: 10px; font-size: 1rem; cursor: pointer; }
 .export-part input { width: 22px; height: 22px; accent-color: var(--primary); margin: 0; }
 .export-part small { color: var(--muted); margin-left: auto; font-size: .8rem; }
-.export-quick, .export-actions { display: flex; gap: 8px; margin: 0 8px; }
-.export-actions { justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
+/* botões das janelas em grade: mesma largura, mesmas margens; o botão principal ocupa a linha de baixo inteira */
+.export-quick, .export-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 8px; }
+.export-actions { margin-top: 4px; }
+.export-actions .btn, .export-quick .btn { width: 100%; min-height: 48px; justify-content: center; }
+.export-actions .btn.primary { grid-column: 1 / -1; }
+.export-actions > .btn:only-child, .export-actions > .btn[hidden] + .btn.primary { grid-column: 1 / -1; }
+.export-actions:has(> #export-share[hidden]) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.export-actions:has(> #export-share[hidden]) .btn.primary { grid-column: auto; }
+.look-body .export-actions { margin-left: 0; margin-right: 0; }
 .form-strip { display: grid; gap: 8px; margin: 0 0 14px; }
 .form-strip[hidden] { display: none; }
 .form-blocks { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }

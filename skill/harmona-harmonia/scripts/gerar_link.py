@@ -4,11 +4,11 @@
 Uso:  python scripts/gerar_link.py projeto.json [--base https://harmona-lab.pages.dev/]
 
 Pedido de UMA PARTE (o pedido traz "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "AJUSTE DA PARTE"): o JSON leva só os
-acordes novos (primeiro os reescritos do fim da parte anterior, se houver, depois os da parte), e o link é outro:
+acordes novos (primeiro os reescritos do fim da parte anterior, se houver, depois os da parte), e o link é outro (?cont=):
       python scripts/gerar_link.py parte.json --parte B [--retocados 1] [--tempos 16] [--explicacao "..."]
 --tempos confere a soma das durações da parte (use quando o pedido disser que ela deve somar EXATAMENTE N tempos).
 
-Imprime o link curto (#z=, preferido: é o que o app gera ao compartilhar) e o link legível (#p=, reserva).
+Imprime o link curto (?z=, preferido) e o link legível (?t=...&p=..., reserva).
 Só gera links se a progressão passar na conferência; senão lista os problemas (código de saída 1).
 """
 

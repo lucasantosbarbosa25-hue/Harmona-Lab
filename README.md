@@ -213,7 +213,7 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 
   O pedido de uma parte leva só a **harmonia** da música (sem frases, levadas, baixo, bateria nem voz, que são do app), a
   melodia com as notas da parte marcadas (quando há) e a tarefa. A IA devolve **só os acordes novos**, por link
-  (`#cont=B&ret=1&p=...`: `ret` = quantos acordes do fim da parte anterior foram reescritos) ou em JSON
+  (`?cont=B&ret=1&p=...`: `ret` = quantos acordes do fim da parte anterior foram reescritos) ou em JSON
   (`{"continuacao": {"parte": "B", "retocados": 1}, "projeto": {"chords": [...]}}`). O app encaixa esses acordes no lugar,
   confere as durações (se não baterem, explica e não mexe em nada) e mantém todo o resto: os outros acordes, com a levada,
   o baixo e as frases deles, e a Voz. O ritmo que estava ligado é escrito também nos acordes novos. Se a resposta trouxer
@@ -293,6 +293,13 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   como cor). Sem cromatismo nem outside por padrão; no rock, no metal e no worship as frases usam **sequências** (grupos de
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
+
+  **O link da IA leva a progressão depois do `?`.** As instruções (no app, em `ia.md` e na skill) agora pedem o link no
+  formato `https://harmona-lab.pages.dev/?t=...&p=...` (e `?cont=...` para uma parte, `?z=...` nos scripts da skill). O
+  motivo: alguns chats, como o Gemini, passam o link por um redirecionador que corta o que vem depois do `#`, e o app abria
+  vazio. O app continua lendo os dois formatos e limpa o endereço depois de abrir. Diferença: com `?`, o endereço (com a
+  progressão) chega ao servidor do site ao abrir; o "Copiar link da progressão" do menu continua usando `#`, que fica só no
+  aparelho.
 
   **A caixa de colar a resposta fica sempre à vista.** Não é mais preciso copiar o pedido para ela aparecer: quem abre o
   app com a resposta da IA em mãos cola direto (o guia, no passo 2, tem "Colar a resposta"). Alguns chats, como o Gemini,
