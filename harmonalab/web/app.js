@@ -1421,7 +1421,7 @@ function renderGroove() {
   const styleSelect = $("#groove-style");
   if (!styleSelect.children.length) styleSelect.replaceChildren(...STYLES.map((s) => h("option", { value: s.id }, s.label)));
   styleSelect.value = style.id;
-  $("#groove-info").textContent = `${style.summary} Influências: ${style.influences.join(", ")}.`;
+  $("#groove-info").textContent = style.summary; // as influências (artistas) ficam só na base de conhecimento, não na tela
 
   const options = compOptions(style);
   const hasComp = anyChord("comp");

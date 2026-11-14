@@ -31,3 +31,20 @@ test("carrossel do fundo: anda de lado com a rolagem e dá a volta sem emenda", 
   assert.equal(carouselOffset(100, 0), 0);
   for (const y of [0, 123, 5000, 99999]) { const x = carouselOffset(y, 777); assert.ok(x <= 0 && x > -777, `${y}: ${x}`); }
 });
+
+test("a tela não mostra nomes de artistas (eles ficam só na base de conhecimento, como influência)", async () => {
+  const { STYLES } = await import("../../harmonalab/web/kb/estilos.js");
+  const names = new Set(["Jordan Rudess", "Dua Lipa", "Hillsong"]);
+  for (const style of STYLES) for (const name of style.influences || []) for (const part of name.split(/[()]/)) if (part.trim().length > 3) names.add(part.trim());
+  const read = (file) => readFileSync(new URL(`../../harmonalab/web/${file}`, import.meta.url), "utf8");
+  // o que vira texto na tela: a página, os textos fixos do app e do assistente, e os rótulos e resumos dos estilos
+  const shown = [["index.html", read("index.html")], ["ai/ui.js", read("ai/ui.js")], ["voz.js", read("voz.js")], ["aparencia.js", read("aparencia.js")], ["manifest.webmanifest", read("manifest.webmanifest")]];
+  for (const style of STYLES) {
+    const items = [...style.comps, ...style.beats, ...(style.percussion || []), ...style.bass, ...(style.riffs || []).filter((r) => typeof r === "object")];
+    shown.push([`estilo ${style.id}`, [style.label, style.summary, ...items.map((x) => x.label || "")].join("\n")]);
+  }
+  // em app.js, só as linhas que não são comentário
+  shown.push(["app.js", read("app.js").split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line)).map((line) => line.replace(/\/\/.*$/, "")).join("\n")]);
+  for (const [where, text] of shown) for (const name of names) assert.ok(!text.includes(name), `${where} mostra "${name}"`);
+  assert.ok(!read("app.js").includes("style.influences"), "o app não lê as influências para mostrar");
+});

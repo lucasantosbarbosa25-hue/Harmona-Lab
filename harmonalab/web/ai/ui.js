@@ -16,12 +16,14 @@ export function preferredChat() {
   return CHATS.find((c) => c.name === name) ?? CHATS.find((c) => c.name === "Gemini") ?? CHATS[0];
 }
 const RESEARCH_KEY = "harmonalab:ai:research";
+// Os exemplos de pedido descrevem o som pelo estilo e pelos recursos, sem citar artistas (os nomes ficam só na base de
+// conhecimento, como influência).
 const EXAMPLES = [
-  "8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E",
-  "4 acordes resolvendo B7alt em Em9 com ponta fixa em F#, estilo Dirty Loops",
-  "6 acordes, 92 BPM, neo-soul à la Domi & JD Beck, com acordes quartais e empréstimo modal",
-  "5 acordes, 70 BPM, baixo cromático à Stevie Wonder, com slash chords e resolução enganosa",
-  "8 acordes, bossa soul à Ed Motta, com maj7(#11), dominantes alterados e diminutos de passagem",
+  "8 acordes, 76 BPM, gospel moderno, ponta descendo de F# até C e baixo em pedal de E",
+  "4 acordes resolvendo B7alt em Em9 com ponta fixa em F#, pop reharmonizado e denso",
+  "6 acordes, 92 BPM, neo-soul com acordes quartais e empréstimo modal",
+  "5 acordes, 70 BPM, soul com baixo cromático, slash chords e resolução enganosa",
+  "8 acordes, bossa soul com maj7(#11), dominantes alterados e diminutos de passagem",
 ];
 
 /** Endereço do app (sem o arquivo e sem #), para as instruções apontarem para onde a pessoa está. */
@@ -131,7 +133,7 @@ export function initAssistant(api) {
     const parts = getParts();
     const part = t && t.kind !== "new" ? t : null;
     if (!request && (!part || part.kind === "adjust")) {
-      setStatus("error", part ? `Escreva o que você quer mudar na parte ${part.name}.` : "Escreva ou dite o que você quer, por exemplo: “6 acordes, 72 BPM, estilo Jesús Molina”.");
+      setStatus("error", part ? `Escreva o que você quer mudar na parte ${part.name}.` : "Escreva ou dite o que você quer, por exemplo: “6 acordes, 72 BPM, neo-soul”.");
       els.prompt.focus();
       return;
     }
