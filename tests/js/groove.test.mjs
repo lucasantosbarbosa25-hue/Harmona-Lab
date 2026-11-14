@@ -798,7 +798,7 @@ test("lo-fi e o rollback do Weimar: o lo-fi tem perfil próprio e não muda com 
   assert.equal(perfilDoEstilo("lofi", undefined), PERFIS.lofi);
   // os outros estilos seguem o perfil ativo (e podem ser forçados, para testes)
   // rock, metal, worship, balada e disco também têm perfil próprio (guitarra e pop): nada do Weimar entra neles
-  assert.deepEqual(PERFIL_POR_ESTILO, { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop", forro: "pop" });
+  assert.deepEqual(PERFIL_POR_ESTILO, { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop", forro: "pop", trap: "pop", edm: "pop" });
   for (const [id, perfil] of Object.entries(PERFIL_POR_ESTILO)) assert.equal(perfilDoEstilo(id), PERFIS[perfil]);
   for (const style of STYLES.filter((s) => !PERFIL_POR_ESTILO[s.id])) {
     assert.equal(perfilDoEstilo(style.id), PERFIS[PERFIL_ATIVO]);

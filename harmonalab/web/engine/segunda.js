@@ -41,6 +41,8 @@ export const SECOND_VOICE_STYLES = {
   metal: { duet: "todas", counter: "gemeas", unit: 0.5, notes: 4 },
   disco: { duet: "todas", counter: "cala", unit: 0.5, notes: 3 },
   forro: { duet: "todas", counter: "cala", unit: 0.5, notes: 4 },
+  trap: { duet: "apoio", counter: "cala", unit: 0.5, notes: 3 },
+  edm: { duet: "todas", counter: "cala", unit: 0.5, notes: 4 },
 };
 const DEFAULT_STYLE = { duet: "todas", counter: "segura", unit: 0.5, notes: 4 };
 

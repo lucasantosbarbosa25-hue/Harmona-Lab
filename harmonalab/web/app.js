@@ -2097,10 +2097,15 @@ function buildShapePanels() {
 /** Estilo com um som que é a cara dele (a sanfona, no forró): o app oferece trocar o som dos acordes, com um toque. */
 function suggestStyleSound(style) {
   const bank = style?.sound ? BUILTIN_BANKS.find((b) => b.id === style.sound) : null;
-  if (!bank || state.sound.chords === builtinValue(bank.id)) return;
-  toast(`${style.label} combina com ${bank.label.toLowerCase()}.`, { timeout: 9000, action: { label: `Usar ${bank.label.toLowerCase()}`, run: () => {
+  // o estilo também pode pedir um kit de bateria (o 808 do trap e do EDM); só se a bateria não estiver desligada
+  const kit = style?.drumSound && state.sound.drums !== NO_DRUMS ? BUILTIN_BANKS.find((b) => b.id === style.drumSound) : null;
+  const wantChords = bank && state.sound.chords !== builtinValue(bank.id);
+  const wantKit = kit && state.sound.drums !== builtinValue(kit.id);
+  if (!wantChords && !wantKit) return;
+  const names = [wantChords ? bank.label.toLowerCase() : "", wantKit ? kit.label.toLowerCase() : ""].filter(Boolean).join(" e ");
+  toast(`${style.label} combina com ${names}.`, { timeout: 9000, action: { label: wantChords && wantKit ? "Usar esses sons" : `Usar ${names}`, run: () => {
     if (state.playing) stopPlayback();
-    state.sound = { ...state.sound, chords: builtinValue(bank.id) };
+    state.sound = { ...state.sound, ...(wantChords ? { chords: builtinValue(bank.id) } : {}), ...(wantKit ? { drums: builtinValue(kit.id) } : {}) };
     saveSoundChoice();
     renderSound();
   } } });

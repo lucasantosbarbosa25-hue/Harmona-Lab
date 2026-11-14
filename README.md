@@ -323,6 +323,13 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   som de sanfona, 16 baterias (o kit imitando a zabumba: bumbo na pele grave, aro no bacalhau) e cinco percussões com
   **triângulo** (peças novas `t` aberto e `m` abafado, que saem no MIDI na faixa "Perc Triângulo"), ganzá, agogô e
   pandeiro. As frases usam terças e sextas. Ao escolher o estilo, o app oferece trocar o som dos acordes para a sanfona.
+
+  **Trap e EDM.** Dois estilos novos, com a mesma riqueza dos outros: cada um tem oito levadas (seis de acordes e dois
+  ostinatos), três baixos, cinco viradas, cinco percussões, riffs próprios e 16 baterias. No **trap**, sensação de meio
+  tempo (caixa no 3), baixo 808 longo ou sincopado e chimbal com rajadas de fusas e de tercinas (grades de 32 e de 24
+  passos), além de drill, phonk e Memphis. No **EDM**, bumbo nos quatro tempos, baixo no contratempo, acordes que
+  "bombeiam", piano house, trance gate, subidas com rufo de caixa, parada sem bumbo e os primos (drum and bass,
+  dubstep, future bass, garage, hardstyle). Ao escolher o estilo, o app oferece o som dos acordes e a bateria 808.
   Sons novos, separados do MuseScore General: **Sanfona**, **Sanfona italiana**, **Bandoneon** e **Gaita**.
 
   **Controles de timbre em cada som.** No painel **Sons**, embaixo de cada som, **Ajustar o som** abre nove faders:
