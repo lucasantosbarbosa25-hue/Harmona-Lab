@@ -28,6 +28,7 @@ npm install --no-audit --no-fund --save-exact "esbuild@$ESBUILD_VERSION" >/dev/n
 
 cat > entry.js <<'JS'
 export { WorkletSynthesizer, Sequencer } from "spessasynth_lib";
+export { BasicMIDI } from "spessasynth_core"; // para a exportação em áudio (renderização fora do tempo real)
 JS
 
 mkdir -p "$OUT"

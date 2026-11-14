@@ -92,6 +92,75 @@ export function soundBankProblem(buffer) {
   return CUT;
 }
 
+/** Áudio (AudioBuffer ou { sampleRate, channels: [Float32Array, ...] }) → bytes de um arquivo WAV de 16 bits. */
+export function wavBytes(audio) {
+  const channels = audio.channels ?? Array.from({ length: audio.numberOfChannels }, (_, i) => audio.getChannelData(i));
+  const frames = channels[0]?.length ?? 0;
+  const count = channels.length;
+  const out = new DataView(new ArrayBuffer(44 + frames * count * 2));
+  const text = (at, value) => { for (let i = 0; i < value.length; i++) out.setUint8(at + i, value.charCodeAt(i)); };
+  text(0, "RIFF"); out.setUint32(4, 36 + frames * count * 2, true); text(8, "WAVE");
+  text(12, "fmt "); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, count, true);
+  out.setUint32(24, audio.sampleRate, true); out.setUint32(28, audio.sampleRate * count * 2, true); out.setUint16(32, count * 2, true); out.setUint16(34, 16, true);
+  text(36, "data"); out.setUint32(40, frames * count * 2, true);
+  for (let i = 0, at = 44; i < frames; i++) {
+    for (let c = 0; c < count; c++, at += 2) {
+      const x = Math.max(-1, Math.min(1, channels[c][i]));
+      out.setInt16(at, x < 0 ? Math.round(x * 32768) : Math.round(x * 32767), true);
+    }
+  }
+  return new Uint8Array(out.buffer);
+}
+
+/**
+ * Os controles de timbre de cada som, em mensagens MIDI. Cada controle vai de 0 a 100; sem valor (null), nada é enviado
+ * e vale o som como ele é. Nos de ataque, decay, release, brilho e ressonância, 50 é "como está" (o controle é relativo);
+ * reverb, chorus e delay são a quantidade do efeito.
+ */
+export const SHAPE_CONTROLS = [
+  { id: "attack", label: "Ataque", cc: 73, relative: true, hint: "para a direita, o som entra mais devagar" },
+  { id: "decay", label: "Decay", cc: 75, relative: true, hint: "quanto o som demora para cair depois do ataque" },
+  { id: "sustain", label: "Sustain", cc: null, hint: "segura cada nota além do escrito (até 2 tempos); vale a partir do próximo play" },
+  { id: "release", label: "Release", cc: 72, relative: true, hint: "quanto o som demora para sumir depois de solto" },
+  { id: "cutoff", label: "Brilho (cutoff)", cc: 74, relative: true, floor: 30, hint: "para a esquerda, o som fica mais abafado" },
+  { id: "resonance", label: "Ressonância", cc: 71, relative: true, hint: "realça a região do corte" },
+  { id: "reverb", label: "Reverb", cc: 91, hint: "ambiente" },
+  { id: "chorus", label: "Chorus", cc: 93, hint: "som mais largo" },
+  { id: "delay", label: "Delay", cc: 94, hint: "eco" },
+];
+/** O valor de cada controle quando ninguém mexeu: o meio nos relativos (o som como ele é), zero nos efeitos e no sustain. */
+export const shapeDefault = (control) => (control.relative ? 50 : 0);
+/** Os canais MIDI de cada som (a frase leva junto a Voz e a segunda voz). */
+export const SOUND_CHANNELS = { chords: [CHORD_CHANNEL], phrase: [PHRASE_CHANNEL, VOICE_CHANNEL, VOICE2_CHANNEL], bass: [BASS_CHANNEL], riff: [RIFF_CHANNEL], pad: [PAD_CHANNEL], drums: [DRUM_CHANNEL] };
+/** O "sustain" de um som (0 a 100) → quantos tempos a nota é segurada além do escrito. */
+export const holdBeats = (value) => (Number(value) > 0 ? (Math.min(100, Number(value)) / 100) * 2 : 0);
+
+/** O valor do fader (0 a 100) → o valor MIDI do controle (0 a 127). Nos relativos, 50 vira 64 (sem mudança). */
+export function shapeByte(control, value) {
+  const v = Math.max(0, Math.min(100, Number(value)));
+  if (!control.relative) return Math.round((v / 100) * 127);
+  const low = control.floor ?? 0; // abaixo disso o som some (o brilho fechado demais cala o instrumento)
+  return Math.round(v <= 50 ? low + (v / 50) * (64 - low) : 64 + ((v - 50) / 50) * 63);
+}
+
+/**
+ * shaping: { chords: { attack: 30, reverb: 60 }, ... } → as mensagens de controle ([status, controlador, valor]).
+ * Sem `all`, só vão os controles que saíram do padrão (o arquivo fica limpo); com `all`, todos (na escuta ao vivo, para
+ * um controle que voltou ao padrão não ficar com o valor antigo no tocador).
+ */
+export function shapeSetup(shaping, { all = false } = {}) {
+  const out = [];
+  for (const [sound, channels] of Object.entries(SOUND_CHANNELS)) {
+    for (const control of SHAPE_CONTROLS) {
+      if (control.cc === null) continue;
+      const value = shaping?.[sound]?.[control.id] ?? shapeDefault(control);
+      if (!all && Number(value) === shapeDefault(control)) continue;
+      for (const channel of channels) out.push([0xb0 | channel, control.cc, shapeByte(control, value)]);
+    }
+  }
+  return out;
+}
+
 const withTimeout = (promise, ms, message) => Promise.race([
   promise, new Promise((_, reject) => setTimeout(() => reject(new Error(message)), ms)),
 ]);
@@ -386,6 +455,87 @@ export class SoundFontPlayer {
     this.stats.songs += 1;
     this.seq.loadNewSongList([{ binary: bytes.slice().buffer, fileName: "harmona-lab.mid" }]);
     this.seq.play();
+  }
+
+  /** Com a música tocando, mexer num controle de timbre vale na hora (menos o sustain, que muda as notas do arquivo). */
+  setControl(sound, controlId, value) {
+    const control = SHAPE_CONTROLS.find((c) => c.id === controlId);
+    if (!this.synth || !control || control.cc === null) return;
+    for (const channel of SOUND_CHANNELS[sound] ?? []) this.synth.controllerChange(channel, control.cc, shapeByte(control, value));
+  }
+
+  /** O instrumento de uma escolha, com o banco já deslocado, sem carregar nada (para montar o MIDI da exportação). */
+  #patchOf(value) {
+    const patch = parsePatchValue(value);
+    if (!patch) return null;
+    if (patch.slot || patch.bank === DEVICE) return patch;
+    const builtin = findBuiltin(patch.bank);
+    return builtin.kind === "bateria" ? patch : { ...patch, bankMSB: patch.bankMSB + builtinOffset(patch.bank) };
+  }
+
+  /**
+   * As mensagens que põem cada som no seu canal (banco e programa), para o MIDI da exportação em áudio: lá não há como
+   * travar o instrumento de fora, então ele vai escrito no próprio arquivo. Mesmos argumentos de play().
+   */
+  patchSetup({ chords, phrase = SAME, drums = NO_DRUMS, bass = SAME, pad = null, riff = SAME }) {
+    const chordPatch = this.#patchOf(chords);
+    if (!chordPatch) return [];
+    const or = (value) => (value === SAME ? chordPatch : this.#patchOf(value) ?? chordPatch);
+    const byChannel = [
+      [CHORD_CHANNEL, chordPatch], [PHRASE_CHANNEL, or(phrase)], [VOICE_CHANNEL, or(phrase)], [VOICE2_CHANNEL, or(phrase)],
+      [BASS_CHANNEL, or(bass)], [RIFF_CHANNEL, or(riff)], ...(pad ? [[PAD_CHANNEL, this.#patchOf(pad) ?? chordPatch]] : []),
+      ...(drums !== NO_DRUMS && this.#patchOf(drums) ? [[DRUM_CHANNEL, this.#patchOf(drums)]] : []),
+    ];
+    return byChannel.flatMap(([channel, p]) => [[0xb0 | channel, 0, p.bankMSB], [0xb0 | channel, 32, p.bankLSB], [0xc0 | channel, p.program]]);
+  }
+
+  /** Os bancos que uma exportação precisa, como arquivos: [{ soundBankBuffer, bankOffset }], o da bateria primeiro. */
+  async #banksFor(values) {
+    const wanted = new Map(); // id → { load(), offset }
+    const drumBank = values.drums && values.drums !== NO_DRUMS ? parsePatchValue(values.drums)?.bank : null;
+    for (const value of Object.values(values)) {
+      const patch = parsePatchValue(value);
+      if (!patch || wanted.has(patch.bank)) continue;
+      if (patch.slot) {
+        wanted.set(patch.bank, { offset: SLOT_OFFSET[patch.slot], load: async () => (await loadSavedBank(slotKey(patch.slot)))?.blob?.arrayBuffer() });
+      } else if (patch.bank === DEVICE) {
+        wanted.set(patch.bank, { offset: 0, load: async () => (await loadSavedBank())?.blob?.arrayBuffer() });
+      } else {
+        const builtin = findBuiltin(patch.bank);
+        wanted.set(patch.bank, {
+          offset: builtin.kind === "bateria" ? 0 : builtinOffset(patch.bank),
+          load: async () => { const r = await fetch(new URL(encodeURIComponent(builtin.file), SOUNDS)); if (!r.ok) throw new Error(`Não consegui baixar ${builtin.label}.`); return r.arrayBuffer(); },
+        });
+      }
+    }
+    const order = [...wanted.keys()].sort((a, b) => (a === drumBank ? -1 : 0) - (b === drumBank ? -1 : 0));
+    const out = [];
+    for (const id of order) {
+      const buffer = await wanted.get(id).load();
+      if (!buffer) throw new Error("Um dos bancos de sons não está mais guardado neste aparelho. Carregue o arquivo de novo.");
+      out.push({ soundBankBuffer: buffer, bankOffset: wanted.get(id).offset });
+    }
+    return out;
+  }
+
+  /**
+   * Renderiza os bytes de um .mid em áudio, fora do tempo real (bem mais rápido que tocar). O arquivo já precisa trazer
+   * o instrumento de cada canal (patchSetup). values: as escolhas de som, para saber que bancos carregar. seconds: a
+   * duração do áudio. Devolve um AudioBuffer estéreo.
+   */
+  async render(bytes, values, { seconds, sampleRate = 44100 } = {}) {
+    const Offline = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!Offline) throw new Error("Este navegador não exporta áudio (sem OfflineAudioContext).");
+    const banks = await this.#banksFor(values);
+    if (!banks.length) throw new Error("Escolha um som de banco nos acordes para exportar o áudio.");
+    const { WorkletSynthesizer, BasicMIDI } = await import(new URL("spessasynth.min.js", VENDOR).href);
+    const ctx = new Offline(2, Math.max(1, Math.ceil(seconds * sampleRate)), sampleRate);
+    await ctx.audioWorklet.addModule(new URL("spessasynth_processor.min.js", VENDOR).href);
+    const synth = new WorkletSynthesizer(ctx);
+    synth.connect(ctx.destination);
+    await synth.isReady;
+    await withTimeout(synth.startOfflineRender({ midiSequence: BasicMIDI.fromArrayBuffer(bytes.slice().buffer), soundBankList: banks, loopCount: 0 }), 120000, "os bancos demoraram demais para abrir");
+    return ctx.startRendering();
   }
 
   /** Para conferência (testes): o instrumento que cada canal está usando agora: { 0: "Tine Electric Piano", ... }. */

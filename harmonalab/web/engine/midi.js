@@ -342,7 +342,7 @@ export function partsPresent(project, options = {}) {
  * A percussão sai numa faixa por instrumento ("Perc Congas", "Perc Clave"..., no máximo 6); `percussionSingle` junta
  * tudo numa faixa "Percussão", e `percussionOnly` (ids) deixa só alguns instrumentos.
  */
-export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null, gains = null, percussionSingle = false, percussionOnly = null } = {}) {
+export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = true, phraseMode = "both", drums = true, parts = null, gains = null, percussionSingle = false, percussionOnly = null, hold = null, setup = null, tail = 0 } = {}) {
   const [num, den] = project.time_signature;
   const all = noteEvents(project, { ticksPerBeat, phraseMode, drums });
   const keep = parts ? new Set(parts) : null;
@@ -352,11 +352,27 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
   if (percussionOnly) { const only = new Set(percussionOnly); notes = notes.filter((n) => !n.percussion || only.has(n.percussion)); }
   // gains: volume de cada parte só para a escuta do app ({ voz: 0.6, ... }); multiplica a velocity
   if (gains) notes = notes.map((n) => ({ ...n, velocity: Math.max(1, Math.min(127, Math.round(n.velocity * (gains[notePart(n)] ?? 1)))) }));
+  // hold: quanto cada parte segura as notas além do escrito, em tempos ({ solo: 0.5, ... }): o "sustain" dos sons do app.
+  // A nota só não passa do começo da próxima nota igual (mesma altura, no mesmo canal).
+  if (hold) {
+    const next = new Map(); // "canal:altura" → os começos, em ordem
+    for (const n of notes) { const k = `${n.channel}:${n.pitch}`; if (!next.has(k)) next.set(k, []); next.get(k).push(n.start); }
+    for (const list of next.values()) list.sort((a, b) => a - b);
+    notes = notes.map((n) => {
+      const extra = roundHalfEven((hold[notePart(n)] ?? 0) * ticksPerBeat);
+      if (extra <= 0) return n;
+      const later = next.get(`${n.channel}:${n.pitch}`).find((start) => start >= n.end);
+      return { ...n, end: Math.max(n.end, Math.min(n.end + extra, later ?? Infinity)) };
+    });
+  }
   // [tick, prioridade, altura, mensagem, canal]. Prioridade: note_off < marcador < note_on.
   const events = { [CHANNEL]: [], [PHRASE_CHANNEL]: [], [BASS_CHANNEL]: [], [VOICE_CHANNEL]: [], [VOICE2_CHANNEL]: [], [RIFF_CHANNEL]: [], [PAD_CHANNEL]: [], [DRUM_CHANNEL]: [], percussion: new Map() };
   project.chords.forEach((chord, i) => {
     if (markers && chord.symbol) events[CHANNEL].push([starts[i], 1, 0, meta(0x06, metaTextBytes(chord.symbol)), CHANNEL]);
   });
+  // setup: mensagens de canal no tempo 0, antes de qualquer nota ([[status, dado1, dado2?], ...]): instrumento de cada
+  // canal e controles de timbre (ataque, brilho, reverb...). Só o app usa, para ouvir e para exportar o áudio.
+  (setup || []).forEach((bytes, i) => events[CHANNEL].push([0, -1, i, { bytes: [...bytes] }, bytes[0] & 0x0f]));
   for (const n of notes) {
     if (n.percussion && !events.percussion.has(n.percussion)) events.percussion.set(n.percussion, []);
     const list = n.percussion ? events.percussion.get(n.percussion) : events[n.channel];
@@ -364,6 +380,8 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
     list.push([n.end, 0, n.pitch, { bytes: [0x80 | n.channel, n.pitch, 0] }, n.channel]);
   }
   const tempo = roundHalfEven(((60 * 1e6) / project.tempo) * 4 / 4);
+  // o fim das faixas: o fim da música; com notas seguradas (hold) ou cauda pedida (tail, em tempos), um pouco depois
+  const lastTick = notes.reduce((max, n) => Math.max(max, n.end), endTick) + roundHalfEven(tail * ticksPerBeat);
 
   // Uma faixa: nome, (compasso e andamento, na primeira), eventos com "running status" (igual ao mido) e fim.
   const trackBytes = (name, items, header) => {
@@ -377,7 +395,7 @@ export function midiBytes(project, { ticksPerBeat = TICKS_PER_BEAT, markers = tr
       messages.push([at - last, msg]);
       last = at;
     }
-    messages.push([endTick - last, meta(0x2f, [])]);
+    messages.push([Math.max(0, lastTick - last), meta(0x2f, [])]);
     const track = [];
     let running = null;
     for (const [delta, msg] of messages) {

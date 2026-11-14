@@ -24,10 +24,16 @@ import { loadProject as readProject, renameProjectNotes } from "./engine/model.j
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 import { VOICINGS, revoiceChord } from "./engine/voicing.js";
 import { BUILTIN_BANKS, DEFAULT_SOUNDS } from "./kb/sons.js";
-import { LARGE_BANK_BYTES, NO_DRUMS, SAME, SIMPLE, SLOTS, SoundFontPlayer, builtinValue, formatSize, parsePatchValue, patchValue, slotPatchValue, suggestedPreset } from "./sound.js";
+import {
+  LARGE_BANK_BYTES, NO_DRUMS, SAME, SHAPE_CONTROLS, SIMPLE, SLOTS, SoundFontPlayer, builtinValue, formatSize, holdBeats, parsePatchValue, patchValue,
+  shapeDefault, shapeSetup, slotPatchValue, suggestedPreset, wavBytes,
+} from "./sound.js";
 
 const DRAFT_KEY = "harmonalab:draft:v1";
 const SOUND_KEY = "harmonalab:sound";
+const SHAPE_KEY = "harmonalab:sound:shape"; // os controles de timbre de cada som (ataque, release, brilho, reverb...)
+/** As partes do MIDI que cada som toca (para o sustain, que segura as notas delas). */
+const SOUND_PARTS = { chords: ["acordes"], phrase: ["solo", "voz", "voz2"], bass: ["baixo"], riff: ["riff"], pad: ["pad"], drums: [] };
 const RIFF_AUTO = "auto"; // som do riff: o sugerido pelo tipo de riff
 const GROOVE_KEY = "harmonalab:groove";
 const CUSTOM_COMP = "custom"; // levada escrita à mão (ou vinda num projeto), que não é uma das opções do estilo
@@ -114,6 +120,7 @@ const state = {
   phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
   // som da pré-escuta de cada camada: um instrumento do app ("kb:id"), do banco do aparelho ("sf:MSB:LSB:programa"), ou
   // o timbre simples (acordes), o mesmo dos acordes (frase, baixo), o pad sintético do app (pad), sem bateria
+  shape: {}, // os controles de timbre de cada som (bindSound lê os guardados)
   sound: {
     chords: builtinValue(DEFAULT_SOUNDS.chords), phrase: SAME, drums: builtinValue(DEFAULT_SOUNDS.drums),
     bass: builtinValue(DEFAULT_SOUNDS.bass), pad: builtinValue(DEFAULT_SOUNDS.pad), riff: RIFF_AUTO,
@@ -1730,6 +1737,69 @@ const usingSoundFont = () => {
  * Toca com o banco de sons o mesmo MIDI que "Gerar MIDI" exporta (no modo de frase escolhido).
  * Devolve false quando não dá (há erros na progressão): aí quem chamou usa o timbre simples.
  */
+/** O sustain de cada som → quanto cada parte do MIDI segura as notas, em tempos. */
+function shapeHold() {
+  const hold = {};
+  for (const [sound, parts] of Object.entries(SOUND_PARTS)) for (const part of parts) hold[part] = holdBeats(state.shape?.[sound]?.sustain);
+  return hold;
+}
+
+/**
+ * Exporta o áudio (WAV) das partes marcadas na janela de exportar, com os sons e os controles de timbre escolhidos e os
+ * volumes do mixer: o tocador renderiza o MIDI fora do tempo real. Precisa de um som de banco nos acordes.
+ */
+async function exportAudio() {
+  const chosen = exportChoice();
+  if (!chosen.length) return;
+  if (!state.report?.ok) { toast("Corrija os erros da progressão antes de exportar o áudio.", { error: true }); return; }
+  if (!usingSoundFont()) { toast("Para exportar o áudio, escolha um som de banco em Sons → Som dos acordes (o timbre simples do app só toca ao vivo).", { error: true, timeout: 8000 }); return; }
+  $("#export-dialog").close();
+  stopPlayback();
+  const { project } = readProject(toPayload());
+  const padPatch = project.pad && state.sound.pad !== APP_PAD && parsePatchValue(state.sound.pad) ? state.sound.pad : null;
+  const hasDrums = (project.drum_bars.length || project.percussion_bars.length) && state.sound.drums !== NO_DRUMS;
+  const left = []; // o que fica de fora, e por quê
+  const parts = chosen.filter((id) => {
+    if (id === "pad" && !padPatch) { left.push("o pad (o pad sintético do app só toca ao vivo: escolha um som de banco para ele)"); return false; }
+    if ((id === "bateria" || id === "percussao") && !hasDrums) { left.push("a bateria (está em “Sem bateria na escuta”)"); return false; }
+    return true;
+  });
+  const percBoxes = [...document.querySelectorAll("#export-perc-list input")];
+  const instruments = percChoice();
+  const values = {
+    chords: state.sound.chords, phrase: state.sound.phrase, drums: hasDrums ? state.sound.drums : NO_DRUMS,
+    bass: project.chords.some((c) => c.bass_events.length) ? state.sound.bass : SAME, pad: padPatch,
+    riff: project.chords.some((c) => c.riff_events.length) ? riffSoundValue() : SAME,
+  };
+  const ids = MIDI_PARTS.map((p) => p.id);
+  const hold = shapeHold();
+  const bytes = midiBytes(project, {
+    phraseMode: state.phraseMode, parts, gains: Object.fromEntries(ids.map((id) => [id, mixOf(id).gain])),
+    percussionOnly: parts.includes("percussao") && instruments.length !== percBoxes.length ? instruments : null,
+    setup: [...soundFont.patchSetup(values), ...shapeSetup(state.shape)], hold,
+  });
+  const seconds = (state.report.totals.seconds || 0) + Math.max(0, ...Object.values(hold)) * (60 / project.tempo) + 3; // a cauda do release e do reverb
+  toast("Renderizando o áudio… (bancos grandes demoram mais)", { timeout: 60000 });
+  try {
+    const audio = await soundFont.render(bytes, values, { seconds });
+    // normaliza o pico (sem estourar): o que sai do tocador costuma vir baixo
+    const channels = Array.from({ length: audio.numberOfChannels }, (_, i) => audio.getChannelData(i));
+    let peak = 0;
+    for (const data of channels) for (let i = 0; i < data.length; i++) { const v = Math.abs(data[i]); if (v > peak) peak = v; }
+    if (peak > 0) { const k = 0.89 / peak; for (const data of channels) for (let i = 0; i < data.length; i++) data[i] *= k; }
+    const wav = wavBytes({ sampleRate: audio.sampleRate, channels });
+    const every = parts.length === [...document.querySelectorAll("#export-parts input")].length;
+    const filename = `${slugify(state.project.title)}${every ? "" : `-${parts.join("-")}`}.wav`;
+    document.querySelectorAll(".toast").forEach((t) => { if (t.textContent.startsWith("Renderizando")) t.remove(); });
+    const saved = await saveFile(new Blob([wav], { type: "audio/wav" }), filename, "Áudio WAV", "audio/wav", ".wav");
+    if (!saved) return;
+    toast(`${saved.picked ? saved.name : filename} ${saved.picked ? "salvo" : "baixado"} (${formatSize(wav.length)}, ${Math.round(seconds)} s).${left.length ? ` Ficou de fora: ${left.join("; ")}.` : ""}`, { timeout: 8000 });
+  } catch (err) {
+    document.querySelectorAll(".toast").forEach((t) => { if (t.textContent.startsWith("Renderizando")) t.remove(); });
+    toast(`Não consegui exportar o áudio: ${err.message}`, { error: true, timeout: 9000 });
+  }
+}
+
 async function playWithSoundFont(only = null, onEnd = null) {
   if (!state.report?.ok) {
     toast("Há erros na progressão: por enquanto, ela toca com o timbre simples.");
@@ -1743,6 +1813,7 @@ async function playWithSoundFont(only = null, onEnd = null) {
   const hasBass = project.chords.some((c) => c.bass_events.length);
   const bytes = midiBytes(project, {
     phraseMode: state.phraseMode, parts: ids.filter((id) => (id !== "pad" || padPatch) && mixGain(id) > 0), gains: Object.fromEntries(ids.map((id) => [id, mixGain(id)])),
+    setup: shapeSetup(state.shape, { all: true }), hold: shapeHold(), // os controles de timbre de cada som
   });
   const hasDrums = project.drum_bars.length || project.percussion_bars.length;
   const hasRiff = project.chords.some((c) => c.riff_events.length);
@@ -1892,6 +1963,7 @@ function updateSoundPhraseField() {
   $("#sound-pad-field").hidden = !banks || !state.project?.pad;
   $("#sound-riff-field").hidden = !banks || !(state.project?.chords || []).some((c) => String(c.riff || "").trim());
   $("#sound-simple-hint").hidden = banks;
+  document.querySelectorAll(".shape").forEach((el) => { el.hidden = !banks; }); // os controles de timbre só existem com sons de banco
 }
 
 async function chooseSoundFile(file) {
@@ -1960,8 +2032,58 @@ async function chooseSlotFile(slot, file) {
   }
 }
 
+function loadShape() {
+  try { const saved = JSON.parse(localStorage.getItem(SHAPE_KEY) || "null"); return saved && typeof saved === "object" ? saved : {}; } catch { return {}; }
+}
+const saveShape = () => { try { localStorage.setItem(SHAPE_KEY, JSON.stringify(state.shape)); } catch { /* sem armazenamento */ } };
+const shapeValue = (sound, control) => { const v = Number(state.shape?.[sound]?.[control.id]); return Number.isFinite(v) ? v : shapeDefault(control); };
+const shapeChanged = (sound) => SHAPE_CONTROLS.some((c) => shapeValue(sound, c) !== shapeDefault(c));
+
+/**
+ * Embaixo de cada som, "Ajustar o som" abre os faders dele: ataque, decay, sustain, release, brilho, ressonância, reverb,
+ * chorus e delay. Mexer vale na hora, com a música tocando (o sustain, a partir do próximo play), e vale também no áudio
+ * exportado. Só existe com sons de banco (o timbre simples do app não tem esses controles).
+ */
+function buildShapePanels() {
+  for (const sound of SLOTS) {
+    const field = $(`#sound-${sound}-field`);
+    const controls = SHAPE_CONTROLS.filter((c) => !(sound === "drums" && c.id === "sustain")); // bateria não sustenta
+    const panel = h("div", { class: "shape-panel", hidden: true });
+    const toggle = h("button", { type: "button", class: "shape-toggle", "aria-expanded": "false" }, h("span", { class: "shape-dot", "aria-hidden": "true" }), h("span", { class: "shape-toggle-text" }, "Ajustar o som"));
+    const mark = () => toggle.classList.toggle("changed", shapeChanged(sound));
+    const rows = controls.map((control) => {
+      const output = h("output", null, "");
+      const input = h("input", { type: "range", min: "0", max: "100", step: "1", "aria-label": `${control.label}: ${control.hint}`, title: control.hint });
+      const show = () => { const v = shapeValue(sound, control); input.value = String(v); output.textContent = v === shapeDefault(control) ? "padrão" : control.relative ? `${v > 50 ? "+" : ""}${v - 50}` : String(v); };
+      input.addEventListener("input", () => {
+        const v = Number(input.value);
+        state.shape = { ...state.shape, [sound]: { ...(state.shape[sound] || {}), [control.id]: Math.abs(v - shapeDefault(control)) <= 2 ? shapeDefault(control) : v } }; // perto do padrão, gruda nele
+        saveShape();
+        show();
+        mark();
+        soundFont.setControl(sound, control.id, shapeValue(sound, control)); // tocando, o controle vale na hora
+      });
+      show();
+      return { show, row: h("label", { class: "shape-row" }, h("span", { class: "shape-name" }, control.label), input, output) };
+    });
+    const reset = h("button", { type: "button", class: "btn ghost small", onclick: () => {
+      const next = { ...state.shape }; delete next[sound]; state.shape = next;
+      saveShape();
+      for (const r of rows) r.show();
+      mark();
+      for (const control of controls) soundFont.setControl(sound, control.id, shapeDefault(control));
+    } }, "Voltar ao padrão");
+    panel.append(...rows.map((r) => r.row), reset);
+    toggle.addEventListener("click", () => { panel.hidden = !panel.hidden; toggle.setAttribute("aria-expanded", String(!panel.hidden)); });
+    mark();
+    field.append(h("div", { class: "shape", dataset: { sound } }, toggle, panel));
+  }
+}
+
 function bindSound() {
   loadSoundChoice();
+  state.shape = loadShape();
+  buildShapePanels();
   let slotWanted = null;
   document.querySelectorAll(".slot-load").forEach((b) => b.addEventListener("click", () => { slotWanted = b.dataset.slot; $("#slot-file").click(); }));
   $("#slot-file").addEventListener("change", (e) => {
@@ -2102,6 +2224,7 @@ function renderExportNote() {
   note.textContent = noInstrument ? "Marque pelo menos um instrumento de percussão (ou desmarque a Percussão)." : "Marque pelo menos uma parte.";
   $("#export-go").disabled = chosen.length === 0 || noInstrument;
   $("#export-share").disabled = $("#export-go").disabled;
+  $("#export-audio").disabled = $("#export-go").disabled;
 }
 
 /** Gera o .mid só com as partes marcadas. */
@@ -2328,6 +2451,7 @@ function bindUi() {
   }
   setupLook({ toast, onTheme: () => { if (state.project) { renderAll(); assistant?.refresh(); } } }); // as cores das partes mudam com o tema
   $("#export-go").addEventListener("click", () => exportChosen());
+  $("#export-audio").addEventListener("click", () => exportAudio());
   $("#export-share").hidden = !canShareMidi(); // só aparece onde o sistema aceita receber o arquivo
   $("#export-share").addEventListener("click", () => exportChosen({ share: true }));
   $("#export-perc-single").addEventListener("change", renderExportNote);

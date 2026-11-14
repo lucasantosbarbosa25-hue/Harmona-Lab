@@ -294,6 +294,20 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **Controles de timbre em cada som.** No painel **Sons**, embaixo de cada som, **Ajustar o som** abre nove faders:
+  **Ataque**, **Decay**, **Sustain**, **Release**, **Brilho (cutoff)**, **Ressonância**, **Reverb**, **Chorus** e
+  **Delay**. Nos cinco de envelope e filtro, o meio é "padrão" (o som como ele é) e o fader soma ou tira; reverb, chorus e
+  delay são a quantidade do efeito. Mexer vale na hora, com a música tocando; o **Sustain** segura cada nota além do
+  escrito (até 2 tempos) e vale a partir do próximo play. Um ponto azul marca o som que saiu do padrão, e **Voltar ao
+  padrão** limpa. Por dentro são controles MIDI padrão (CC 73, 75, 72, 74, 71, 91, 93, 94) enviados ao tocador, medidos um
+  a um na renderização; só existem com sons de banco (o timbre simples do app não os tem). A bateria não tem sustain.
+  Os ajustes ficam guardados no aparelho e **não** vão para o arquivo MIDI.
+
+  **Exportar o áudio (WAV).** Na janela de gerar o MIDI, **Áudio (WAV)** renderiza as partes marcadas com os sons, os
+  controles de timbre e os volumes do mixer, fora do tempo real (bem mais rápido que tocar), e salva um WAV estéreo de 16
+  bits, 44,1 kHz, com o pico normalizado e 3 segundos de cauda para o release e o reverb. Precisa de um som de banco nos
+  acordes; o pad sintético do app e a bateria em "Sem bateria na escuta" ficam de fora (o app avisa).
+
   **Um banco de sons do aparelho para cada som.** No painel **Sons**, cada som (acordes, frase, baixo, riff, pad, bateria)
   tem ao lado um botão **SF2**: ele carrega do aparelho um banco `.sf2`/`.sf3` só para aquele som, e os instrumentos do
   banco aparecem no menu dele, em "Banco deste som". O botão fica marcado quando o som tem banco próprio, e o **×** ao lado

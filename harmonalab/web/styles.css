@@ -591,10 +591,10 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .export-quick, .export-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 8px; }
 .export-actions { margin-top: 4px; }
 .export-actions .btn, .export-quick .btn { width: 100%; min-height: 48px; justify-content: center; }
-.export-actions .btn.primary { grid-column: 1 / -1; }
-.export-actions > .btn:only-child, .export-actions > .btn[hidden] + .btn.primary { grid-column: 1 / -1; }
-.export-actions:has(> #export-share[hidden]) { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
-.export-actions:has(> #export-share[hidden]) .btn.primary { grid-column: auto; }
+/* janela de exportar: áudio e envio em cima, Cancelar e Gerar MIDI embaixo, sempre em duas metades iguais;
+   sem o botão de enviar (computador), o do áudio ocupa a linha inteira */
+.export-actions:has(> #export-share[hidden]) #export-audio { grid-column: 1 / -1; }
+.export-actions > .btn:only-child { grid-column: 1 / -1; }
 .look-body .export-actions { margin-left: 0; margin-right: 0; }
 .form-strip { display: grid; gap: 8px; margin: 0 0 14px; }
 .form-strip[hidden] { display: none; }
@@ -760,3 +760,20 @@ a.btn.secondary, a.btn.ghost { color: var(--text); }
 .sound-row .btn { flex: none; min-height: 44px; padding: 0 10px; font-size: .78rem; font-weight: 700; letter-spacing: .03em; }
 .slot-load.has-bank { border-color: var(--primary); color: var(--primary); box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary) 22%, transparent); }
 .sound-row .slot-remove { font-size: 1.15rem; padding: 0 12px; }
+
+/* os controles de timbre de cada som: "Ajustar o som" abre os faders embaixo do menu */
+.shape { display: grid; gap: 6px; }
+.shape-toggle { justify-self: start; display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 10px 4px 6px; border: 0; border-radius: 8px; background: transparent;
+  color: var(--muted); font: inherit; font-size: .86rem; font-weight: 600; cursor: pointer; }
+.shape-toggle::after { content: ""; width: 7px; height: 7px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(45deg); margin: 0 2px 3px 2px; }
+.shape-toggle[aria-expanded="true"]::after { transform: rotate(-135deg); margin: 3px 2px 0 2px; }
+.shape-toggle:hover { color: var(--text); background: var(--surface-2); }
+.shape-dot { width: 8px; height: 8px; border-radius: 50%; background: transparent; border: 1px solid var(--border-strong); }
+.shape-toggle.changed { color: var(--primary); }
+.shape-toggle.changed .shape-dot { background: var(--primary); border-color: var(--primary); }
+.shape-panel { display: grid; gap: 4px; padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2); }
+.shape-row { display: grid; grid-template-columns: 7.2rem minmax(0, 1fr) 3.4rem; align-items: center; gap: 8px; min-height: 40px; }
+.shape-name { font-size: .86rem; font-weight: 600; }
+.shape-row input[type="range"] { width: 100%; accent-color: var(--primary); min-height: 32px; }
+.shape-row output { font-size: .8rem; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.shape-panel .btn { justify-self: start; margin-top: 2px; }
