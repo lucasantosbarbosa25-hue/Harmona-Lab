@@ -24,7 +24,7 @@ import { loadProject as readProject, renameProjectNotes } from "./engine/model.j
 import { keyboardRange, renderKeyboard } from "./keyboard.js";
 import { VOICINGS, revoiceChord } from "./engine/voicing.js";
 import { BUILTIN_BANKS, DEFAULT_SOUNDS } from "./kb/sons.js";
-import { LARGE_BANK_BYTES, NO_DRUMS, SAME, SIMPLE, SoundFontPlayer, builtinValue, formatSize, parsePatchValue, patchValue, suggestedPreset } from "./sound.js";
+import { LARGE_BANK_BYTES, NO_DRUMS, SAME, SIMPLE, SLOTS, SoundFontPlayer, builtinValue, formatSize, parsePatchValue, patchValue, slotPatchValue, suggestedPreset } from "./sound.js";
 
 const DRAFT_KEY = "harmonalab:draft:v1";
 const SOUND_KEY = "harmonalab:sound";
@@ -126,6 +126,7 @@ const openChords = new Set(); // ids dos acordes com o cartão aberto (os outros
 const foldedSections = new Set(); // ids do 1º acorde das partes recolhidas na lista
 const player = new Player();
 const soundFont = new SoundFontPlayer(); // banco de sons (.sf2): só carrega a biblioteca quando alguém usa
+if (["localhost", "127.0.0.1"].includes(location.hostname)) window.__harmonaSound = soundFont; // só no computador de quem desenvolve: os testes conferem os canais
 let soundTimers = [];
 let soundRestored = false; // o banco guardado já foi lido (antes disso, não descartamos a escolha salva)
 let nextId = 1;
@@ -1717,7 +1718,13 @@ function riffSoundValue() {
   const id = riffSound(grooveStyle(), state.project?.groove?.riff);
   return id && BUILTIN_BANKS.some((b) => b.id === id) ? builtinValue(id) : SAME;
 }
-const usingSoundFont = () => parsePatchValue(state.sound.chords) !== null && (parsePatchValue(state.sound.chords).bank !== "aparelho" || Boolean(soundFont.bank));
+/** A escuta usa bancos de sons? (o som dos acordes é de um banco: do app, o geral do aparelho ou o próprio dos acordes) */
+const usingSoundFont = () => {
+  const patch = parsePatchValue(state.sound.chords);
+  if (!patch) return false;
+  if (patch.slot) return Boolean(soundFont.slots[patch.slot]);
+  return patch.bank !== "aparelho" || Boolean(soundFont.bank);
+};
 
 /**
  * Toca com o banco de sons o mesmo MIDI que "Gerar MIDI" exporta (no modo de frase escolhido).
@@ -1805,13 +1812,18 @@ function renderSound() {
   const pads = BUILTIN_BANKS.filter((b) => b.kind === "pad");
   const melodic = new Set([...keys.map((b) => builtinValue(b.id)), ...presets.filter((p) => !p.isDrum).map(patchValue)]);
   const drums = new Set([...kits.map((b) => builtinValue(b.id)), ...presets.filter((p) => p.isDrum).map(patchValue)]);
+  // o banco próprio de cada som (carregado pelo botão SF2 ao lado dele): os instrumentos dele só aparecem naquele som
+  const own = (key) => (soundFont.slots[key]?.presets ?? []).filter((p) => (key === "drums" ? p.isDrum : !p.isDrum));
+  const ownOk = (key) => own(key).some((p) => slotPatchValue(key, p) === state.sound[key]);
+  const ownGroup = (key) => (own(key).length ? [h("optgroup", { label: `Banco deste som: ${soundFont.slots[key].name}` }, ...own(key).map((p) => h("option", { value: slotPatchValue(key, p) }, p.name)))] : []);
   if (soundRestored) {
-    if (state.sound.chords !== SIMPLE && !melodic.has(state.sound.chords)) state.sound.chords = SIMPLE;
-    if (state.sound.phrase !== SAME && !melodic.has(state.sound.phrase)) state.sound.phrase = SAME;
-    if (state.sound.drums !== NO_DRUMS && !drums.has(state.sound.drums)) state.sound.drums = kits[0] ? builtinValue(kits[0].id) : NO_DRUMS;
+    if (state.sound.chords !== SIMPLE && !melodic.has(state.sound.chords) && !ownOk("chords")) state.sound.chords = SIMPLE;
+    if (state.sound.phrase !== SAME && !melodic.has(state.sound.phrase) && !ownOk("phrase")) state.sound.phrase = SAME;
+    if (state.sound.riff !== RIFF_AUTO && state.sound.riff !== SAME && !melodic.has(state.sound.riff) && !ownOk("riff")) state.sound.riff = RIFF_AUTO;
+    if (state.sound.drums !== NO_DRUMS && !drums.has(state.sound.drums) && !ownOk("drums")) state.sound.drums = kits[0] ? builtinValue(kits[0].id) : NO_DRUMS;
     const device = new Set(presets.filter((p) => !p.isDrum).map(patchValue));
-    if (state.sound.bass !== SAME && !device.has(state.sound.bass) && !basses.some((b) => builtinValue(b.id) === state.sound.bass) && !melodic.has(state.sound.bass)) state.sound.bass = builtinValue(DEFAULT_SOUNDS.bass);
-    if (state.sound.pad !== APP_PAD && !device.has(state.sound.pad) && !pads.some((b) => builtinValue(b.id) === state.sound.pad) && !melodic.has(state.sound.pad)) state.sound.pad = builtinValue(DEFAULT_SOUNDS.pad);
+    if (state.sound.bass !== SAME && !ownOk("bass") && !device.has(state.sound.bass) && !basses.some((b) => builtinValue(b.id) === state.sound.bass) && !melodic.has(state.sound.bass)) state.sound.bass = builtinValue(DEFAULT_SOUNDS.bass);
+    if (state.sound.pad !== APP_PAD && !ownOk("pad") && !device.has(state.sound.pad) && !pads.some((b) => builtinValue(b.id) === state.sound.pad) && !melodic.has(state.sound.pad)) state.sound.pad = builtinValue(DEFAULT_SOUNDS.pad);
   }
   // os sons do app, agrupados por família (Teclados, Sopros e vozes...); os antigos, sem grupo, ficam em "Outros do app"
   const builtinOptions = (list) => {
@@ -1825,35 +1837,45 @@ function renderSound() {
   };
   const melodicOptions = () => [...builtinOptions(keys), ...deviceGroup(false)];
   const chords = $("#sound-chords");
-  chords.replaceChildren(h("option", { value: SIMPLE }, "Timbre simples do app"), ...melodicOptions());
+  chords.replaceChildren(h("option", { value: SIMPLE }, "Timbre simples do app"), ...ownGroup("chords"), ...melodicOptions());
   chords.value = state.sound.chords;
   const phrase = $("#sound-phrase");
-  phrase.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...melodicOptions());
+  phrase.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...ownGroup("phrase"), ...melodicOptions());
   phrase.value = state.sound.phrase;
   const drumSelect = $("#sound-drums");
   drumSelect.replaceChildren(
     h("option", { value: NO_DRUMS }, "Sem bateria na escuta"),
+    ...ownGroup("drums"),
     ...builtinOptions(kits),
     ...deviceGroup(true),
   );
   drumSelect.value = state.sound.drums;
   const bassSelect = $("#sound-bass");
-  bassSelect.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...builtinOptions(basses), ...deviceGroup(false));
+  bassSelect.replaceChildren(h("option", { value: SAME }, "O mesmo dos acordes"), ...ownGroup("bass"), ...builtinOptions(basses), ...deviceGroup(false));
   bassSelect.value = state.sound.bass;
   const riffSelect = $("#sound-riff");
   const auto = parsePatchValue(riffSoundValue());
   const autoLabel = state.sound.riff === RIFF_AUTO && auto ? BUILTIN_BANKS.find((b) => b.id === auto.bank)?.label : "";
-  riffSelect.replaceChildren(h("option", { value: RIFF_AUTO }, autoLabel ? `Automático: ${autoLabel}` : "Automático (o do tipo de riff)"), h("option", { value: SAME }, "O mesmo dos acordes"), ...melodicOptions());
+  riffSelect.replaceChildren(h("option", { value: RIFF_AUTO }, autoLabel ? `Automático: ${autoLabel}` : "Automático (o do tipo de riff)"), h("option", { value: SAME }, "O mesmo dos acordes"), ...ownGroup("riff"), ...melodicOptions());
   riffSelect.value = state.sound.riff;
   const padSelect = $("#sound-pad");
-  padSelect.replaceChildren(h("option", { value: APP_PAD }, "Pad do app (sintético)"), ...builtinOptions(pads), ...deviceGroup(false));
+  padSelect.replaceChildren(h("option", { value: APP_PAD }, "Pad do app (sintético)"), ...ownGroup("pad"), ...builtinOptions(pads), ...deviceGroup(false));
   padSelect.value = state.sound.pad;
   updateSoundPhraseField();
   $("#sound-remove").hidden = !bank;
-  $("#sound-load").textContent = bank ? "Trocar o banco do aparelho" : "Carregar banco do aparelho (.sf2)";
+  $("#sound-load").textContent = bank ? "Trocar o banco geral do aparelho" : "Carregar banco geral do aparelho (.sf2)";
+  // o botão SF2 de cada som: marcado quando o som tem banco próprio; o × ao lado tira o banco
+  for (const key of SLOTS) {
+    const has = Boolean(soundFont.slots[key]);
+    const load = document.querySelector(`.slot-load[data-slot="${key}"]`);
+    load.classList.toggle("has-bank", has);
+    load.title = has ? `Banco deste som: ${soundFont.slots[key].name} (${formatSize(soundFont.slots[key].size)}). Toque para trocar.` : load.getAttribute("aria-label");
+    document.querySelector(`.slot-remove[data-slot="${key}"]`).hidden = !has;
+  }
   const label = (value) => {
     const patch = parsePatchValue(value);
     if (!patch) return "";
+    if (patch.slot) return soundFont.slots[patch.slot]?.presets.find((p) => slotPatchValue(patch.slot, p) === value)?.name ?? "";
     if (patch.bank !== "aparelho") return BUILTIN_BANKS.find((b) => b.id === patch.bank)?.label ?? "";
     return presets.find((p) => patchValue(p) === value)?.name ?? "";
   };
@@ -1896,8 +1918,66 @@ async function chooseSoundFile(file) {
   }
 }
 
+const SLOT_NAMES = { chords: "os acordes", phrase: "a frase", bass: "o baixo", riff: "o riff", pad: "o pad", drums: "a bateria e a percussão" };
+/** No banco de um som, o instrumento que faz mais sentido para ele (pelo nome); sem achar, o primeiro. */
+function slotSuggestion(slot, presets) {
+  const hints = { bass: /bass|baixo|contrab/i, pad: /pad|string|cordas|choir|coro/i, riff: /guitar|guitarra|synth|lead/i };
+  if (slot === "drums") return presets.find((p) => p.isDrum) ?? null;
+  const usable = presets.filter((p) => !p.isDrum);
+  if (slot === "chords") return suggestedPreset(usable.length ? usable : presets);
+  return (hints[slot] && usable.find((p) => hints[slot].test(p.name))) || usable[0] || null;
+}
+
+/** Carrega do aparelho um banco só para um som (acordes, frase, baixo, riff, pad ou bateria). */
+async function chooseSlotFile(slot, file) {
+  if (!file) return;
+  if (file.size > LARGE_BANK_BYTES
+    && !window.confirm(`Este banco tem ${formatSize(file.size)}. No celular, bancos grandes podem travar o app (e cada som com banco próprio soma). Carregar mesmo assim?`)) return;
+  stopPlayback();
+  const slow = setTimeout(() => toast(`Lendo ${file.name}…`), 300);
+  try {
+    const { bank, saved } = await soundFont.loadSlotFile(slot, file);
+    clearTimeout(slow);
+    soundRestored = true;
+    const preset = slotSuggestion(slot, bank.presets);
+    if (!preset) {
+      await soundFont.removeSlot(slot);
+      renderSound();
+      toast(slot === "drums" ? `${bank.name} não tem kit de bateria (só instrumentos melódicos). Use-o em outro som.` : `${bank.name} só tem kits de bateria. Use-o no som da bateria.`, { error: true, timeout: 8000 });
+      return;
+    }
+    state.sound = { ...state.sound, [slot]: slotPatchValue(slot, preset) };
+    saveSoundChoice();
+    renderSound();
+    const count = bank.presets.filter((p) => (slot === "drums" ? p.isDrum : !p.isDrum)).length;
+    toast(saved
+      ? `Banco só para ${SLOT_NAMES[slot]}: ${bank.name} (${formatSize(bank.size)}), ${count} instrumento${count === 1 ? "" : "s"}. Tocando com ${preset.name}.`
+      : `${bank.name} carregado para ${SLOT_NAMES[slot]}, mas não coube para guardar neste aparelho: vale só até fechar o app.`, { timeout: 7000 });
+  } catch (err) {
+    clearTimeout(slow);
+    renderSound();
+    toast(err.message, { error: true, timeout: 8000 });
+  }
+}
+
 function bindSound() {
   loadSoundChoice();
+  let slotWanted = null;
+  document.querySelectorAll(".slot-load").forEach((b) => b.addEventListener("click", () => { slotWanted = b.dataset.slot; $("#slot-file").click(); }));
+  $("#slot-file").addEventListener("change", (e) => {
+    const [file] = e.target.files;
+    e.target.value = "";
+    if (slotWanted) chooseSlotFile(slotWanted, file);
+  });
+  document.querySelectorAll(".slot-remove").forEach((b) => b.addEventListener("click", async () => {
+    const slot = b.dataset.slot;
+    if (!window.confirm(`Tirar ${soundFont.slots[slot]?.name ?? "o banco"} d${SLOT_NAMES[slot]}? (o arquivo sai deste app; no aparelho ele continua)`)) return;
+    stopPlayback();
+    await soundFont.removeSlot(slot);
+    renderSound(); // o som volta ao padrão dele
+    saveSoundChoice();
+    toast(`Banco próprio d${SLOT_NAMES[slot]} tirado.`);
+  }));
   $("#sound-chords").addEventListener("change", (e) => {
     state.sound.chords = e.target.value;
     if (state.playing) stopPlayback();

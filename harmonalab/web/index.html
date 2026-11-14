@@ -281,19 +281,62 @@
       <details class="more panel sound-tools" id="sound-tools">
         <summary><span class="panel-title">Sons <small id="sound-summary">timbre simples</small></span></summary>
         <div class="more-body">
-          <label class="field wide" for="sound-chords"><span class="label">Som dos acordes</span><select id="sound-chords"></select></label>
-          <label class="field wide" for="sound-phrase" id="sound-phrase-field" hidden><span class="label">Som da frase</span><select id="sound-phrase"></select></label>
-          <label class="field wide" for="sound-bass" id="sound-bass-field" hidden><span class="label">Som do baixo</span><select id="sound-bass"></select></label>
-          <label class="field wide" for="sound-riff" id="sound-riff-field" hidden><span class="label">Som do riff</span><select id="sound-riff"></select></label>
-          <label class="field wide" for="sound-pad" id="sound-pad-field" hidden><span class="label">Som do pad</span><select id="sound-pad"></select></label>
-          <label class="field wide" for="sound-drums" id="sound-drums-field" hidden><span class="label">Som da bateria</span><select id="sound-drums"></select></label>
+          <div class="field wide sound-field" id="sound-chords-field">
+            <label class="label" for="sound-chords">Som dos acordes</label>
+            <div class="sound-row">
+              <select id="sound-chords"></select>
+              <button type="button" class="btn secondary small slot-load" data-slot="chords" title="Carregar do aparelho um banco .sf2 só para os acordes" aria-label="Carregar do aparelho um banco de sons só para os acordes">SF2</button>
+              <button type="button" class="btn ghost small danger slot-remove" data-slot="chords" hidden aria-label="Tirar o banco próprio dos acordes">×</button>
+            </div>
+          </div>
+          <div class="field wide sound-field" id="sound-phrase-field" hidden>
+            <label class="label" for="sound-phrase">Som da frase</label>
+            <div class="sound-row">
+              <select id="sound-phrase"></select>
+              <button type="button" class="btn secondary small slot-load" data-slot="phrase" title="Carregar do aparelho um banco .sf2 só para a frase" aria-label="Carregar do aparelho um banco de sons só para a frase">SF2</button>
+              <button type="button" class="btn ghost small danger slot-remove" data-slot="phrase" hidden aria-label="Tirar o banco próprio da frase">×</button>
+            </div>
+          </div>
+          <div class="field wide sound-field" id="sound-bass-field" hidden>
+            <label class="label" for="sound-bass">Som do baixo</label>
+            <div class="sound-row">
+              <select id="sound-bass"></select>
+              <button type="button" class="btn secondary small slot-load" data-slot="bass" title="Carregar do aparelho um banco .sf2 só para o baixo" aria-label="Carregar do aparelho um banco de sons só para o baixo">SF2</button>
+              <button type="button" class="btn ghost small danger slot-remove" data-slot="bass" hidden aria-label="Tirar o banco próprio do baixo">×</button>
+            </div>
+          </div>
+          <div class="field wide sound-field" id="sound-riff-field" hidden>
+            <label class="label" for="sound-riff">Som do riff</label>
+            <div class="sound-row">
+              <select id="sound-riff"></select>
+              <button type="button" class="btn secondary small slot-load" data-slot="riff" title="Carregar do aparelho um banco .sf2 só para o riff" aria-label="Carregar do aparelho um banco de sons só para o riff">SF2</button>
+              <button type="button" class="btn ghost small danger slot-remove" data-slot="riff" hidden aria-label="Tirar o banco próprio do riff">×</button>
+            </div>
+          </div>
+          <div class="field wide sound-field" id="sound-pad-field" hidden>
+            <label class="label" for="sound-pad">Som do pad</label>
+            <div class="sound-row">
+              <select id="sound-pad"></select>
+              <button type="button" class="btn secondary small slot-load" data-slot="pad" title="Carregar do aparelho um banco .sf2 só para o pad" aria-label="Carregar do aparelho um banco de sons só para o pad">SF2</button>
+              <button type="button" class="btn ghost small danger slot-remove" data-slot="pad" hidden aria-label="Tirar o banco próprio do pad">×</button>
+            </div>
+          </div>
+          <div class="field wide sound-field" id="sound-drums-field" hidden>
+            <label class="label" for="sound-drums">Som da bateria e da percussão</label>
+            <div class="sound-row">
+              <select id="sound-drums"></select>
+              <button type="button" class="btn secondary small slot-load" data-slot="drums" title="Carregar do aparelho um banco .sf2 só para a bateria e a percussão" aria-label="Carregar do aparelho um banco de sons só para a bateria e a percussão">SF2</button>
+              <button type="button" class="btn ghost small danger slot-remove" data-slot="drums" hidden aria-label="Tirar o banco próprio da bateria e a percussão">×</button>
+            </div>
+          </div>
           <p class="ai-help wide" id="sound-simple-hint">No timbre simples, tudo toca com sons sintéticos leves. Escolha um som do app (piano elétrico, piano) para ouvir com instrumentos de verdade: baixo, cordas e bateria acústica.</p>
           <div class="sound-actions wide">
             <button type="button" class="btn secondary small" id="sound-load">Carregar banco de sons (.sf2)</button>
             <button type="button" class="btn ghost small danger" id="sound-remove" hidden>Remover banco</button>
             <input type="file" id="sound-file" accept=".sf2,.sf3,.dls" hidden>
+            <input type="file" id="slot-file" accept=".sf2,.sf3,.dls" hidden>
           </div>
-          <p class="ai-help wide" id="sound-info">Com um banco de sons (.sf2) o app toca exatamente o MIDI que você exporta, com o instrumento escolhido. Os bancos do app baixam só na primeira vez que você os escolhe. Um banco seu, carregado do aparelho, fica só neste aparelho.</p>
+          <p class="ai-help wide" id="sound-info">O botão <strong>SF2</strong> ao lado de cada som carrega do aparelho um banco só para aquele som (a percussão usa o banco da bateria). O botão abaixo carrega um banco geral, que oferece os instrumentos dele a todos os sons. Os bancos do aparelho ficam só nele; vários bancos grandes juntos podem pesar no navegador.</p>
         </div>
       </details>
       <details class="more panel voicing-tools" id="voicing-tools">

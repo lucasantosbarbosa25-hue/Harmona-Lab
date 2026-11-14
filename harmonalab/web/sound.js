@@ -1,6 +1,8 @@
 // Pré-escuta com bancos de sons (.sf2): o SpessaSynth toca exatamente o arquivo MIDI que o app exporta.
-// Há dois tipos de banco: os que vêm com o app (kb/sons.js, baixados de sons/ só quando escolhidos) e um carregado do
-// aparelho pela pessoa, que fica guardado só nele (IndexedDB). Cada canal (acordes, frase, bateria) pode usar um banco.
+// Há três tipos de banco: os que vêm com o app (kb/sons.js, baixados de sons/ só quando escolhidos); o banco GERAL
+// carregado do aparelho, que oferece os instrumentos dele a todos os sons; e um banco POR SOM (SLOTS: acordes, frase,
+// baixo, riff, pad, bateria), carregado do aparelho só para aquela camada. Todos os do aparelho ficam guardados só nele
+// (IndexedDB). Cada banco por som entra no tocador com um deslocamento de banco próprio, para não colidir com os outros.
 // A biblioteca (vendor/spessasynth, Apache-2.0) só é carregada quando alguém usa um banco: quem não usa não paga nada.
 
 import { BUILTIN_BANKS, findBuiltin } from "./kb/sons.js";
@@ -15,6 +17,12 @@ const builtinOffset = (id) => 64 + BUILTIN_BANKS.findIndex((b) => b.id === id);
 const DB_NAME = "harmonalab";
 const STORE = "sons";
 const KEY = "banco";
+/** Os sons que podem ter um banco próprio do aparelho (a percussão toca no canal da bateria: usa o banco dela). */
+export const SLOTS = ["chords", "phrase", "bass", "riff", "pad", "drums"];
+/** O deslocamento de banco de cada um (os embutidos usam de 64 em diante; aqui, de 4 em 4, do 104 ao 124). */
+const SLOT_OFFSET = { chords: 104, phrase: 108, bass: 112, riff: 116, pad: 120, drums: 124 };
+const slotId = (slot) => `${DEVICE}-${slot}`;
+const slotKey = (slot) => `${KEY}:${slot}`;
 export const SIMPLE = "simple"; // o timbre simples do app (osciladores)
 export const SAME = "same"; // a frase usa o mesmo som dos acordes
 export const NO_DRUMS = "none"; // bateria muda na escuta (no MIDI ela continua)
@@ -34,11 +42,15 @@ export const LARGE_BANK_BYTES = 200 * 1024 * 1024;
  * parsePatchValue devolve { bank: "aparelho" | id, bankMSB, bankLSB, program } ou null.
  */
 export const patchValue = (p) => `sf:${p.bankMSB}:${p.bankLSB}:${p.program}`;
+/** Instrumento do banco carregado só para um som: "sf@bass:112:0:33" (o banco já vem com o deslocamento do som). */
+export const slotPatchValue = (slot, p) => `sf@${slot}:${p.bankMSB}:${p.bankLSB}:${p.program}`;
 export const builtinValue = (id) => `kb:${id}`;
 export function parsePatchValue(value) {
   const text = String(value || "");
   const m = /^sf:(\d+):(\d+):(\d+)$/.exec(text);
   if (m) return { bank: DEVICE, bankMSB: Number(m[1]), bankLSB: Number(m[2]), program: Number(m[3]) };
+  const own = /^sf@(\w+):(\d+):(\d+):(\d+)$/.exec(text);
+  if (own && SLOTS.includes(own[1])) return { bank: slotId(own[1]), slot: own[1], bankMSB: Number(own[2]), bankLSB: Number(own[3]), program: Number(own[4]) };
   const k = /^kb:([\w-]+)$/.exec(text);
   const builtin = k ? findBuiltin(k[1]) : null;
   return builtin ? { bank: builtin.id, ...builtin.preset } : null;
@@ -113,13 +125,13 @@ async function withStore(mode, action) {
   }
 }
 
-/** Banco guardado: { name, size, presets, blob } ou null. */
-export async function loadSavedBank() {
-  try { return (await withStore("readonly", (s) => s.get(KEY))) ?? null; } catch { return null; }
+/** Banco guardado: { name, size, presets, blob } ou null. `key`: o geral (KEY) ou o de um som (slotKey). */
+export async function loadSavedBank(key = KEY) {
+  try { return (await withStore("readonly", (s) => s.get(key))) ?? null; } catch { return null; }
 }
-const saveBank = (entry) => withStore("readwrite", (s) => s.put(entry, KEY));
-export async function deleteSavedBank() {
-  try { await withStore("readwrite", (s) => s.delete(KEY)); } catch { /* nada guardado */ }
+const saveBank = (entry, key = KEY) => withStore("readwrite", (s) => s.put(entry, key));
+export async function deleteSavedBank(key = KEY) {
+  try { await withStore("readwrite", (s) => s.delete(key)); } catch { /* nada guardado */ }
 }
 
 // ---------------------------------------------------------------- tocador
@@ -131,6 +143,8 @@ export class SoundFontPlayer {
     this.seq = null;
     this.bank = null; // { name, size, presets } do banco guardado no aparelho
     this.loadedInSynth = false; // o banco do aparelho já está no tocador
+    this.slots = {}; // o banco próprio de cada som: { chords: { name, size, presets }, ... }
+    this.slotLoaded = new Set(); // os que já estão no tocador
     this.builtinLoaded = new Set(); // bancos embutidos já no tocador
     this.stats = { noteOns: 0, songs: 0 }; // para conferência (testes)
     this.onEnd = null;
@@ -140,6 +154,10 @@ export class SoundFontPlayer {
   async restore() {
     const saved = await loadSavedBank();
     this.bank = saved ? { name: saved.name, size: saved.size, presets: saved.presets } : null;
+    for (const slot of SLOTS) {
+      const own = await loadSavedBank(slotKey(slot));
+      if (own) this.slots[slot] = { name: own.name, size: own.size, presets: own.presets };
+    }
     return this.bank;
   }
 
@@ -193,6 +211,73 @@ export class SoundFontPlayer {
     return presets;
   }
 
+  /**
+   * Coloca no tocador o banco próprio de um som, com o deslocamento dele, e devolve só os instrumentos DESTE arquivo
+   * (os que apareceram na lista do tocador depois de carregar), já com o banco deslocado.
+   */
+  async #addSlotToSynth(slot, buffer) {
+    const problem = soundBankProblem(buffer);
+    if (problem) throw new Error(problem);
+    await this.#ensureSynth();
+    const id = slotId(slot);
+    if (this.slotLoaded.has(slot)) {
+      await this.synth.soundBankManager.deleteSoundBank(id).catch(() => {});
+      this.slotLoaded.delete(slot);
+      await new Promise((resolve) => setTimeout(resolve, 150)); // a lista do tocador se atualiza
+    }
+    const key = (p) => `${p.bankMSB}:${p.bankLSB}:${p.program}:${p.isDrum ? 1 : 0}`;
+    const before = new Set((this.synth.presetList || []).map(key));
+    const listed = new Promise((resolve) => {
+      this.synth.eventHandler.addEvent("presetListChange", `harmona-${slot}`, (list) => { if (list?.length) resolve(list); });
+      setTimeout(() => resolve(this.synth.presetList), 5000);
+    });
+    try {
+      await withTimeout(this.synth.soundBankManager.addSoundBank(buffer, id, SLOT_OFFSET[slot]), 60000, "o arquivo demorou demais para abrir");
+    } catch (err) {
+      this.synth.eventHandler.removeEvent("presetListChange", `harmona-${slot}`);
+      throw new Error(`Não consegui ler este arquivo como banco de sons: ${err?.message || err}`);
+    }
+    const list = await listed;
+    this.synth.eventHandler.removeEvent("presetListChange", `harmona-${slot}`);
+    this.slotLoaded.add(slot);
+    // só os deste arquivo, e só os que cabem num número de banco MIDI (até 127) depois do deslocamento
+    const presets = (list || []).filter((p) => !before.has(key(p)) && p.bankMSB >= SLOT_OFFSET[slot] && p.bankMSB <= 127)
+      .map(({ name, program, bankMSB, bankLSB, isDrum }) => ({ name, program, bankMSB, bankLSB, isDrum: Boolean(isDrum) }));
+    if (!presets.length) {
+      // não serve: sai do tocador (o banco que estava guardado para este som volta na próxima vez que ele tocar)
+      await this.synth.soundBankManager.deleteSoundBank(id).catch(() => {});
+      this.slotLoaded.delete(slot);
+      throw new Error("O arquivo abriu, mas não tem nenhum instrumento que dê para usar neste som. Se for um banco só de bateria, carregue-o no som da bateria.");
+    }
+    return presets;
+  }
+
+  /** Banco escolhido só para um som (slot de SLOTS): carrega, confere e guarda no aparelho. Devolve { bank, saved }. */
+  async loadSlotFile(slot, file) {
+    const buffer = await file.arrayBuffer();
+    const presets = await this.#addSlotToSynth(slot, buffer.slice(0));
+    this.slots[slot] = { name: file.name, size: file.size, presets };
+    let saved = true;
+    try { await saveBank({ ...this.slots[slot], blob: new Blob([buffer]) }, slotKey(slot)); } catch { saved = false; }
+    return { bank: this.slots[slot], saved };
+  }
+
+  async removeSlot(slot) {
+    this.stop();
+    if (this.slotLoaded.has(slot)) await this.synth.soundBankManager.deleteSoundBank(slotId(slot)).catch(() => {});
+    this.slotLoaded.delete(slot);
+    delete this.slots[slot];
+    await deleteSavedBank(slotKey(slot));
+  }
+
+  /** Garante no tocador o banco próprio de um som (na primeira vez que alguém toca depois de abrir o app). */
+  async #ensureSlot(slot) {
+    if (this.slotLoaded.has(slot)) return;
+    const saved = await loadSavedBank(slotKey(slot));
+    if (!saved?.blob) throw new Error("O banco deste som não está mais guardado neste aparelho. Carregue o arquivo de novo.");
+    this.slots[slot] = { name: saved.name, size: saved.size, presets: await this.#addSlotToSynth(slot, await saved.blob.arrayBuffer()) };
+  }
+
   /** Arquivo escolhido pela pessoa: carrega, confere e guarda no aparelho. Devolve { bank, saved }. */
   async loadFile(file) {
     const buffer = await file.arrayBuffer();
@@ -242,6 +327,10 @@ export class SoundFontPlayer {
   async #resolve(value) {
     const patch = parsePatchValue(value);
     if (!patch) return null;
+    if (patch.slot) {
+      await this.#ensureSlot(patch.slot);
+      return patch; // o banco deste som já foi guardado com o deslocamento
+    }
     if (patch.bank === DEVICE) {
       await this.#ensureBank();
       return patch;
@@ -287,7 +376,7 @@ export class SoundFontPlayer {
     if (drumPatch) {
       // o banco da bateria escolhida fica na frente, para o canal 10 pegar o kit dele
       const bank = parsePatchValue(drums).bank;
-      const first = bank === DEVICE ? DEVICE : `kb-${bank}`;
+      const first = bank === DEVICE || bank.startsWith(`${DEVICE}-`) ? bank : `kb-${bank}`;
       const order = this.synth.soundBankManager.priorityOrder;
       this.synth.soundBankManager.priorityOrder = [first, ...order.filter((id) => id !== first)];
       this.#setPatch(DRUM_CHANNEL, drumPatch);
@@ -297,6 +386,13 @@ export class SoundFontPlayer {
     this.stats.songs += 1;
     this.seq.loadNewSongList([{ binary: bytes.slice().buffer, fileName: "harmona-lab.mid" }]);
     this.seq.play();
+  }
+
+  /** Para conferência (testes): o instrumento que cada canal está usando agora: { 0: "Tine Electric Piano", ... }. */
+  channelPatches() {
+    const out = {};
+    for (const channel of [CHORD_CHANNEL, PHRASE_CHANNEL, BASS_CHANNEL, PAD_CHANNEL, RIFF_CHANNEL, DRUM_CHANNEL]) out[channel] = this.synth?.midiChannels[channel]?.patch?.name ?? "";
+    return out;
   }
 
   stop() {

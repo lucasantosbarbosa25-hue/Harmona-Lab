@@ -294,6 +294,14 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **Um banco de sons do aparelho para cada som.** No painel **Sons**, cada som (acordes, frase, baixo, riff, pad, bateria)
+  tem ao lado um botão **SF2**: ele carrega do aparelho um banco `.sf2`/`.sf3` só para aquele som, e os instrumentos do
+  banco aparecem no menu dele, em "Banco deste som". O botão fica marcado quando o som tem banco próprio, e o **×** ao lado
+  tira o banco. A percussão toca no canal da bateria, então usa o banco dela. O banco geral ("Carregar banco geral do
+  aparelho") continua existindo e oferece os instrumentos dele a todos os sons. Cada banco próprio entra no tocador com um
+  deslocamento de banco próprio (104 a 124), para não colidir com os outros; todos ficam guardados só no aparelho
+  (IndexedDB) e voltam ao reabrir. Vários bancos grandes ao mesmo tempo somam na memória do navegador.
+
   **O link da IA leva a progressão depois do `?`.** As instruções (no app, em `ia.md` e na skill) agora pedem o link no
   formato `https://harmona-lab.pages.dev/?t=...&p=...` (e `?cont=...` para uma parte, `?z=...` nos scripts da skill). O
   motivo: alguns chats, como o Gemini, passam o link por um redirecionador que corta o que vem depois do `#`, e o app abria
