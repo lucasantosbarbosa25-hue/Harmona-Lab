@@ -958,11 +958,9 @@ function renderGuide() {
     actions = [button(`Ir para o pedido da parte ${waiting.name}`, () => selectPart(waiting.index, { focus: true }), true)];
   } else {
     step = hasVoice ? "Passo 3" : "Passo 2";
-    text = "Ouça e ajuste. Depois, crie a próxima parte (no “+” das partes) ou gere o MIDI.";
+    text = "Ouça e ajuste. Depois, crie a próxima parte ou gere o MIDI.";
     actions = [
-      button("Ouvir", () => { state.listen.range = null; if (!state.playing) playAll(); }, true),
-      button("Criar a próxima parte", () => { formAdding = true; formSelected = -1; renderForm(); $("#song").scrollIntoView({ behavior: "smooth", block: "start" }); }),
-      button("Gerar MIDI", exportMidi),
+      button("Próxima parte", () => { formAdding = true; formSelected = -1; renderForm(); $("#song").scrollIntoView({ behavior: "smooth", block: "start" }); }, true),
     ];
   }
   $("#guide-step").textContent = step;
@@ -1076,7 +1074,7 @@ function renderSummary() {
     );
   }
   const exportBtn = $("#export");
-  exportBtn.replaceChildren(icon("download"), "Gerar MIDI");
+  exportBtn.replaceChildren(icon("download"), h("span", null, h("span", { class: "long" }, "Gerar "), "MIDI"));
   if (errors) exportBtn.append(h("span", { class: "badge-count", title: `${errors} erro(s)` }, errors));
 }
 
@@ -2134,6 +2132,39 @@ function bindUi() {
     revoiceChords({ pedal });
   });
   $("#export").addEventListener("click", exportMidi);
+  // o guia do topo acompanha a rolagem; quando fica preso no alto da tela, encolhe (classe "stuck")
+  {
+    // O guia do topo acompanha a rolagem; quando fica preso no alto da tela, encolhe (classe "stuck"). Preso, ele fica
+    // mais baixo: a margem de baixo compensa a diferença, para a página não mudar de tamanho (senão a tela pularia).
+    const guide = $("#guide");
+    const sentinel = $("#guide-sentinel");
+    let waiting = false;
+    const check = () => {
+      waiting = false;
+      const top = sentinel.getBoundingClientRect().top;
+      const was = guide.classList.contains("stuck");
+      const stuck = was ? top < 8 : top < 0; // com folga, para não ficar prendendo e soltando no limite
+      if (stuck === was || guide.hidden) return;
+      // A altura do guia preso é medida numa cópia invisível, fora do fluxo. Assim a classe e a margem mudam juntas, sem
+      // nenhum instante em que a página fique mais curta (senão o navegador "corrigiria" a rolagem e a tela pularia).
+      if (stuck) {
+        const copy = guide.cloneNode(true);
+        copy.classList.add("stuck");
+        copy.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;top:0;left:0;margin:0;width:${guide.offsetWidth}px`;
+        const before = guide.offsetHeight;
+        guide.parentNode.append(copy);
+        const after = copy.offsetHeight;
+        copy.remove();
+        guide.style.marginBottom = `${14 + Math.max(0, before - after)}px`;
+      } else {
+        guide.style.marginBottom = "";
+      }
+      guide.classList.toggle("stuck", stuck);
+    };
+    const schedule = () => { if (!waiting) { waiting = true; requestAnimationFrame(check); } };
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+  }
   $("#export-go").addEventListener("click", exportChosen);
   $("#export-perc-single").addEventListener("change", renderExportNote);
   $("#chords-toggle-all").addEventListener("click", () => {

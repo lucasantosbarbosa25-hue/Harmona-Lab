@@ -32,10 +32,20 @@
   </header>
 
   <main id="main">
-    <div class="guide" id="guide" role="status" aria-live="polite" hidden>
-      <span class="guide-step" id="guide-step"></span>
-      <p id="guide-text"></p>
-      <div class="guide-actions" id="guide-actions"></div>
+    <div class="guide-sentinel" id="guide-sentinel" aria-hidden="true"></div>
+    <div class="guide" id="guide" hidden>
+      <div class="guide-main">
+        <button class="btn primary guide-play" id="play-all"></button>
+        <div class="guide-copy" role="status" aria-live="polite">
+          <span class="guide-step" id="guide-step"></span>
+          <p id="guide-text"></p>
+        </div>
+      </div>
+      <div class="guide-row">
+        <div class="guide-actions" id="guide-actions"></div>
+        <button class="btn secondary small" id="export"></button>
+      </div>
+      <p class="summary" id="summary" aria-live="polite"></p>
     </div>
     <section class="card assistant" id="assistant" aria-labelledby="assistant-heading">
       <div>
@@ -318,15 +328,6 @@
     </details>
   </main>
 
-  <footer class="actionbar">
-    <div class="actionbar-inner">
-      <p class="summary" id="summary" aria-live="polite"></p>
-      <div class="actions">
-        <button class="btn secondary" id="play-all"></button>
-        <button class="btn primary" id="export"></button>
-      </div>
-    </div>
-  </footer>
 
   <dialog id="export-dialog" class="sheet" aria-labelledby="export-title">
     <form method="dialog" class="sheet-body export-body">

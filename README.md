@@ -294,6 +294,10 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **O guia do topo acompanha a rolagem.** O guia (o próximo passo e os botões dele) fica preso no alto da tela enquanto
+  você rola, e traz o **play/pause** e o **Gerar MIDI**; por isso a barra fixa de baixo saiu. Preso, ele encolhe: ficam o
+  passo e os botões, e a página não muda de tamanho (nada de pulos).
+
   **Tela mais simples.** Um **guia** no topo diz o próximo passo conforme o que a música já tem (cantar, pedir a
   harmonia, continuar a parte nova, corrigir erros, gerar o MIDI), com os botões que levam até lá. Os **cartões dos acordes
   vêm recolhidos** (nome, função, teclado e frase); "Editar" abre as notas e o resto, "Abrir todos" abre a lista inteira, e

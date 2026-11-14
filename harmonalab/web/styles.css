@@ -39,7 +39,7 @@
   --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 4px 16px rgb(0 0 0 / .04);
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  --bar-h: 76px;
+  --bar-h: 0px;
   color-scheme: light;
 }
 
@@ -204,7 +204,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 
 .chords { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 
-.chord { padding: 14px 14px 10px; display: grid; gap: 14px; scroll-margin: 16px; transition: border-color .2s, box-shadow .2s; }
+.chord { padding: 14px 14px 10px; display: grid; gap: 14px; scroll-margin: 90px 0 16px; transition: border-color .2s, box-shadow .2s; }
 .chord.is-playing { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
 .chord.has-error { border-color: color-mix(in srgb, var(--error) 55%, var(--border)); }
 
@@ -396,20 +396,9 @@ details[open].more > summary::before, details[open].help > summary::before { tra
 .ai-help a { color: var(--focus); }
 dialog.sheet { max-height: 92vh; overflow-y: auto; }
 
-/* ---------- barra inferior ---------- */
-.actionbar {
-  position: fixed; inset: auto 0 0 0; z-index: 10;
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border-top: 1px solid var(--border);
-  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
-}
-.actionbar-inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 12px; }
-.summary { flex: 1; min-width: 0; font-size: .82rem; color: var(--muted); line-height: 1.3; font-variant-numeric: tabular-nums; }
-.summary strong { color: var(--text); display: block; font-size: .95rem; }
-.summary, .summary strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.actions { display: flex; gap: 8px; }
-@media (max-width: 479px) { #play-all { width: 44px; padding: 0; } #play-all .btn-text { display: none; } }
+/* ---------- resumo (dentro do guia do topo) ---------- */
+.summary { margin: 0; font-size: .8rem; color: var(--muted); line-height: 1.3; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.summary strong { color: var(--text); font-weight: 600; margin-right: 6px; }
 
 /* ---------- menu (bottom sheet no celular) ---------- */
 dialog.sheet {
@@ -593,13 +582,32 @@ details[open].sound-tools > summary { margin-bottom: 4px; }
 .chord[hidden] { display: none; }
 .chord-toggle { flex: none; }
 .chords-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
-.guide { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 12px; padding: 12px 14px; margin: 0 0 14px; border-radius: var(--radius);
-  background: color-mix(in srgb, var(--primary) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); }
+/* O guia do topo: o próximo passo, o play/pause e o Gerar MIDI. Acompanha a rolagem (fica preso no alto da tela);
+   preso, encolhe: some a frase e o resumo, ficam o passo e os botões. */
+.guide { position: sticky; top: calc(6px + env(safe-area-inset-top)); z-index: 10; display: grid; gap: 8px; padding: 10px 12px; margin: 0 0 14px; border-radius: var(--radius);
+  background: color-mix(in srgb, var(--primary) 12%, var(--surface)); border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border)); box-shadow: var(--shadow); }
 .guide[hidden] { display: none; }
-.guide-step { font-weight: 800; color: var(--primary); font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; }
-.guide p { margin: 0; font-weight: 600; }
-.guide-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; }
-.guide-actions:empty { display: none; }
+.guide, .guide-sentinel { overflow-anchor: none; } /* o guia encolhe ao prender: ele não serve de âncora da rolagem */
+.guide-main { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.guide-play { flex: none; width: 48px; min-height: 48px; padding: 0; border-radius: 50%; }
+.guide-play .btn-text { display: none; }
+.guide-copy { min-width: 0; }
+.guide-step { display: block; font-weight: 800; color: var(--primary); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+.guide p#guide-text { margin: 0; font-weight: 600; line-height: 1.3; }
+.guide-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.guide-actions { display: contents; }
+.guide.stuck { padding: 8px 10px; gap: 6px; box-shadow: 0 6px 20px rgb(0 0 0 / .18); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: color-mix(in srgb, color-mix(in srgb, var(--primary) 14%, var(--surface)) 94%, transparent); }
+.guide.stuck #guide-text, .guide.stuck .summary { display: none; }
+.guide.stuck .guide-main { float: left; margin-right: 8px; }
+.guide.stuck { display: flex; flex-wrap: wrap; align-items: center; }
+.guide.stuck .guide-row { flex: 1 1 0; min-width: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.guide.stuck .guide-row .btn { flex: 0 1 auto; min-width: 0; min-height: 40px; padding: 0 12px; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: inline-block; line-height: 38px; }
+.guide.stuck #export { flex: none; margin-left: auto; display: inline-flex; line-height: normal; }
+.guide.stuck #export .long { display: none; }
+.guide.stuck .guide-play { width: 44px; min-height: 44px; }
+.guide.stuck .guide-step { font-size: .72rem; }
+.guide-sentinel { height: 1px; margin-bottom: -1px; }
 .canto-more { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 6px 12px; }
 .canto-more summary { cursor: pointer; font-weight: 700; min-height: 40px; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .canto-more summary small { font-weight: 400; color: var(--muted); }
@@ -648,3 +656,4 @@ details[open].sound-tools > summary { margin-bottom: 4px; }
 .ai-part.add { border-style: dashed; border-color: var(--border); background: transparent; color: var(--muted); }
 .ai-task { margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .92rem; }
 .beats-input[readonly] { background: var(--surface-2); color: var(--muted); }
+html { scroll-padding-top: 84px; } /* o guia preso no alto não cobre o que a tela foi mostrar */
