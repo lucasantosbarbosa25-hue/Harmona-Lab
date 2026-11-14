@@ -923,49 +923,102 @@ const ISSUE_ICON = { error: "error", warning: "warning", info: "info" };
 const issueItem = (issue) => h("li", { class: `issue ${issue.level}` }, icon(ISSUE_ICON[issue.level]), h("span", null, issue.message));
 
 /**
- * O guia do topo: uma linha que diz o próximo passo, conforme o que a música já tem (melodia, harmonia, parte nova
- * esperando a harmonia, erros), com os botões que levam até lá.
+ * O guia do topo: o passo a passo da parte em que a pessoa está. São seis passos, sempre os mesmos:
+ *   1 Melodia (cantar, importar um MIDI ou pular)   2 Pedido à IA   3 Ritmo e levada   4 Sons   5 Ouvir   6 Próxima parte
+ * O guia mostra o primeiro passo que falta e avança sozinho quando ele é cumprido; os números levam a qualquer passo, e
+ * "Pular" segue adiante. Ele só conduz: a tela continua toda à mão. Com erro no projeto, o guia manda corrigir primeiro.
  */
+const GUIDE_STEPS = ["Melodia", "Pedido", "Ritmo", "Sons", "Ouvir", "Próxima"];
+const guide = { visited: new Set(), manual: null, auto: null, part: "" };
+/** Marca um passo como visto: os da música toda (ritmo, sons) valem para todas as partes; os outros, só para a parte. */
+function guideVisit(step, part = getTarget()) {
+  guide.visited.add(step === 3 || step === 4 ? `${step}` : `${step}:${part?.index ?? 0}:${part?.name ?? ""}`);
+}
+const guideSeen = (step, part) => guide.visited.has(step === 3 || step === 4 ? `${step}` : `${step}:${part?.index ?? 0}:${part?.name ?? ""}`);
+
 function renderGuide() {
-  const p = state.project;
-  const hasVoice = Boolean(String(p.voice || "").trim());
-  const harmony = hasProgression();
   const errors = (state.report?.issues || []).filter((i) => i.level === "error").length;
-  const waiting = harmony ? getParts().find((part) => part.empty) ?? null : null;
-  const go = (selector) => () => $(selector).scrollIntoView({ behavior: "smooth", block: "start" });
-  const button = (label, run, primary = false) => h("button", { type: "button", class: `btn small ${primary ? "primary" : "secondary"}`, onclick: run }, label);
-  const sing = () => $("#canto-open").click();
-  let step;
+  const part = getTarget();
+  const fresh = !part || part.kind === "new"; // ainda não há música (ou é o exemplo): os passos criam a parte A
+  const name = fresh ? "A" : part.name;
+  const groove = state.project.groove || {};
+  const done = [
+    fresh ? Boolean(String(state.project.voice || "").trim()) || guideSeen(1, part) : part.melody || !part.empty || guideSeen(1, part),
+    !fresh && !part.empty,
+    guideSeen(3, part) || Boolean(groove.comp || groove.drums || groove.bass),
+    guideSeen(4, part),
+    guideSeen(5, part),
+    false,
+  ];
+  // sem harmonia, ritmo, sons e ouvir ainda não fazem sentido: o passo que falta é o pedido
+  let auto = done.findIndex((d) => !d);
+  if (!done[1] && auto > 1) auto = 1;
+  const key = `${fresh ? "new" : `${part.index}:${part.name}`}`;
+  if (guide.part !== key || guide.auto !== auto) guide.manual = null; // mudou a parte ou a música andou: o guia volta a conduzir
+  guide.part = key;
+  guide.auto = auto;
+  const current = guide.manual ?? auto;
+  const go = (selector) => $(selector).scrollIntoView({ behavior: "smooth", block: "start" });
+  const button = (label, run, kind = "secondary") => h("button", { type: "button", class: `btn small ${kind}`, onclick: run }, label);
+  const next = (label = "Pular") => button(label, () => { guideVisit(current + 1, part); guide.manual = null; renderGuide(); }, "ghost");
+  const sing = (target) => { $("#canto-open").click(); if (target) $(`#canto-target [data-target="${target}"]:not([hidden])`)?.click(); };
+  let label;
   let text;
   let actions;
   if (errors) {
-    step = "Corrigir";
-    text = errors === 1 ? "Há 1 erro para corrigir antes de gerar o MIDI." : `Há ${errors} erros para corrigir antes de gerar o MIDI.`;
-    actions = [button("Ver o primeiro erro", focusFirstError, true)];
-  } else if (!hasVoice && !harmony) {
-    step = "Passo 1";
-    text = "Comece cantando uma melodia, ou descreva a progressão que você quer.";
-    actions = [button("Cantar uma melodia", sing, true), button("Escrever o pedido", () => { go("#assistant")(); $("#ai-prompt").focus({ preventScroll: true }); })];
-  } else if (hasVoice && !harmony) {
-    step = "Passo 2";
-    text = "A melodia está pronta. Agora peça a harmonia: copie o pedido para a sua IA e abra o link que ela mandar.";
-    actions = [button("Ir para o pedido", go("#assistant"), true), button("Cantar de novo", sing)];
-  } else if (waiting) {
-    step = `Parte ${waiting.name}`;
-    text = waiting.melody
-      ? `A parte ${waiting.name} já tem melodia; falta a harmonia. Copie o pedido dela para a sua IA.`
-      : `A parte ${waiting.name} está vazia. Escreva o pedido dela e copie para a sua IA.`;
-    actions = [button(`Ir para o pedido da parte ${waiting.name}`, () => selectPart(waiting.index, { focus: true }), true)];
-  } else {
-    step = hasVoice ? "Passo 3" : "Passo 2";
-    text = "Ouça e ajuste. Depois, crie a próxima parte ou gere o MIDI.";
+    label = "Corrigir";
+    text = errors === 1 ? "Há 1 erro para corrigir antes de seguir." : `Há ${errors} erros para corrigir antes de seguir.`;
+    actions = [button("Ver o primeiro erro", focusFirstError, "primary")];
+  } else if (current === 0) {
+    const over = !fresh && !part.empty && !part.melody; // já tem harmonia: canta-se por cima dela
+    if (fresh || over) {
+      text = over ? `Quer uma melodia na parte ${name}? Cante por cima da harmonia dela (de fone).` : "Comece pela melodia: cante ou traga um MIDI. Se preferir começar pela harmonia, pule.";
+      actions = [
+        button(over ? "Cantar por cima" : "Cantar", () => sing(over ? "parte" : null), "primary"),
+        ...(over ? [] : [button("Importar MIDI", () => { sing(null); $("#canto-midi").click(); })]),
+        next(),
+      ];
+    } else if (part.melody) {
+      text = `A parte ${name} já tem melodia.`;
+      actions = [button("Editar melodia", () => $("#voice-edit").click(), "primary"), next("Continuar")];
+    } else {
+      text = `A parte ${name} nasce do pedido. A melodia pode vir depois: com a harmonia pronta, você canta por cima.`;
+      actions = [next("Continuar")];
+      actions[0].className = "btn small primary";
+    }
+  } else if (current === 1) {
+    text = done[1] ? `A parte ${name} já tem harmonia. Para mudar algo nela, escreva o que quer e copie o pedido.`
+      : fresh ? "Descreva a música, copie o pedido para a sua IA e abra o link que ela mandar."
+        : `Escreva o pedido da parte ${name}, copie para a sua IA e abra o link que ela mandar.`;
+    const open = () => { if (fresh) { go("#assistant"); $("#ai-prompt").focus({ preventScroll: true }); } else selectPart(part.index, { focus: true }); };
+    actions = [button(done[1] ? "Ajustar pelo pedido" : "Escrever o pedido", open, "primary"), ...(done[1] ? [next("Continuar")] : [])];
+  } else if (current === 2) {
+    text = "Escolha o estilo, a levada dos acordes, a bateria e o baixo. Vale para a música toda.";
+    actions = [button("Escolher ritmo e levada", () => { guideVisit(3, part); go("#groove"); renderGuide(); }, "primary"), next()];
+  } else if (current === 3) {
+    text = "Escolha os sons de cada camada (acordes, frase, baixo, bateria).";
+    actions = [button("Escolher sons", () => { guideVisit(4, part); $("#sound-tools").open = true; go("#sound-tools"); renderGuide(); }, "primary"), next()];
+  } else if (current === 4) {
+    text = fresh ? "Ouça a música." : `Ouça a parte ${name} e ajuste o que quiser.`;
     actions = [
-      button("Próxima parte", () => { formAdding = true; formSelected = -1; renderForm(); $("#song").scrollIntoView({ behavior: "smooth", block: "start" }); }, true),
+      button(fresh ? "Ouvir" : `Ouvir a parte ${name}`, () => { guideVisit(5, part); if (fresh) { state.listen.range = null; if (!state.playing) playAll(); } else playRange(part.from, part.to); renderGuide(); }, "primary"),
+      next("Continuar"),
     ];
+  } else {
+    text = "Parte pronta. Crie a próxima parte ou gere o MIDI.";
+    actions = [button("Próxima parte", () => { formAdding = true; formSelected = -1; renderForm(); go("#song"); }, "primary")];
   }
-  $("#guide-step").textContent = step;
+  if (!errors) label = `Passo ${current + 1} de ${GUIDE_STEPS.length}${fresh ? "" : ` · Parte ${name}`}`;
+  $("#guide-step").replaceChildren(h("span", { class: "long" }, label), h("span", { class: "short" }, errors ? "!" : `${current + 1}/${GUIDE_STEPS.length}`));
   $("#guide-text").textContent = text;
   $("#guide-actions").replaceChildren(...actions);
+  // os números: o passo atual em destaque, os cumpridos marcados; tocar leva ao passo
+  $("#guide-steps").hidden = Boolean(errors);
+  $("#guide-steps").replaceChildren(...GUIDE_STEPS.map((title, i) => h("button", {
+    type: "button", class: `guide-dot${i === current ? " current" : ""}${done[i] ? " done" : ""}`, "aria-current": i === current ? "step" : null,
+    "aria-label": `Passo ${i + 1}: ${title}${done[i] ? " (feito)" : ""}`, disabled: !done[1] && i > 1, // sem harmonia, os passos de depois esperam
+    onclick: () => { guide.manual = i; renderGuide(); },
+  }, h("b", null, String(i + 1)), h("span", null, title))));
   $("#guide").hidden = false;
 }
 
@@ -2124,7 +2177,10 @@ function bindUi() {
   renderPlayButton();
   document.querySelectorAll(".menu-item[data-icon]").forEach((b) => b.prepend(icon(b.dataset.icon)));
 
-  $("#play-all").addEventListener("click", () => { if (!state.playing) state.listen.range = null; playAll(); });
+  $("#play-all").addEventListener("click", () => {
+    if (!state.playing) { state.listen.range = null; if (hasProgression()) { guideVisit(5); renderGuide(); } }
+    playAll();
+  });
   $("#voicing-all").replaceChildren(...VOICINGS.map((v) => h("button", { type: "button", onclick: () => revoiceChords({ kind: v.id }) }, v.label)));
   $("#pedal-apply").addEventListener("click", () => {
     const pedal = $("#pedal-note").value.trim();
@@ -2435,6 +2491,7 @@ function selectPart(index, { focus = false } = {}) {
   assistTarget = index;
   if (formSelected !== index || formAdding) { formSelected = index; formAdding = false; renderForm(); }
   assistant?.refresh();
+  renderGuide();
   if (focus) {
     $("#assistant").scrollIntoView({ behavior: "smooth", block: "start" });
     $("#ai-prompt").focus({ preventScroll: true });
@@ -2545,7 +2602,7 @@ function applyContinuation(data, { explanation = "", request = "", index: asked 
   saveDraftSoon();
   const what = count ? ` e ${count} acorde${count > 1 ? "s" : ""} do fim da parte ${before.name} reescrito${count > 1 ? "s" : ""}` : "";
   const verb = target.kind === "adjust" ? "ajustada" : "criada";
-  toast(`Parte ${target.name} ${verb}: ${fresh.length} acordes${what}. O resto da música ficou como estava.`, { action: { label: "Desfazer", run: undo }, timeout: 9000 });
+  toast(`Parte ${target.name} ${verb}: ${fresh.length} acorde${fresh.length === 1 ? "" : "s"}${what}. O resto da música ficou como estava.`, { action: { label: "Desfazer", run: undo }, timeout: 9000 });
   $("#progression-heading").scrollIntoView({ behavior: "smooth", block: "start" });
   return { problems: [], title: `parte ${target.name} de ${p.title}` };
 }

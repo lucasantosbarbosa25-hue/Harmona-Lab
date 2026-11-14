@@ -653,4 +653,19 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .ai-task { margin: 0; padding: 8px 12px; border-radius: var(--radius-sm); background: var(--surface-2); font-size: .92rem; }
 .beats-input[readonly] { background: var(--surface-2); color: var(--muted); }
 html { scroll-padding-top: 84px; } /* o guia preso no alto não cobre o que a tela foi mostrar */
-@media (max-width: 430px) { .guide.stuck .guide-step { display: none; } } /* no celular, preso: o espaço fica para o botão do passo */
+/* o passo a passo: seis números com o nome embaixo; o atual em destaque, os cumpridos marcados */
+.guide-steps { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.guide-steps[hidden] { display: none; }
+.guide-dot { display: grid; justify-items: center; gap: 2px; min-height: 44px; padding: 4px 0; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; cursor: pointer; }
+.guide-dot b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--border); background: var(--surface); font-size: .82rem; }
+.guide-dot span { font-size: .68rem; line-height: 1.1; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.guide-dot.done b { border-color: var(--primary); color: var(--primary); }
+.guide-dot.current b { border-color: var(--primary); background: var(--primary); color: #fff; }
+.guide-dot.current span { color: var(--text); font-weight: 700; }
+.guide-dot:disabled { opacity: .45; cursor: default; }
+.guide-step .short { display: none; }
+/* preso no alto: o passo vira "2/6", ficam o play, o botão principal do passo e o MIDI */
+.guide.stuck .guide-steps { display: none; }
+.guide.stuck .guide-step .long { display: none; }
+.guide.stuck .guide-step .short { display: inline; font-size: .85rem; }
+.guide.stuck .guide-actions .btn:not(:first-child) { display: none; }
