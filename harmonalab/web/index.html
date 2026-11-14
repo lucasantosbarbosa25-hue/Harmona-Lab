@@ -15,11 +15,13 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Harmona Lab">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <script src="tema-inicio.js"></script>
   <link rel="stylesheet" href="styles.css">
   <link rel="modulepreload" href="engine/analysis.js">
   <script type="module" src="app.js"></script>
 </head>
 <body>
+  <div class="backdrop" id="backdrop" aria-hidden="true" hidden><div class="backdrop-strip"></div></div>
   <header class="topbar">
     <div class="brand">
       <img src="icon.svg" alt="" width="36" height="36">
@@ -347,7 +349,30 @@
       <p class="export-hint" id="export-note" hidden></p>
       <div class="export-actions">
         <button type="submit" class="btn secondary" value="cancel">Cancelar</button>
+        <button type="button" class="btn secondary" id="export-share" hidden>Enviar para outro app</button>
         <button type="button" class="btn primary" id="export-go">Gerar MIDI</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="look-dialog" class="sheet" aria-labelledby="look-title">
+    <form method="dialog" class="sheet-body look-body">
+      <p class="sheet-title" id="look-title">Aparência</p>
+      <span class="label">Cores</span>
+      <div class="look-themes" id="look-themes" role="group" aria-label="Tema de cores"></div>
+      <span class="label">Fundo</span>
+      <div class="segmented" id="look-backdrops" role="group" aria-label="Imagens do fundo"></div>
+      <p class="ai-help" id="look-hint"></p>
+      <div id="look-images-box" hidden>
+        <div class="look-images" id="look-images"></div>
+        <div class="look-actions">
+          <button type="button" class="btn secondary small" id="look-add">Escolher imagens…</button>
+          <button type="button" class="btn ghost small danger" id="look-clear" hidden>Tirar todas</button>
+          <input type="file" id="look-file" accept="image/*" multiple hidden>
+        </div>
+      </div>
+      <div class="export-actions">
+        <button type="submit" class="btn primary" value="ok">Pronto</button>
       </div>
     </form>
   </dialog>
@@ -361,6 +386,7 @@
       <button class="menu-item" value="share" data-icon="link">Copiar link da progressão</button>
       <button class="menu-item" value="diagrams" data-icon="download">Exportar diagramas dos acordes (PDF)</button>
       <button class="menu-item" value="save" data-icon="save">Salvar projeto (.json)</button>
+      <button class="menu-item" value="look" data-icon="sparkle">Aparência (cores e fundo)</button>
       <button class="menu-item" value="example" data-icon="sparkle">Carregar exemplo</button>
       <button class="menu-item" value="new" data-icon="file">Começar outra música</button>
       <button class="menu-item subtle" value="close">Fechar</button>

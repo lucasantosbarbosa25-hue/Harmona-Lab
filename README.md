@@ -294,6 +294,17 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **Aparência: temas de cores e fundo com músicos.** No menu ⋯ → **Aparência (cores e fundo)**. Temas: **Azul** (o padrão:
+  página azul-marinho e cartões claros), **Azul noite** (tudo escuro), **Azul claro** (tudo claro) e **Âmbar** (o tema
+  antigo, que segue o claro/escuro do aparelho). Ao fundo, **silhuetas de músicos** (pianista, guitarrista, cantora,
+  saxofonista, baterista, contrabaixista; desenhos do próprio app, em `web/fundo/`), pintadas com a cor do tema, que
+  **deslizam de lado enquanto a tela rola**. Dá para trocar por **imagens suas** (até 8; são reduzidas e ficam só no
+  aparelho) ou ficar **sem imagens**. Quem pede menos movimento ao sistema vê o fundo parado. As escolhas ficam guardadas.
+
+  **Enviar o MIDI direto para outro app.** Na janela de gerar o MIDI, **Enviar para outro app** entrega o arquivo à folha
+  de compartilhar do celular (BandLab, Drive, WhatsApp…), sem passar pela pasta de downloads. O botão só aparece onde o
+  sistema aceita receber arquivos; se o app de destino aparece na lista depende dele.
+
   **Passo a passo no guia do topo.** O guia conduz a parte em que você está por seis passos, sempre os mesmos:
   **1 Melodia** (cantar, importar um MIDI ou pular; numa parte que já tem harmonia, cantar por cima), **2 Pedido** (escrever
   o pedido da parte e copiar para a IA), **3 Ritmo** (estilo, levada, bateria, baixo), **4 Sons**, **5 Ouvir** e

@@ -6,6 +6,7 @@ import { buildShareHash } from "./ai/link.js";
 import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
+import { openLook, setupLook } from "./aparencia.js";
 import { estimateKey } from "./engine/canto.js";
 import { addPitchWeights, makeKey, parseKey } from "./tom.js";
 import {
@@ -2013,10 +2014,17 @@ function renderExportNote() {
   note.hidden = chosen.length > 0 && !noInstrument;
   note.textContent = noInstrument ? "Marque pelo menos um instrumento de percussão (ou desmarque a Percussão)." : "Marque pelo menos uma parte.";
   $("#export-go").disabled = chosen.length === 0 || noInstrument;
+  $("#export-share").disabled = $("#export-go").disabled;
 }
 
 /** Gera o .mid só com as partes marcadas. */
-async function exportChosen() {
+/** O sistema deixa mandar um arquivo MIDI direto para outro app (a folha de compartilhar do celular)? */
+function canShareMidi() {
+  try { return Boolean(navigator.canShare?.({ files: [new File([new Uint8Array(1)], "x.mid", { type: "audio/midi" })] })); } catch { return false; }
+}
+
+/** Gera o MIDI das partes marcadas. share: em vez de salvar, entrega o arquivo à folha de compartilhar (BandLab, Drive...). */
+async function exportChosen({ share = false } = {}) {
   const boxes = [...document.querySelectorAll("#export-parts input")];
   const parts = exportChoice();
   if (!parts.length) return;
@@ -2042,6 +2050,16 @@ async function exportChosen() {
   const names = parts.map((id) => (id === "percussao" && !allInstruments ? `percussao-${instruments.join("-")}` : id));
   const suffix = every ? "" : `-${names.join("-")}`;
   const filename = `${slugify(state.project.title)}${suffix}.mid`;
+  if (share) {
+    // direto para outro app, sem passar pela pasta de downloads; se a pessoa desistir na folha, nada acontece
+    try {
+      await navigator.share({ files: [new File([bytes], filename, { type: "audio/midi" })], title: filename });
+      toast(`${filename} enviado.`);
+    } catch (err) {
+      if (err?.name !== "AbortError") toast("Este aparelho não deixou enviar o arquivo. Use “Gerar MIDI” para salvar.", { error: true });
+    }
+    return;
+  }
   const saved = await saveFile(new Blob([bytes], { type: "audio/midi" }), filename, "Arquivo MIDI", "audio/midi", ".mid");
   if (!saved) return;
   if (saved.picked) {
@@ -2221,7 +2239,10 @@ function bindUi() {
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
   }
-  $("#export-go").addEventListener("click", exportChosen);
+  setupLook({ toast });
+  $("#export-go").addEventListener("click", () => exportChosen());
+  $("#export-share").hidden = !canShareMidi(); // só aparece onde o sistema aceita receber o arquivo
+  $("#export-share").addEventListener("click", () => exportChosen({ share: true }));
   $("#export-perc-single").addEventListener("change", renderExportNote);
   $("#chords-toggle-all").addEventListener("click", () => {
     const chords = state.project.chords;
@@ -2259,6 +2280,7 @@ function bindUi() {
     else if (action === "share") copyShareLink();
     else if (action === "diagrams") exportDiagrams();
     else if (action === "save") saveProject();
+    else if (action === "look") openLook();
     else if (action === "example") loadExample();
     else if (action === "new") newProject();
     else if (action === "install") installApp();

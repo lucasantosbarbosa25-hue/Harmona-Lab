@@ -43,8 +43,9 @@
   color-scheme: light;
 }
 
+/* O tema Âmbar (o antigo) segue o claro/escuro do aparelho. Os temas azuis têm cores fixas (mais abaixo). */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root[data-theme="ambar"] {
     --bg: #0e0f12;
     --surface: #16181d;
     --surface-2: #1d2027;
@@ -82,14 +83,47 @@
   }
 }
 
+/* ---------- temas azuis ----------
+   Dois conjuntos de cores: o ESCURO (azul-marinho) e o CLARO (branco azulado).
+     noite  tudo no escuro          claro  tudo no claro
+     azul   (o padrão) mistura os dois: a página é escura e os cartões, o guia e as janelas são claros.
+   No tema "azul", as variáveis são redefinidas dentro de cada superfície, então tudo o que está num cartão usa o claro. */
+:root[data-theme="noite"], :root[data-theme="azul"] {
+  --bg: #0b1e3a; --surface: #12294b; --surface-2: #1a3560; --border: #27457a; --border-strong: #3a5c98;
+  --text: #eaf2ff; --muted: #a4b9d8; --focus: #8cc0ff;
+  --primary: #5aa4ff; --primary-hover: #7db8ff; --on-primary: #06162e;
+  --rh: #f2a93b; --rh-soft: #3a2a12; --lh: #6db3ff; --lh-soft: #173258; --bass: #3ecf8e; --bass-soft: #0f3326; --free: #b48cff; --free-soft: #2a1f45;
+  --error: #ff8a80; --error-soft: #47191a; --warning: #f2c46b; --warning-soft: #3a2c10; --info: #b7c4d8; --info-soft: #1d3052;
+  --key-white: #e9eef7; --key-black: #050d1c; --key-border: #5a6f92;
+  --shadow: 0 1px 2px rgb(0 0 0 / .3);
+  --page-bg: linear-gradient(160deg, #071830 0%, #123b70 55%, #0a2548 100%);
+  --silhouette: rgb(125 175 255 / .26);
+  color-scheme: dark;
+}
+:root[data-theme="claro"],
+:root[data-theme="azul"] :is(.card, .groove, details.panel, .guide, dialog) {
+  --bg: #e9f1fc; --surface: #ffffff; --surface-2: #edf3fb; --border: #d3deee; --border-strong: #b5c6de;
+  --text: #10233f; --muted: #52647f; --focus: #1f6fd1;
+  --primary: #1a5fd0; --primary-hover: #154fb0; --on-primary: #ffffff;
+  --rh: #c26a00; --rh-soft: #fbe9cf; --lh: #1f6fd1; --lh-soft: #dbe9fb; --bass: #0d8a55; --bass-soft: #d3f1e3; --free: #7a4fd6; --free-soft: #e9e0fb;
+  --error: #c2261b; --error-soft: #fde4e1; --warning: #8a5a00; --warning-soft: #fdf0d3; --info: #4d5868; --info-soft: #eceef2;
+  --key-white: #ffffff; --key-black: #2a2b30; --key-border: #b5c6de;
+  --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 4px 16px rgb(0 0 0 / .04);
+  color-scheme: light;
+}
+:root[data-theme="claro"] { --page-bg: linear-gradient(160deg, #f4f8ff 0%, #d6e5fb 60%, #eaf2fd 100%); --silhouette: rgb(26 95 208 / .16); }
+:root[data-theme="azul"] :is(.card, .groove, details.panel, .guide, dialog) { color: var(--text); }
+:root[data-theme="azul"] .card, :root[data-theme="azul"] .guide { --shadow: 0 2px 6px rgb(0 0 0 / .25), 0 10px 30px rgb(0 0 0 / .2); }
+:root[data-theme="ambar"] { --silhouette: color-mix(in srgb, var(--primary) 13%, transparent); }
+
 *, *::before, *::after { box-sizing: border-box; }
 [hidden] { display: none !important; }
 
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; min-height: 100%; background: var(--page-bg, var(--bg)) fixed; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: none; /* a cor (ou o degradê) do tema fica na página; entre ela e o conteúdo passa o fundo com os músicos */
   color: var(--text);
   font: 16px/1.5 var(--sans);
   -webkit-font-smoothing: antialiased;
@@ -149,7 +183,7 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 
 /* ---------- cartões ---------- */
 .card {
-  background: var(--surface); border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface) 89%, transparent); border: 1px solid var(--border); /* um pouco de transparência: o fundo aparece de leve */
   border-radius: var(--radius); box-shadow: var(--shadow);
 }
 .project { padding: 16px; display: grid; gap: 14px; }
@@ -549,7 +583,7 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .export-part input { width: 22px; height: 22px; accent-color: var(--primary); margin: 0; }
 .export-part small { color: var(--muted); margin-left: auto; font-size: .8rem; }
 .export-quick, .export-actions { display: flex; gap: 8px; margin: 0 8px; }
-.export-actions { justify-content: flex-end; margin-top: 4px; }
+.export-actions { justify-content: flex-end; margin-top: 4px; flex-wrap: wrap; }
 .form-strip { display: grid; gap: 8px; margin: 0 0 14px; }
 .form-strip[hidden] { display: none; }
 .form-blocks { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; }
@@ -669,3 +703,33 @@ html { scroll-padding-top: 84px; } /* o guia preso no alto não cobre o que a te
 .guide.stuck .guide-step .long { display: none; }
 .guide.stuck .guide-step .short { display: inline; font-size: .85rem; }
 .guide.stuck .guide-actions .btn:not(:first-child) { display: none; }
+
+/* ---------- fundo com músicos (carrossel que anda de lado com a rolagem) ---------- */
+.backdrop { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.backdrop-strip { position: absolute; left: 0; bottom: 0; height: 100%; display: flex; align-items: flex-end; will-change: transform; }
+.backdrop-item { flex: none; width: min(64vw, 430px); height: min(80vh, 640px); margin: 0 5vw; background-color: var(--silhouette, rgb(0 0 0 / .08));
+  -webkit-mask: center bottom / contain no-repeat; mask: center bottom / contain no-repeat; }
+.backdrop.photos .backdrop-item { width: min(88vw, 560px); height: 100%; margin: 0; background: center / cover no-repeat; opacity: .34; filter: grayscale(1) contrast(1.1);
+  mix-blend-mode: luminosity; -webkit-mask: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+.groove, details.panel { background: color-mix(in srgb, var(--surface) 89%, transparent); }
+
+/* ---------- janela Aparência ---------- */
+.look-body { gap: 10px; padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); }
+.look-body .sheet-title { padding-left: 0; }
+.look-themes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.look-theme { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 10px; padding: 10px; border-radius: 12px; border: 2px solid var(--border); background: var(--surface);
+  color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.look-theme strong { align-self: end; }
+.look-theme small { grid-column: 2; color: var(--muted); font-size: .78rem; line-height: 1.2; }
+.look-theme[aria-pressed="true"] { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 25%, transparent); }
+.look-swatch { grid-row: 1 / span 2; width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgb(0 0 0 / .15); display: block; }
+.look-swatch i { display: none; }
+.look-theme[data-theme="azul"] .look-swatch { background: linear-gradient(135deg, #0b1e3a 0 50%, #ffffff 50% 78%, #1a5fd0 78%); }
+.look-theme[data-theme="noite"] .look-swatch { background: linear-gradient(135deg, #0b1e3a 0 50%, #12294b 50% 78%, #5aa4ff 78%); }
+.look-theme[data-theme="claro"] .look-swatch { background: linear-gradient(135deg, #e9f1fc 0 50%, #ffffff 50% 78%, #1a5fd0 78%); }
+.look-theme[data-theme="ambar"] .look-swatch { background: linear-gradient(135deg, #f5f4f0 0 50%, #ffffff 50% 78%, #a85a00 78%); }
+.look-images { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.look-images:empty { display: none; }
+.look-image { position: relative; aspect-ratio: 1; border-radius: 10px; background: center / cover no-repeat var(--surface-2); border: 1px solid var(--border); }
+.look-image button { position: absolute; top: -6px; right: -6px; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 1.1rem; line-height: 1; cursor: pointer; }
+.look-actions { display: flex; flex-wrap: wrap; gap: 8px; }
