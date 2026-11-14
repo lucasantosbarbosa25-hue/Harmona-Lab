@@ -2452,9 +2452,13 @@ async function copyShareLink() {
 
 /** Abre o link que trouxe a pessoa até aqui (ou que ela tocou com o app já aberto) e limpa o endereço. */
 async function handleHash(askBeforeReplacing) {
-  if (location.hash.length < 3 || !assistant) return;
-  const hash = location.hash;
-  history.replaceState(null, "", `${location.pathname}${location.search}`);
+  if (!assistant) return;
+  // O link pode trazer a progressão depois do "#" (o normal: não passa por servidor nenhum) ou depois do "?" (reserva:
+  // alguns chats passam o link por um redirecionador que corta o que vem depois do "#").
+  const fromQuery = /(^|[?&])(p|z|json|pedido)=/i.test(location.search);
+  const hash = location.hash.length >= 3 ? location.hash : fromQuery ? `#${location.search.slice(1)}` : "";
+  if (!hash) return;
+  history.replaceState(null, "", `${location.pathname}${fromQuery ? "" : location.search}`); // o endereço fica limpo
   const handled = await assistant.openLink(hash, { askBeforeReplacing });
   if (handled) $("#assistant").scrollIntoView({ behavior: "smooth", block: "start" });
 }

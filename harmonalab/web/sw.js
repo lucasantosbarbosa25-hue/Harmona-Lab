@@ -2,7 +2,7 @@
 // Estratégia "stale-while-revalidate": responde com a cópia guardada e, ao mesmo tempo,
 // busca a versão nova na rede — a atualização aparece na próxima vez que o app abrir.
 
-const CACHE = "harmona-lab-v64";
+const CACHE = "harmona-lab-v65";
 // O tocador de banco de sons (vendor/) fica fora da lista: só baixa quando alguém usa um .sf2, e aí fica guardado
 // pela estratégia abaixo (toda resposta boa vai para o cache), funcionando também sem internet.
 const SHELL = [
@@ -33,7 +33,8 @@ self.addEventListener("fetch", (event) => {
     const cached = await cache.match(request, { ignoreSearch: true });
     const network = fetch(request)
       .then((response) => {
-        if (response.ok) cache.put(request, response.clone());
+        // página aberta por um link com a progressão depois do "?": não vai para o cache (seria uma cópia por link)
+        if (response.ok && !(request.mode === "navigate" && new URL(request.url).search)) cache.put(request, response.clone());
         return response;
       })
       .catch(() => null);
