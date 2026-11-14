@@ -1,6 +1,6 @@
 // Cantar uma melodia: metrônomo amadeirado, um compasso de contagem, a gravação (só no aparelho) e as notas que o app
 // ouviu, para conferir, ajustar e usar como a camada Voz do projeto. A análise está em engine/canto.js.
-import { SIXTEENTHS_UP_TO_BPM, estimateKey, hatTickSamples, hzFromMidi, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
+import { SING_SCALES, SIXTEENTHS_UP_TO_BPM, estimateKey, hatTickSamples, hzFromMidi, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
 import { TICKS_PER_BEAT, parsePhrase } from "./engine/phrase.js";
 import { melodyFromMidi, melodyTracks, parseMidi } from "./engine/midi-read.js";
 
@@ -330,7 +330,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
       // com anacruse, o atraso do clique é medido só no 1º compasso da contagem (no 2º a pessoa já pode estar cantando)
       measureBeats: pickup ? take.countInBeats - bar : take.countInBeats,
       pickupBeats: pickup ? bar : withMusic ? 0 : Infinity, music: withMusic,
-      latencyFallback: take.latencyFallback, middleC: defaults().middleC, fastest: state.fastest, diatonic: $("#canto-diatonic").checked, key,
+      latencyFallback: take.latencyFallback, middleC: defaults().middleC, fastest: state.fastest, diatonic: $("#canto-diatonic").checked, scale: $("#canto-scale").value, key,
     });
     if (over) {
       // só o que cabe na parte
@@ -354,7 +354,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     $("#canto-result").hidden = false;
     const leak = r.leak.leak ? `o clique vazou para o microfone (atraso medido: ${Math.round(r.latency * 1000)} ms, usado para alinhar)` : "o clique não vazou para o microfone";
     const grid = r.fastest === "16" ? "semicolcheias" : "colcheias";
-    const scale = r.diatonic ? ` (notas na escala de ${r.key?.name ?? "?"})` : "";
+    const scale = r.diatonic ? ` (notas na escala de ${r.scaleName ?? r.key?.name ?? "?"})` : "";
     $("#canto-info").textContent = r.source === "projeto"
       ? `${r.events.length} notas da melodia do projeto · grade em ${grid}.`
       : r.source === "midi"
@@ -872,6 +872,21 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     renderMode();
   }));
   $("#canto-pickup").addEventListener("change", () => renderMode());
+  // a escala em que o canto fica travado: a diatônica do tom, ou outra (blues, menor melódica, bebop...). Fica guardada.
+  const SCALE_KEY = "harmonalab:canto:escala";
+  const scaleSelect = $("#canto-scale");
+  scaleSelect.replaceChildren(...SING_SCALES.map((sc) => Object.assign(document.createElement("option"), { value: sc.id, textContent: sc.label })));
+  try { const saved = localStorage.getItem(SCALE_KEY); if (SING_SCALES.some((sc) => sc.id === saved)) scaleSelect.value = saved; } catch { /* sem armazenamento */ }
+  const renderScale = () => {
+    const on = $("#canto-diatonic").checked;
+    $("#canto-scale-field").hidden = !on;
+    $("#canto-scale-hint").textContent = scaleSelect.value === "tom"
+      ? "A escala maior ou menor do tom que o app identificar no canto (ou do tom da música)."
+      : `As notas cantadas vão para a escala ${SING_SCALES.find((sc) => sc.id === scaleSelect.value).label.toLowerCase()}, a partir da tônica do tom. Vale para a próxima gravação.`;
+  };
+  scaleSelect.addEventListener("change", () => { try { localStorage.setItem(SCALE_KEY, scaleSelect.value); } catch { /* sem armazenamento */ } renderScale(); });
+  $("#canto-diatonic").addEventListener("change", renderScale);
+  renderScale();
   $("#canto-again").addEventListener("click", () => { halt(); state.result = null; $("#canto-result").hidden = true; record(); });
   return { edit };
 }

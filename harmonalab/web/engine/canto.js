@@ -339,6 +339,32 @@ export function estimateKey(notes) {
 }
 
 /**
+ * As escalas em que o canto pode ser travado ("Ajustar à escala"). steps: os graus em semitons a partir da tônica do tom
+ * (o que o app identifica no canto, ou o da música). "tom" é a diatônica de sempre (maior, ou menor com a sensível);
+ * na pentatônica, a maior ou a menor conforme o tom.
+ */
+export const SING_SCALES = [
+  { id: "tom", label: "Diatônica do tom" },
+  { id: "pentatonica", label: "Pentatônica", name: "pentatônica", steps: { maior: [0, 2, 4, 7, 9], menor: [0, 3, 5, 7, 10] } },
+  { id: "blues", label: "Blues", name: "blues", steps: [0, 3, 5, 6, 7, 10] },
+  { id: "melodica", label: "Menor melódica", name: "menor melódica", steps: [0, 2, 3, 5, 7, 9, 11] },
+  { id: "harmonica", label: "Menor harmônica", name: "menor harmônica", steps: [0, 2, 3, 5, 7, 8, 11] },
+  { id: "bebop", label: "Bebop (dominante)", name: "bebop", steps: [0, 2, 4, 5, 7, 9, 10, 11] },
+  { id: "dorico", label: "Dórico", name: "dórico", steps: [0, 2, 3, 5, 7, 9, 10] },
+  { id: "mixolidio", label: "Mixolídio (nordestino)", name: "mixolídio", steps: [0, 2, 4, 5, 7, 9, 10] },
+  { id: "frigiodominante", label: "Frígio dominante (espanhol)", name: "frígio dominante", steps: [0, 1, 4, 5, 7, 8, 10] },
+];
+
+/** A escala escolhida, a partir da tônica do tom: { scale (Set de classes de altura), name ("C blues") }. */
+export function singScale(key, id = "tom") {
+  const choice = SING_SCALES.find((s) => s.id === id);
+  if (!choice?.steps) return { scale: key.scale, name: key.name };
+  const steps = Array.isArray(choice.steps) ? choice.steps : choice.steps[key.mode === "menor" ? "menor" : "maior"];
+  const tonic = (key.flats ? NAMES_FLAT : NAMES_SHARP)[mod12(key.tonic)];
+  return { scale: new Set(steps.map((step) => mod12(key.tonic + step))), name: `${tonic} ${choice.name}` };
+}
+
+/**
  * A nota MIDI de uma altura cantada: corrige a afinação e, se ficar perto do meio do caminho, prefere a da escala. Com
  * diatonic, toda nota vai para a escala do tom (no menor, a sensível também vale).
  */
@@ -517,7 +543,7 @@ export function measureClicks(samples, sampleRate, clickTimes, { maxLatency = 0.
  * altura: ele soa entre dois semitons (CLICK_MIDI), onde nenhuma nota cantada afinada cai.
  * Devolve { events, text, key, tuning, leak, latency, shift, notes (brutas), warnings }.
  */
-export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, measureBeats = countInBeats, pickupBeats = Infinity, music = false, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true, key: forcedKey = null } = {}) {
+export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTimes = [], tickTimes = [], countInBeats = 4, measureBeats = countInBeats, pickupBeats = Infinity, music = false, latencyFallback = 0, middleC = "C4", maskClicks = false, fastest = "auto", diatonic = true, key: forcedKey = null, scale: scaleId = "tom" } = {}) {
   const warnings = [];
   // measureBeats: os cliques da contagem em que ninguém canta (com anacruse, só o primeiro compasso), usados para medir o atraso
   const countIn = clickTimes.slice(0, Math.min(measureBeats, countInBeats));
@@ -550,9 +576,11 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   const offsets = trackTuning(notes);
   // o tom: o que o app mandar (o tom da parte); sem ele, o provável pelas notas cantadas
   const key = forcedKey ?? estimateKey(notes.map((n, i) => ({ ...n, midi: n.midi - offsets[i] })));
+  // a escala em que as notas ficam travadas: a diatônica do tom, ou a que a pessoa escolheu (blues, menor melódica...)
+  const lock = singScale(key, scaleId);
   let adjusted = 0;
   notes.forEach((n, i) => {
-    n.note = snapPitch(n.midi, offsets[i], key.scale, { diatonic });
+    n.note = snapPitch(n.midi, offsets[i], lock.scale, { diatonic });
     if (diatonic && n.note !== Math.round(n.midi - offsets[i])) adjusted += 1; // foi para a escala (não é a nota cromática mais perto)
   });
   const drift = offsets.length ? Math.max(...offsets) - Math.min(...offsets) : 0;
@@ -582,6 +610,6 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   if (drift > 0.3) warnings.push(`A afinação foi mudando aos poucos durante o canto (cerca de ${Math.round(drift * 100)} centésimos); acompanhei e corrigi as notas.`);
   else if (Math.abs(tuning.offset) > 0.25) warnings.push(`O canto estava ${Math.round(Math.abs(tuning.offset) * 100)} centésimos ${tuning.offset > 0 ? "acima" : "abaixo"} da afinação; corrigi.`);
   if (shift) warnings.push("A melodia começou antes do tempo 1 (anacruse): ela ganhou um compasso no começo.");
-  if (adjusted) warnings.push(`${adjusted} nota${adjusted > 1 ? "s" : ""} fora da escala de ${key.name} ${adjusted > 1 ? "foram ajustadas" : "foi ajustada"} para a nota da escala mais perto.`);
-  return { events, text: voiceText(events, { key, middleC }), key, tuning, leak, latency, shift, notes, warnings, clickVsVoice, fastest: resolved, adjusted, diatonic };
+  if (adjusted) warnings.push(`${adjusted} nota${adjusted > 1 ? "s" : ""} fora da escala de ${lock.name} ${adjusted > 1 ? "foram ajustadas" : "foi ajustada"} para a nota da escala mais perto.`);
+  return { events, text: voiceText(events, { key, middleC }), key, tuning, leak, latency, shift, notes, warnings, clickVsVoice, fastest: resolved, adjusted, diatonic, scaleName: lock.name };
 }

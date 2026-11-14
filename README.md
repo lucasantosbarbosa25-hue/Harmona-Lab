@@ -294,6 +294,13 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **Escolha a escala do canto.** Na janela de cantar, em "Mais opções", com **Ajustar à escala** ligado, o menu **Escolha
+  a escala** trava as notas cantadas numa escala a partir da tônica do tom (o que o app identifica no canto, ou o da
+  música): **Diatônica do tom** (o padrão), **Pentatônica** (maior ou menor, conforme o tom), **Blues**, **Menor
+  melódica**, **Menor harmônica**, **Bebop (dominante)**, **Dórico**, **Mixolídio (nordestino)** e **Frígio dominante
+  (espanhol)**. Cada nota vai para a nota da escala mais perto do que foi cantado; o resultado diz a escala usada ("A
+  blues"). A escolha fica guardada e vale a partir da próxima gravação.
+
   **A tela acompanha a música.** Ao apertar o play do topo, a tela rola sozinha até o acorde que está soando, que
   **acende** (borda, brilho em volta e fundo tingido), no celular e no computador. Se o acorde está numa parte recolhida, a
   tela vai até a divisória dela. Rolar a tela à mão no meio da música (dedo, roda do mouse ou teclas) pausa o

@@ -214,3 +214,35 @@ test("parte nova: o trecho anterior da música, tocando na contagem e vazando pa
   assert.equal(score(out.events, take.truth).accuracy, 1);
   assert.equal(out.events.length, take.truth.length);
 });
+
+test("canto travado numa escala escolhida: blues, menor melódica, harmônica, bebop e outras", async () => {
+  const { SING_SCALES, singScale, snapPitch: snap, estimateKey: guess } = await import("../../harmonalab/web/engine/canto.js");
+  assert.deepEqual(SING_SCALES.map((s) => s.id), ["tom", "pentatonica", "blues", "melodica", "harmonica", "bebop", "dorico", "mixolidio", "frigiodominante"]);
+  const am = { tonic: 9, mode: "menor", flats: false, name: "Am", scale: new Set([9, 11, 0, 2, 4, 5, 7, 8]) };
+  const pcs = (id, key = am) => [...singScale(key, id).scale].sort((a, b) => a - b);
+  assert.deepEqual(pcs("tom"), [0, 2, 4, 5, 7, 8, 9, 11]);
+  assert.equal(singScale(am, "tom").name, "Am");
+  assert.deepEqual(pcs("blues"), [0, 2, 3, 4, 7, 9]); // A C D Eb E G
+  assert.equal(singScale(am, "blues").name, "A blues");
+  assert.deepEqual(pcs("melodica"), [0, 2, 4, 6, 8, 9, 11]); // A B C D E F# G#
+  assert.deepEqual(pcs("harmonica"), [0, 2, 4, 5, 8, 9, 11]); // A B C D E F G#
+  assert.deepEqual(pcs("pentatonica"), [0, 2, 4, 7, 9]); // menor: A C D E G
+  const c = { tonic: 0, mode: "maior", flats: false, name: "C", scale: new Set([0, 2, 4, 5, 7, 9, 11]) };
+  assert.deepEqual(pcs("pentatonica", c), [0, 2, 4, 7, 9]); // maior: C D E G A
+  assert.deepEqual(pcs("bebop", c), [0, 2, 4, 5, 7, 9, 10, 11]);
+  assert.deepEqual(pcs("mixolidio", c), [0, 2, 4, 5, 7, 9, 10]);
+  assert.deepEqual(pcs("dorico", c), [0, 2, 3, 5, 7, 9, 10]);
+  // um Si (71) cantado em Lá menor: na diatônica fica; no blues vai para o Dó, a nota da escala mais perto
+  assert.equal(snap(71, 0, singScale(am, "tom").scale, { diatonic: true }), 71);
+  assert.equal(snap(71, 0, singScale(am, "blues").scale, { diatonic: true }), 72);
+  assert.equal(snap(65, 0, singScale(am, "blues").scale, { diatonic: true }), 64); // o Fá vai para o Mi
+  assert.equal(snap(65, 0, singScale(am, "melodica").scale, { diatonic: true }), 64); // na melódica não há Fá: vai para o Mi (o Fá# empata; vale a de baixo)
+  // a gravação inteira: com a escala blues, nenhuma nota sai dela
+  const take = singMelody(MELODY, { latency: 0.08 });
+  const blues = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: true, scale: "blues" });
+  const allowed = singScale(blues.key, "blues").scale;
+  assert.ok(blues.events.length >= 5 && blues.events.every((e) => allowed.has(((e.midi % 12) + 12) % 12)), blues.text);
+  assert.match(blues.scaleName, / blues$/);
+  const plain = transcribe(take.samples, RATE, { bpm: 80, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: true });
+  assert.equal(plain.scaleName, plain.key.name);
+});

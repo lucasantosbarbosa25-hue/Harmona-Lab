@@ -505,7 +505,12 @@
       <label class="switch" for="canto-diatonic">
         <input type="checkbox" id="canto-diatonic" role="switch" checked>
         <span class="switch-track" aria-hidden="true"></span>
-        <span class="switch-text">Ajustar à escala do tom <small>toda nota vai para a escala diatônica do tom que o app identificar no canto</small></span>
+        <span class="switch-text">Ajustar à escala <small>toda nota cantada vai para a nota mais perto da escala escolhida abaixo</small></span>
+      </label>
+      <label class="field" for="canto-scale" id="canto-scale-field">
+        <span class="label">Escolha a escala</span>
+        <select id="canto-scale"></select>
+        <span class="canto-hint" id="canto-scale-hint"></span>
       </label>
       <label class="switch" for="canto-pickup">
         <input type="checkbox" id="canto-pickup" role="switch">
