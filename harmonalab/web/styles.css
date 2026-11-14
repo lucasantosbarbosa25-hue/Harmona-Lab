@@ -748,3 +748,7 @@ html { scroll-padding-top: 84px; } /* o guia preso no alto não cobre o que a te
 .ai-chat-send { display: grid; gap: 10px; }
 .ai-chat-send[hidden] { display: none; }
 .ai-chat-step .ai-help { margin: -4px 0 0; }
+.chat-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.chat-row .ai-help { margin: 0; }
+a.btn { text-decoration: none; }
+a.btn.secondary, a.btn.ghost { color: var(--text); }

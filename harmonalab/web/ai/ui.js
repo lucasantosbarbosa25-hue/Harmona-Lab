@@ -8,6 +8,13 @@ import { PERMANENT_INSTRUCTIONS } from "./prompt.js";
 import { createDictation, mergeDictation, speechSupported } from "./speech.js";
 
 const PROMPT_KEY = "harmonalab:ai:prompt";
+const CHAT_KEY = "harmonalab:ai:chat";
+/** O chat que a pessoa usa: o último atalho em que ela tocou (sem nenhum ainda, o Gemini). */
+export function preferredChat() {
+  let name = "";
+  try { name = localStorage.getItem(CHAT_KEY) || ""; } catch { /* sem armazenamento */ }
+  return CHATS.find((c) => c.name === name) ?? CHATS.find((c) => c.name === "Gemini") ?? CHATS[0];
+}
 const RESEARCH_KEY = "harmonalab:ai:research";
 const EXAMPLES = [
   "8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E",
@@ -50,7 +57,11 @@ export function initAssistant(api) {
   els.examples.replaceChildren(...EXAMPLES.map((text) => h("button", {
     type: "button", class: "chip-button", onclick: () => { els.prompt.value = text; keep(text); els.prompt.focus(); },
   }, truncate(text, 56))));
-  $("#ai-chat-links").replaceChildren(...CHATS.map((c) => h("a", { class: "btn secondary small", href: c.url, target: "_blank", rel: "noopener noreferrer" }, c.name)));
+  // os atalhos para os chats ficam sempre à vista; o último usado fica guardado (o guia do topo abre esse)
+  $("#ai-chat-links").replaceChildren(...CHATS.map((c) => h("a", {
+    class: "btn secondary small", href: c.url, target: "_blank", rel: "noopener noreferrer",
+    onclick: () => { try { localStorage.setItem(CHAT_KEY, c.name); } catch { /* sem armazenamento */ } api.onChat?.(); },
+  }, c.name)));
   els.generate.addEventListener("click", copyForChat);
   $("#ai-load-answer").addEventListener("click", loadAnswer);
   const bars = (t) => { const n = t.toBar - t.fromBar + 1; return `${n} compasso${n === 1 ? "" : "s"}`; };

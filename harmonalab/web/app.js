@@ -3,7 +3,7 @@
 // e gera os mesmos bytes de MIDI que a versão em Python (há teste comparando).
 
 import { buildShareHash } from "./ai/link.js";
-import { initAssistant } from "./ai/ui.js";
+import { initAssistant, preferredChat } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
 import { openLook, setupLook } from "./aparencia.js";
@@ -996,7 +996,10 @@ function renderGuide() {
     const open = () => { if (fresh) { go("#assistant"); $("#ai-prompt").focus({ preventScroll: true }); } else selectPart(part.index, { focus: true }); };
     // quem já tem a resposta da IA (o link dela abriu o app vazio, por exemplo) vai direto à caixa de colar
     const paste = () => { if (!fresh) selectPart(part.index); go("#ai-chat-step"); $("#ai-answer").focus({ preventScroll: true }); };
-    actions = [button(done[1] ? "Ajustar pelo pedido" : "Escrever o pedido", open, "primary"), button("Colar a resposta", paste), ...(done[1] ? [next("Continuar")] : [])];
+    // o atalho para o chat que a pessoa usa (o último em que ela tocou)
+    const chat = preferredChat();
+    const openChat = h("a", { class: "btn small secondary", href: chat.url, target: "_blank", rel: "noopener noreferrer" }, `Abrir o ${chat.name}`);
+    actions = [button(done[1] ? "Ajustar pelo pedido" : "Escrever o pedido", open, "primary"), openChat, button("Colar a resposta", paste), ...(done[1] ? [next("Continuar")] : [])];
   } else if (current === 2) {
     text = "Escolha o estilo, a levada dos acordes, a bateria e o baixo. Vale para a música toda.";
     actions = [button("Escolher ritmo e levada", () => { guideVisit(3, part); go("#groove"); renderGuide(); }, "primary"), next()];
@@ -2693,7 +2696,7 @@ async function init() {
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, onChat: () => renderGuide(), hasProgression, applyGenerated, applyContinuation,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);
