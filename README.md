@@ -294,6 +294,18 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **Pelo menos 16 baterias em cada estilo.** Além das que cada estilo já tinha, as baterias novas ficam em
+  `web/kb/baterias.js`, numa notação de grade bem mais curta (uma linha por peça, um caractere por passo:
+  `"K x--x--x---x-x---"`), que o app expande para a notação da bateria do projeto. A grade de 12 passos é a de tercinas
+  (swing e shuffle); no lo-fi, a caixa e o bumbo saem um pouco atrasados, como nas outras baterias do estilo.
+
+  **Forró.** Estilo novo (pé de serra: baião, xote, xaxado e arrasta-pé), pensado para **sanfona**: oito levadas (baixo
+  na mão esquerda e fole no contratempo, resfolego em semicolcheias, fole aberto, ponteado), três baixos, cinco riffs com
+  som de sanfona, 16 baterias (o kit imitando a zabumba: bumbo na pele grave, aro no bacalhau) e cinco percussões com
+  **triângulo** (peças novas `t` aberto e `m` abafado, que saem no MIDI na faixa "Perc Triângulo"), ganzá, agogô e
+  pandeiro. As frases usam terças e sextas. Ao escolher o estilo, o app oferece trocar o som dos acordes para a sanfona.
+  Sons novos, separados do MuseScore General: **Sanfona**, **Sanfona italiana**, **Bandoneon** e **Gaita**.
+
   **Controles de timbre em cada som.** No painel **Sons**, embaixo de cada som, **Ajustar o som** abre nove faders:
   **Ataque**, **Decay**, **Sustain**, **Release**, **Brilho (cutoff)**, **Ressonância**, **Reverb**, **Chorus** e
   **Delay**. Nos cinco de envelope e filtro, o meio é "padrão" (o som como ele é) e o fader soma ou tira; reverb, chorus e

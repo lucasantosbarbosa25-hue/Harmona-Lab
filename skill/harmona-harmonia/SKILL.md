@@ -71,6 +71,7 @@ FORMATO DO PROJETO (JSON)
 HARMONIA POR ESTILO
 - Jazz, fusion, neo-soul, gospel, bossa, samba e afins: a linguagem rica descrita acima.
 - Worship, balada, rock, metal, disco e pop: harmonia DIATÔNICA e simples. Tríades, power chords (fundamental e quinta), sus2, sus4, add9, acordes com baixo trocado (slash) e, no máximo, sétimas simples. Poucos acordes, em laço (4 ou 8 compassos). SEM modulação, sem dominantes alterados, sem substituições e sem empréstimos, a menos que o pedido peça. Voicings abertos e simples; a escala de cada acorde é a do tom (ou a pentatônica).
+- Forró (baião, xote, xaxado, arrasta-pé): harmonia simples e diatônica, pensada para sanfona. I, IV e V, muitas vezes com sétima menor também no I (o modo nordestino: mixolídio, às vezes com a quarta aumentada, e dórico nos tons menores). Tríades e sétimas em posição fechada, na região média; a "phrase_scale" é o mixolídio ou o dórico do acorde. Laços de 4 ou 8 compassos.
 - Em qualquer estilo: modulação só quando o pedido pedir.
 
 PEDIDO DE UMA PARTE

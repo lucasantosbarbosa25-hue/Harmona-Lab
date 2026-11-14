@@ -44,6 +44,8 @@
 // Regra fixa do gerador: dentro de uma frase, nunca a mesma nota duas vezes seguidas (pausa de até um tempo no meio não
 // conta como fim de frase). Entre o fim de uma frase e o começo da próxima, pode. Baixo e levadas não seguem essa regra.
 
+import { MORE_BEATS, expandBeat } from "./baterias.js";
+
 export const KB_VERSION = 1;
 
 /** As três cores de frase que o pedido pode marcar em cada acorde (campo phrase_color). */
@@ -609,6 +611,47 @@ export const STYLES = [
     fast: ["16 16 16 16 4", "16 16 8 16 16 8", "8 8 8 8"],
     phrase: { chromatic: 0, enclosure: 0, blue: 0.1, leap: 0.3, rest: 0.45, motif: 0.9, pentatonic: true, minNotes: 3, duet: { octave: 0.3, sixth: 0.1, triad: 0 } },
   },
+  {
+    id: "forro", label: "Forró",
+    sound: "ms-sanfona", // o som que combina com o estilo (o app oferece ao escolher o forró)
+    riffs: [
+      { id: "dedilhado", label: "Ponteado de sanfona", sound: "ms-sanfona", rhythms: ["16 16 16 16 16 16 16 16 16 16 16 16 16 16 16 16", "8 16 16 8 16 16 8 16 16 8 8", "8. 16 8 8 8. 16 8 8", "16 16 8 16 16 8 16 16 8 8 8"] },
+      { id: "ostinato", label: "Frase de sanfona", sound: "ms-sanfona", rhythms: ["8. 16 8 8 4 4", "8 16 16 8 8 8. 16 4", "8. 8. 8 8. 8. 8", "16 16 8 8 8 4 4", "8 8 8. 16 4 4"] },
+      { id: "ataques", label: "Fole no contratempo", sound: "ms-sanfona", rhythms: ["r8 8 r8 8 r8 8 r8 8", "r8 16 16 r8 8 r8 16 16 r8 8", "r8. 16 r8 8 r8. 16 r8 8", "r4 8 8 r4 8 8"] },
+      { id: "oitavas", label: "Baixos da sanfona", sound: "ms-sanfona", rhythms: ["8. 8. 8 8. 8. 8", "8. 16 r8 8 8. 16 r8 8", "4 8 8 4 8 8"] },
+      { id: "gemeas", label: "Melodia em terças (duas sanfonas)", sound: "ms-sanfona" },
+    ],
+    influences: ["Luiz Gonzaga", "Dominguinhos", "Sivuca", "Jackson do Pandeiro", "Trio Nordestino", "Oswaldinho do Acordeon", "Marinês"],
+    summary: "Forró pé de serra: baião, xote, xaxado e arrasta-pé. A sanfona marca o baixo com a mão esquerda e o fole no contratempo; a zabumba toca o grave no 1 e no fim do tempo, e o triângulo corre em semicolcheias. Melodia no mixolídio e no dórico (o modo nordestino), em terças e sextas; harmonia simples, com I, IV e V com sétima.",
+    comps: [
+      { id: "baiao", bass: "baiao", label: "Baião (baixo e fole no contratempo)", pattern: "B/8. B/8. B/8 B/8. B/8. B/8 ; r/8 D/16 D?/16 r/8 D/8 r/8 D/16 D?/16 r/8 D/8" },
+      { id: "xote", bass: "xote", label: "Xote", pattern: "B/4 r/4 B/4 r/4 ; r/8 D/8 r/8 D!/8 r/8 D/8 r/8 D!/8" },
+      { id: "arrastape", bass: "arrastape", label: "Arrasta-pé (baixo e acorde)", pattern: "B/8 D/8 B?/8 D/8 B/8 D/8 B?/8 D/8" },
+      { id: "resfolego", bass: "baiao", label: "Resfolego (fole em semicolcheias)", pattern: "B/8. B/8. B/8 B/8. B/8. B/8 ; D!/16 D?/16 D/16 D?/16 D!/16 D?/16 D/16 D?/16 D!/16 D?/16 D/16 D?/16 D!/16 D?/16 D/16 D?/16" },
+      { id: "xaxado", bass: "baiao", label: "Xaxado", pattern: "B/8 B/8 r/8 B/8 B/8 B/8 r/8 B/8 ; r/8. D/16 D/8 r/8 r/8. D/16 D/8 r/8" },
+      { id: "fole", label: "Fole aberto (acordes longos)", pattern: "T/2 T/2" },
+      { id: "baixosdasanfona", kind: "ostinato", bass: "baiao", label: "Baixos da sanfona", pattern: "S1/8. S1/8. S5/8 S1/8. S3/8. S5/8 ; r/8 D/16 D?/16 r/8 D/8 r/8 D/16 D?/16 r/8 D/8" },
+      { id: "ponteado", kind: "ostinato", bass: "baiao", label: "Ponteado da mão direita", pattern: "B/8. B/8. B/8 B/8. B/8. B/8 ; M1/16 M3/16 M5/16 M3/16 M6/8 M5/8 M3/16 M5/16 M7/16 M5/16 M3/8 M1/8" },
+    ],
+    beats: [],
+    percussion: [
+      { id: "triangulo", label: "Triângulo", bars: ["m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16"] },
+      { id: "trianguloganza", label: "Triângulo e ganzá", bars: ["m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 ; Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16 Q?/16 Q?/16 Q/16 Q!/16"] },
+      { id: "trianguloxote", label: "Triângulo de xote (colcheias)", bars: ["m/8 t!/8 m/8 t!/8 m/8 t!/8 m/8 t!/8"] },
+      { id: "trianguloagogo", label: "Triângulo e agogô", bars: ["m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 ; D/8 r/8 D/8 D/8 r/8 D/8 r/8 D/8"] },
+      { id: "pandeiro", label: "Triângulo e pandeiro", bars: ["m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 m/16 m?/16 t!/16 m?/16 ; A/16 A?/16 A?/16 A!/16 A/16 A?/16 A?/16 A!/16 A/16 A?/16 A?/16 A!/16 A/16 A?/16 A?/16 A!/16"] },
+    ],
+    fills: ["S/16 S?/16 S/16 S?/16 S/16 r/16 S!/8 ; K/8. K/16 K/8. K/16", "T/16 T/16 M/16 M/16 F/8 F!/8 ; K/8. K/16 K/4", "S!/16 S/16 S/16 S!/16 S/16 S/16 S!/8 ; K/8. K/16 K/8 K/8", "F/8. F/16 F!/4 ; K/8. K/16 K/4", "S/16 S/16 S!/8"],
+    bass: [
+      { id: "baiao", label: "Baião", pattern: "1/8. 1/8. 5/8 1/8. 1/8. 5/8" },
+      { id: "xote", label: "Xote", pattern: "1/4. 5/8 1/4. _4/8" },
+      { id: "arrastape", label: "Arrasta-pé (fundamental e quinta)", pattern: "1/4 _4/4 1/4 _4/4" },
+    ],
+    bassFill: { chance: 0.35, figure: "16", beats: 1, high: 12, shapes: ["chegada", "subida", "descida"] },
+    cells: ["8. 16 8 8", "16 16 16 16 8 8", "8 16 16 8 8", "8. 8. 8", "4 8 8", "16 8 16 8 8", "r8 8 8 8", "8 8 4", "2", "16 16 8 16 16 8", "8. 16 4", "r16 16 16 16 4"],
+    fast: ["16 16 16 16 16 16 16 16", "16 16 16 16 16 16 8", "16t 16t 16t 16t 16t 16t 4"],
+    phrase: { chromatic: 0.06, enclosure: 0, blue: 0, leap: 0.25, rest: 0.15, motif: 0.75, pentatonic: false, sequence: true, minNotes: 5, duet: { octave: 0.08, sixth: 0.4, triad: 0.1 } },
+  },
 ];
 
 /** De onde vieram os padrões (leituras abertas; servem também para quem quiser estudar). */
@@ -625,6 +668,9 @@ export const SOURCES = [
   { title: "Outside (jazz): side-slipping", url: "https://en.wikipedia.org/wiki/Outside_(jazz)" },
   { title: "4 Steps to Play Neo Soul Chords on Piano", url: "https://pianowithjonny.com/piano-lessons/4-steps-to-play-neo-soul-chords-on-piano/" },
 ];
+
+// As baterias em notação de grade (kb/baterias.js) entram depois das que cada estilo já tem: pelo menos 16 por estilo.
+for (const style of STYLES) style.beats.push(...(MORE_BEATS[style.id] ?? []).map((beat) => expandBeat(beat, { late: style.id === "lofi" })));
 
 export const findStyle = (id) => STYLES.find((s) => s.id === id) ?? null;
 export const styleByLabel = (label) => STYLES.find((s) => s.label.toLowerCase() === String(label || "").trim().toLowerCase()) ?? null;

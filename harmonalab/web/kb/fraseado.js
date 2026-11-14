@@ -170,7 +170,7 @@ export const PERFIL_ATIVO = "weimar";
  * Estilos com perfil PRÓPRIO: não seguem o PERFIL_ATIVO. Assim, voltar o Weimar para "anterior" (rollback) não mexe no
  * fraseado deles. Para um estilo passar a seguir o perfil ativo, é só tirar a linha dele daqui.
  */
-export const PERFIL_POR_ESTILO = { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop" };
+export const PERFIL_POR_ESTILO = { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop", forro: "pop" };
 
 /** O perfil de um estilo: o próprio, se tiver; senão o ativo. `id` (opcional) força um perfil, para testes. */
 export const perfilDoEstilo = (estiloId, id) => PERFIS[id] ?? PERFIS[PERFIL_POR_ESTILO[estiloId]] ?? PERFIS[PERFIL_ATIVO];

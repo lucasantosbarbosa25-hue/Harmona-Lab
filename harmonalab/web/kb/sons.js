@@ -37,6 +37,10 @@ export const BUILTIN_BANKS = [
   ms("ms-synth-baixo", "Synth de baixo", "teclado", "Synths e metais", 38, 114940),
   ms("ms-metais", "Naipe de metais", "teclado", "Synths e metais", 61, 686380),
   ms("ms-synth-metais", "Metais de synth", "teclado", "Synths e metais", 62, 56184),
+  ms("ms-sanfona", "Sanfona", "teclado", "Sanfona e foles", 21, 248258),
+  ms("ms-sanfona-italiana", "Sanfona italiana (mais brilhante)", "teclado", "Sanfona e foles", 21, 248278), // no original é o banco 8; no arquivo do app fica no banco 0
+  ms("ms-sanfona-tango", "Bandoneon", "teclado", "Sanfona e foles", 23, 352702),
+  ms("ms-gaita", "Gaita (harmônica)", "teclado", "Sanfona e foles", 22, 105218),
   ms("ms-baixo-dedilhado", "Baixo elétrico (dedo)", "baixo", "Baixos", 33, 236154),
   ms("ms-baixo-acustico", "Baixo acústico", "baixo", "Baixos", 32, 159166),
   ms("ms-baixo-fretless", "Baixo fretless", "baixo", "Baixos", 35, 198276),

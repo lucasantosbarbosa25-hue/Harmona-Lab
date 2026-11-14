@@ -52,6 +52,7 @@ PERCUSSION_INSTRUMENTS = (
     ("timbales", "Timbales", (65, 66)),
     ("guiro", "Güiro", (73, 74)),
     ("agogo", "Agogô", (67,)),
+    ("triangulo", "Triângulo", (80, 81)),
 )
 #: No máximo este número de faixas de percussão: se a música usar mais instrumentos, os últimos dividem a última faixa.
 MAX_PERCUSSION_TRACKS = 6

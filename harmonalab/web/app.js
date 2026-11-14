@@ -1614,6 +1614,7 @@ function bindGroove() {
     state.groove.style = e.target.value;
     saveGroove();
     const style = grooveStyle();
+    suggestStyleSound(style);
     const current = state.project.groove?.comp || "";
     const hasComp = anyChord("comp") && current && current !== CUSTOM_COMP;
     const phrases = anyChord("phrase");
@@ -2074,6 +2075,18 @@ function buildShapePanels() {
     mark();
     field.append(h("div", { class: "shape", dataset: { sound } }, toggle, panel));
   }
+}
+
+/** Estilo com um som que é a cara dele (a sanfona, no forró): o app oferece trocar o som dos acordes, com um toque. */
+function suggestStyleSound(style) {
+  const bank = style?.sound ? BUILTIN_BANKS.find((b) => b.id === style.sound) : null;
+  if (!bank || state.sound.chords === builtinValue(bank.id)) return;
+  toast(`${style.label} combina com ${bank.label.toLowerCase()}.`, { timeout: 9000, action: { label: `Usar ${bank.label.toLowerCase()}`, run: () => {
+    if (state.playing) stopPlayback();
+    state.sound = { ...state.sound, chords: builtinValue(bank.id) };
+    saveSoundChoice();
+    renderSound();
+  } } });
 }
 
 function bindSound() {

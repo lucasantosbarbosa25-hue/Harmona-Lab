@@ -70,5 +70,5 @@ test("os bancos que vêm com o app existem na pasta sons/, cabem no limite e tê
   assert.deepEqual([kindOf(DEFAULT_SOUNDS.chords), kindOf(DEFAULT_SOUNDS.bass), kindOf(DEFAULT_SOUNDS.pad), kindOf(DEFAULT_SOUNDS.drums)], ["teclado", "baixo", "pad", "bateria"]);
   assert.ok(statSync(new URL("../../harmonalab/web/sons/MuseScore_General_License.md", import.meta.url)).size > 1000);
   assert.equal(new Set(BUILTIN_BANKS.map((b) => b.id)).size, BUILTIN_BANKS.length, "ids únicos");
-  assert.ok(BUILTIN_BANKS.length <= 60, "o deslocamento de banco de cada som (64 + posição) tem de caber em 127");
+  assert.ok(BUILTIN_BANKS.length <= 64, "o deslocamento de banco de cada som (40 + posição) tem de ficar abaixo de 104, onde começam os bancos por som");
 });

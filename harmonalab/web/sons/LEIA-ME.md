@@ -9,6 +9,8 @@ Um arquivo SF3 por instrumento, separados do `MuseScore_General.sf3` (versão 0.
 Licença **MIT**: o texto completo, com os créditos, está em `MuseScore_General_License.md` (ele tem de acompanhar os
 arquivos). Origem: https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/
 
+`ms-sanfona-italiana.sf3` é o "Italian Accordion" do original (banco 8, programa 21), gravado no banco 0 como os outros.
+
 ## Outros
 
 - `SF-3007-Drum-Kit-Public.sf2`: bateria Sonor Force 3007, domínio público.

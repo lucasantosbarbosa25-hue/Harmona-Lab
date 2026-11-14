@@ -279,6 +279,7 @@ export const PERCUSSION_INSTRUMENTS = [
   { id: "timbales", label: "Timbales", pitches: [65, 66] },
   { id: "guiro", label: "Güiro", pitches: [73, 74] },
   { id: "agogo", label: "Agogô", pitches: [67] },
+  { id: "triangulo", label: "Triângulo", pitches: [80, 81] },
 ];
 /** No máximo este número de faixas de percussão: se a música usar mais instrumentos, os últimos dividem a última faixa. */
 export const MAX_PERCUSSION_TRACKS = 6;

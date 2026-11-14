@@ -13,13 +13,13 @@ const DEVICE = "aparelho"; // o id do banco carregado do aparelho
 const DRUM_CHANNEL = 9;
 const BASS_CHANNEL = 2;
 /** Cada banco embutido de teclado ganha um deslocamento de banco próprio, para não colidir com os outros (todos usam o programa 0). */
-const builtinOffset = (id) => 64 + BUILTIN_BANKS.findIndex((b) => b.id === id);
+const builtinOffset = (id) => 40 + BUILTIN_BANKS.findIndex((b) => b.id === id); // de 40 até 103: os bancos por som começam no 104
 const DB_NAME = "harmonalab";
 const STORE = "sons";
 const KEY = "banco";
 /** Os sons que podem ter um banco próprio do aparelho (a percussão toca no canal da bateria: usa o banco dela). */
 export const SLOTS = ["chords", "phrase", "bass", "riff", "pad", "drums"];
-/** O deslocamento de banco de cada um (os embutidos usam de 64 em diante; aqui, de 4 em 4, do 104 ao 124). */
+/** O deslocamento de banco de cada um (os embutidos usam de 40 a 103; aqui, de 4 em 4, do 104 ao 124). */
 const SLOT_OFFSET = { chords: 104, phrase: 108, bass: 112, riff: 116, pad: 120, drums: 124 };
 const slotId = (slot) => `${DEVICE}-${slot}`;
 const slotKey = (slot) => `${KEY}:${slot}`;

@@ -193,7 +193,7 @@ test("a virada interrompe o beat no fim do compasso, o beat volta no tempo 1 e e
   assert.equal(generateGroove(data, { style, drums: "basico", drumVariation: 2 }).drums, text);
   assert.equal(drumsFor(style, "basico", loadProject({ chords: [{ notes: "C4" }] }).project).split(" | ").map(plain).join(" | "), plain(style.beats[0].bars.join(" | "))); // um compasso só: sem virada
   assert.equal(drumsFor(style, "nao-existe", project), "");
-  assert.deepEqual(beatOptions(style).map((o) => o.id), ["basico", "meio", "aberto", "duplo", "rajada", "galope", "tons", "prog"]);
+  assert.deepEqual(beatOptions(style).map((o) => o.id).slice(0, 8), ["basico", "meio", "aberto", "duplo", "rajada", "galope", "tons", "prog"]);
 });
 
 test("a bateria gerada é válida em todos os estilos e compassos, e sai numa faixa própria no canal 10", () => {
@@ -798,7 +798,7 @@ test("lo-fi e o rollback do Weimar: o lo-fi tem perfil próprio e não muda com 
   assert.equal(perfilDoEstilo("lofi", undefined), PERFIS.lofi);
   // os outros estilos seguem o perfil ativo (e podem ser forçados, para testes)
   // rock, metal, worship, balada e disco também têm perfil próprio (guitarra e pop): nada do Weimar entra neles
-  assert.deepEqual(PERFIL_POR_ESTILO, { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop" });
+  assert.deepEqual(PERFIL_POR_ESTILO, { lofi: "lofi", rock: "rock", metal: "rock", worship: "pop", balada: "pop", disco: "pop", forro: "pop" });
   for (const [id, perfil] of Object.entries(PERFIL_POR_ESTILO)) assert.equal(perfilDoEstilo(id), PERFIS[perfil]);
   for (const style of STYLES.filter((s) => !PERFIL_POR_ESTILO[s.id])) {
     assert.equal(perfilDoEstilo(style.id), PERFIS[PERFIL_ATIVO]);
@@ -922,13 +922,15 @@ test("virtuoso: as corridas seguem o andamento (fusas a 60 BPM, semicolcheias a 
   assert.ok(!/\/32/.test(quick) && !/\/16t/.test(quick), "a 170 BPM, nada de fusas nem sextinas");
 });
 
-test("rock e metal: o dobro de baterias dos outros estilos, várias com bumbo duplo", () => {
+test("todos os estilos têm pelo menos 16 baterias; rock e metal, várias com bumbo duplo", () => {
   const data = { ...bare(), chords: [...bare().chords, ...bare().chords] };
-  const most = Math.max(...STYLES.filter((s) => !["rock", "metal"].includes(s.id)).map((s) => s.beats.length));
+  for (const style of STYLES) {
+    assert.ok(style.beats.length >= 16, `${style.id}: ${style.beats.length} baterias`);
+    assert.equal(new Set(style.beats.map((b) => b.id)).size, style.beats.length, `${style.id}: ids repetidos`);
+    assert.equal(new Set(style.beats.map((b) => b.label)).size, style.beats.length, `${style.id}: rótulos repetidos`);
+  }
   for (const id of ["rock", "metal"]) {
     const style = findStyle(id);
-    assert.ok(style.beats.length >= 8 && style.beats.length >= 2 * (most - 1), `${id}: ${style.beats.length} baterias`);
-    assert.equal(new Set(style.beats.map((b) => b.id)).size, style.beats.length, `${id}: ids repetidos`);
     let double = 0;
     for (const beat of style.beats) {
       const text = generateGroove(data, { style, drums: beat.id }).drums;

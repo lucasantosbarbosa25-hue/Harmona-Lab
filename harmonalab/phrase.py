@@ -232,13 +232,14 @@ DRUM_PIECES = {
     "K": 36, "S": 38, "X": 37, "H": 42, "O": 46, "P": 44, "R": 51, "E": 53, "C": 49,
     "T": 50, "M": 47, "F": 43, "B": 56, "L": 75, "A": 54, "Q": 70, "G": 63, "N": 64,
     "U": 62, "V": 60, "W": 61, "Y": 65, "Z": 66, "J": 73, "I": 74, "D": 67,
+    "t": 81, "m": 80,  # triângulo aberto e abafado (as maiúsculas acabaram: estas duas peças são minúsculas)
 }
 DRUM_NAMES = "K bumbo, S caixa, X aro, H chimbal fechado, O chimbal aberto, P chimbal de pé, R condução, E cúpula, C ataque, " \
              "T/M/F tons, B cowbell (campana), L clave, A pandeirola, Q ganzá, G conga aberta aguda, N conga grave, U conga muda (tapa), " \
-             "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô"
+             "V/W bongô agudo/grave, Y/Z timbal agudo/grave, J/I güiro curto/longo, D agogô, t/m triângulo aberto/abafado"
 #: Atraso fino de um toque da bateria (tocar um pouquinho depois do tempo), em ticks: ">" ≈ 19 ms e ">>" ≈ 38 ms a 80 BPM.
 DRUM_DELAY = {"": 0, ">": 12, ">>": 24}
-_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|r)(!!|\?\?|[!?])?(>>|>)?$")
+_DRUM_TOKEN_RE = re.compile(r"^([A-Z]|[tm]|r)(!!|\?\?|[!?])?(>>|>)?$")
 
 
 def split_drums(value) -> list[list[list[str]]]:
