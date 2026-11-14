@@ -57,6 +57,7 @@ let images = loadImages();
 let strip = null;
 let stripWidth = 0;
 let toastFn = null;
+let themeFn = null; // avisa o app quando o tema muda (as cores das partes acompanham o tema)
 
 function applyTheme() {
   document.documentElement.setAttribute("data-theme", look.theme);
@@ -110,7 +111,7 @@ function renderDialog() {
     const name = document.createElement("strong"); name.textContent = t.label;
     const hint = document.createElement("small"); hint.textContent = t.hint;
     b.append(name, hint);
-    b.addEventListener("click", () => { look = { ...look, theme: t.id }; saveLook(look); applyTheme(); renderDialog(); });
+    b.addEventListener("click", () => { look = { ...look, theme: t.id }; saveLook(look); applyTheme(); renderDialog(); themeFn?.(); });
     return b;
   }));
   $("#look-backdrops").replaceChildren(...BACKDROPS.map((d) => {
@@ -148,8 +149,9 @@ export function openLook() {
 }
 
 /** Liga a aparência: aplica o tema, monta o fundo e a janela. options: { toast(texto, opções) }. */
-export function setupLook({ toast } = {}) {
+export function setupLook({ toast, onTheme } = {}) {
   toastFn = toast;
+  themeFn = onTheme;
   applyTheme();
   renderBackdrop();
   const schedule = () => { if (!waiting) { waiting = true; requestAnimationFrame(move); } };

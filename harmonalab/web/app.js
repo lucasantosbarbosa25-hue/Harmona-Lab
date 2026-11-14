@@ -674,7 +674,9 @@ function renderChords() {
 const sectionHue = (name) => {
   const text = String(name || "A").toUpperCase();
   const index = text.length === 1 && text >= "A" && text <= "Z" ? text.charCodeAt(0) - 65 : [...text].reduce((n, ch) => n + ch.charCodeAt(0), 0);
-  return [28, 205, 140, 280, 350, 95, 245, 55][index % 8];
+  // as cores das partes acompanham o tema: nos temas azuis, tons frios (azul, ciano, índigo, verde-água, violeta...)
+  const blue = ["azul", "noite", "claro"].includes(document.documentElement.dataset.theme);
+  return (blue ? [215, 188, 255, 165, 285, 200, 235, 150] : [28, 205, 140, 280, 350, 95, 245, 55])[index % 8];
 };
 let formSelected = -1; // o bloco escolhido na faixa das partes
 let formAdding = false; // o "+" está aberto, mostrando os jeitos de criar uma parte
@@ -2239,7 +2241,7 @@ function bindUi() {
     window.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
   }
-  setupLook({ toast });
+  setupLook({ toast, onTheme: () => { if (state.project) { renderAll(); assistant?.refresh(); } } }); // as cores das partes mudam com o tema
   $("#export-go").addEventListener("click", () => exportChosen());
   $("#export-share").hidden = !canShareMidi(); // só aparece onde o sistema aceita receber o arquivo
   $("#export-share").addEventListener("click", () => exportChosen({ share: true }));

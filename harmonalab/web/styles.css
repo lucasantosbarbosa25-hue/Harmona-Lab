@@ -40,6 +40,9 @@
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --bar-h: 0px;
+  /* a cor de destaque dos botões marcados e das etiquetas (no Âmbar é o laranja; nos temas azuis, o azul do tema).
+     As cores das mãos no teclado (--rh, --lh, --bass) são outra coisa: têm significado e não mudam com o tema. */
+  --accent: var(--rh); --accent-soft: var(--rh-soft);
   color-scheme: light;
 }
 
@@ -96,6 +99,7 @@
   --error: #ff8a80; --error-soft: #47191a; --warning: #f2c46b; --warning-soft: #3a2c10; --info: #b7c4d8; --info-soft: #1d3052;
   --key-white: #e9eef7; --key-black: #050d1c; --key-border: #5a6f92;
   --shadow: 0 1px 2px rgb(0 0 0 / .3);
+  --accent: var(--primary); --accent-soft: color-mix(in srgb, var(--primary) 20%, var(--surface));
   --page-bg: linear-gradient(160deg, #071830 0%, #123b70 55%, #0a2548 100%);
   --silhouette: rgb(125 175 255 / .26);
   color-scheme: dark;
@@ -109,6 +113,7 @@
   --error: #c2261b; --error-soft: #fde4e1; --warning: #8a5a00; --warning-soft: #fdf0d3; --info: #4d5868; --info-soft: #eceef2;
   --key-white: #ffffff; --key-black: #2a2b30; --key-border: #b5c6de;
   --shadow: 0 1px 2px rgb(0 0 0 / .05), 0 4px 16px rgb(0 0 0 / .04);
+  --accent: var(--primary); --accent-soft: color-mix(in srgb, var(--primary) 13%, var(--surface));
   color-scheme: light;
 }
 :root[data-theme="claro"] { --page-bg: linear-gradient(160deg, #f4f8ff 0%, #d6e5fb 60%, #eaf2fd 100%); --silhouette: rgb(26 95 208 / .16); }
@@ -260,13 +265,13 @@ main { max-width: 760px; margin: 0 auto; padding: 0 16px; display: grid; grid-te
 .chord-fn[hidden] { display: none; }
 .meta-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
 .meta-chip { padding: 4px 11px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border-strong); font-size: .82rem; font-weight: 600; }
-.meta-chip.key { background: var(--rh-soft); color: var(--rh); border-color: transparent; }
+.meta-chip.key { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
 .chord-pos { display: block; font-size: .82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 .ponta-badge {
   flex: none; display: inline-flex; align-items: center; gap: 4px;
   padding: 4px 10px; border-radius: 999px; font-family: var(--mono); font-weight: 700; font-size: .95rem;
-  background: var(--rh-soft); color: var(--rh);
+  background: var(--accent-soft); color: var(--accent);
 }
 .ponta-badge .icon { width: 14px; height: 14px; }
 .ponta-badge:empty { display: none; }
@@ -483,7 +488,7 @@ dialog.sheet::backdrop { background: rgb(0 0 0 / .45); }
 .chord-phrase[hidden] { display: none; }
 .chord-phrase .icon { width: 16px; height: 16px; flex: none; }
 .chord-phrase .pn { padding: 1px 7px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); color: var(--text); font-variant-numeric: tabular-nums; }
-.chord-phrase .pn.is-alvo { background: var(--rh-soft); border-color: transparent; color: var(--rh); font-weight: 700; }
+.chord-phrase .pn.is-alvo { background: var(--accent-soft); border-color: transparent; color: var(--accent); font-weight: 700; }
 .chord-phrase .pn.is-aprox { font-style: italic; border-style: dashed; }
 .phrase-mode { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
 .phrase-mode[hidden] { display: none; }
@@ -532,7 +537,7 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .phrase-tags .label small { font-weight: 400; color: var(--muted); }
 .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font: inherit; font-size: .86rem; cursor: pointer; min-height: 34px; }
-.tag[aria-pressed="true"] { background: var(--rh-soft); border-color: var(--rh); color: var(--rh); font-weight: 700; }
+.tag[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .phrase-color { display: flex; align-items: center; gap: 8px; margin: 6px 0 0; font-size: .85rem; color: var(--muted); }
 .phrase-color[hidden] { display: none; }
 .phrase-color select { width: auto; min-height: 34px; padding: 4px 28px 4px 10px; font-size: .85rem; }
