@@ -1,6 +1,6 @@
 ---
 name: harmona-harmonia
-description: Cria progressões de harmonia rebuscada para teclado (jazz/fusion, neo-soul, gospel, soul e MPB) com voicings nota por nota, explica a função de cada acorde (escalas, empréstimos modais, cromatismos, substituições), informa a escala de cada acorde (o Harmona Lab escreve o ritmo e as frases a partir dela) e gera um link que abre a progressão no Harmona Lab. Use quando a pessoa pedir progressões de acordes, reharmonização ou voicings, citar artistas como Jesús Molina, Dirty Loops, Domi & JD Beck, Stevie Wonder ou Ed Motta, ou mencionar o Harmona Lab.
+description: Cria progressões de harmonia para teclado com voicings nota por nota (rebuscada em jazz/fusion, neo-soul, gospel, soul e MPB; diatônica e simples em rock, metal, worship, balada e pop), harmoniza melodias cantadas e cria ou ajusta uma parte (A, B, C) de uma música que já existe, explica a função de cada acorde (escalas, empréstimos modais, cromatismos, substituições), informa a escala de cada acorde (o Harmona Lab escreve o ritmo e as frases a partir dela) e gera um link que abre a progressão no Harmona Lab. Use quando a pessoa pedir progressões de acordes, reharmonização ou voicings, citar artistas como Jesús Molina, Dirty Loops, Domi & JD Beck, Stevie Wonder ou Ed Motta, ou mencionar o Harmona Lab.
 ---
 
 # Harmona Lab: harmonia rebuscada para teclado
@@ -12,6 +12,12 @@ Esta skill monta progressões sofisticadas com os voicings escritos nota por not
 2. Rode `python scripts/validar.py projeto.json` e corrija até aparecer OK. O resumo traz a linha da ponta e a do baixo: use-as na resposta.
 3. Rode `python scripts/gerar_link.py projeto.json` e use o "link curto" na resposta. Se o chat quebrar o link, use o "legível".
 4. Escreva a resposta no formato descrito mais abaixo, no nível de detalhe de `references/exemplo.md`.
+
+Pedido de UMA PARTE (o pedido traz "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "AJUSTE DA PARTE", com o mapa da música e a harmonia atual): siga a tarefa do pedido e devolva SÓ os acordes novos.
+1. Escreva em `parte.json` só esses acordes, em `{"chords": [...]}`: primeiro os reescritos do fim da parte anterior (se o pedido permitir e você reescrever), depois os da parte.
+2. Rode `python scripts/validar.py parte.json` e corrija até aparecer OK.
+3. Rode `python scripts/gerar_link.py parte.json --parte B --retocados K --explicacao "..."` (K = quantos acordes do começo do JSON reescrevem o fim da parte anterior: 0, 1 ou 2). Se o pedido disser que a parte deve somar EXATAMENTE N tempos, acrescente `--tempos N`: o script confere a soma.
+4. Entregue esse link (ele começa com `#cont=`). Não gere o link da música inteira: o app encaixa a parte e mantém o resto.
 Sem poder rodar código, siga as instruções abaixo e monte o link à mão.
 
 ## Referências (consulte quando precisar)
@@ -66,6 +72,10 @@ HARMONIA POR ESTILO
 - Jazz, fusion, neo-soul, gospel, bossa, samba e afins: a linguagem rica descrita acima.
 - Worship, balada, rock, metal, disco e pop: harmonia DIATÔNICA e simples. Tríades, power chords (fundamental e quinta), sus2, sus4, add9, acordes com baixo trocado (slash) e, no máximo, sétimas simples. Poucos acordes, em laço (4 ou 8 compassos). SEM modulação, sem dominantes alterados, sem substituições e sem empréstimos, a menos que o pedido peça. Voicings abertos e simples; a escala de cada acorde é a do tom (ou a pentatônica).
 - Em qualquer estilo: modulação só quando o pedido pedir.
+
+PEDIDO DE UMA PARTE
+- Quando o pedido trouxer "PARTE NOVA", "CONTINUAÇÃO DA MÚSICA" ou "AJUSTE DA PARTE", a música já existe: o pedido traz a tarefa, o mapa das partes, o ponto de ligação, o tom e a harmonia atual (que vale mais do que qualquer versão anterior da conversa).
+- Entregue SÓ os acordes novos, no link de parte que o pedido descreve (começa com #cont=). Não devolva a música inteira nem as outras partes: o app encaixa a parte e mantém o resto.
 
 CRITÉRIOS MUSICAIS
 - Tocável e na região média: mão esquerda com 1 a 3 notas, em geral entre C3 e C4, e mão direita com 3 a 5 notas, em geral entre C4 e C6. O grave fica para a linha de baixo, que o Harmona Lab escreve; desça a mão esquerda até C2 só quando o pedido pedir baixo ou pedal na mão do tecladista; cada mão cabe numa décima. Evite segundas e terças apertadas abaixo de C2.

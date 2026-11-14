@@ -316,11 +316,6 @@ function renderSettings() {
   $("#tempo").value = p.tempo;
   $("#default-velocity").value = p.default_velocity;
   $("#middle-c").value = p.middle_c;
-  $("#project-comment").value = p.comment || "";
-  $("#project-key").value = p.key || "";
-  $("#project-refs").value = p.references || "";
-  $("#project-style").value = p.style || "";
-  $("#project-voice").value = p.voice || "";
   renderMeta();
   const select = $("#time-signature");
   const options = TIME_SIGNATURES.includes(p.time_signature) ? TIME_SIGNATURES : [...TIME_SIGNATURES, p.time_signature];
@@ -354,11 +349,6 @@ function bindSettings() {
     scheduleValidate();
   });
   bind("#title", "title");
-  bind("#project-comment", "comment");
-  bind("#project-key", "key", renderMeta);
-  bind("#project-refs", "references", renderMeta);
-  bind("#project-style", "style", renderMeta);
-  bind("#project-voice", "voice", () => { refreshSecondVoice(); renderGroove(); drawSongRoll(); });
   bind("#tempo", "tempo");
   bind("#default-velocity", "default_velocity", () => {
     for (const chord of state.project.chords) refs.get(chord).velocity.placeholder = state.project.default_velocity || "80";
@@ -823,7 +813,7 @@ function drawSongRoll() {
 /** Aplica uma mudança nas partes ({ chords, voice? }), com Desfazer. `select`: o bloco que fica escolhido depois. */
 function changeSections(result, message, select = -1) {
   if (!result) {
-    toast("Não deu para mudar as partes. Se a Voz tiver um erro de escrita, corrija-o primeiro (em “Sobre esta progressão”).", { error: true });
+    toast("Não deu para mudar as partes. Se a Voz deste projeto tiver um erro de escrita, cante a melodia de novo (em “Música toda”).", { error: true });
     return;
   }
   const undo = snapshot();
@@ -2280,7 +2270,7 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     // cantada por cima da harmonia de uma parte: as notas entram no lugar dela, e o resto da melodia fica
     const block = sectionBlocks(p.chords)[part];
     const old = voiceNotes(p.voice, p.middle_c);
-    if (!block || old === null) { toast("Não deu para pôr a melodia na parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }
+    if (!block || old === null) { toast("Não deu para pôr a melodia na parte: a Voz deste projeto tem um erro de escrita. Cante a melodia de novo (em “Música toda”) ou abra outro projeto.", { error: true }); return; }
     const from = Math.round(block.startBeat * TICKS_PER_BEAT);
     const to = Math.round((block.startBeat + block.beats) * TICKS_PER_BEAT);
     const fresh = events.filter((e) => e.beat < block.beats - 1e-9).map((e) => {
@@ -2298,7 +2288,7 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
   }
   if (target === "nova") {
     const result = appendSection(p, { events, pickup, beatsPerBar: beatsPerBar(), spell, blankChord });
-    if (!result) { toast("Não deu para acrescentar a parte: a Voz atual tem um erro de escrita. Corrija-o em “Sobre esta progressão”.", { error: true }); return; }
+    if (!result) { toast("Não deu para acrescentar a parte: a Voz deste projeto tem um erro de escrita. Cante a melodia de novo (em “Música toda”) ou abra outro projeto.", { error: true }); return; }
     p.chords = result.chords;
     p.voice = result.voice;
     refreshSecondVoice();

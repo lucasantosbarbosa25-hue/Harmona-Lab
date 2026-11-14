@@ -125,6 +125,23 @@ def test_gerar_link_so_gera_com_projeto_valido():
     assert ruim.returncode == 1 and "PROBLEMAS" in ruim.stdout and "https://" not in ruim.stdout
 
 
+def test_gerar_link_de_uma_parte_leva_so_os_acordes_novos():
+    parte = {"chords": [
+        {"symbol": "E7", "duration_beats": 4, "left_hand": ["E2"], "right_hand": ["D4", "G#4"], "comment": "Dominante.", "phrase_scale": "E F# G# A B C D"},
+        {"symbol": "Am7", "duration_beats": 4, "left_hand": ["A2"], "right_hand": ["C4", "E4"], "comment": "Chegada.", "phrase_scale": "A B C D E F G"},
+        {"symbol": "Dm7", "duration_beats": 4, "left_hand": ["D3"], "right_hand": ["F4", "A4"], "comment": "Quarto grau.", "phrase_scale": "D E F G A B C"},
+    ]}
+    r = rodar("gerar_link.py", "-", "--parte", "B", "--retocados", "1", "--tempos", "8", "--explicacao", "Parte B em lá menor", "--base", "https://meu.site",
+              entrada=json.dumps(parte))
+    assert r.returncode == 0, r.stdout + r.stderr
+    link = [linha for linha in r.stdout.splitlines() if linha.startswith("https://")][0]
+    assert link.startswith("https://meu.site/#cont=B&ret=1&x=Parte_B_em_lá_menor&p=E7:E2/D4,Gs4:4:")
+    assert link.count(";") == 2 and "#z=" not in r.stdout and "&t=" not in link
+    errado = rodar("gerar_link.py", "-", "--parte", "B", "--retocados", "1", "--tempos", "16", entrada=json.dumps(parte))
+    assert errado.returncode == 1 and "somam 8 tempos, mas o pedido pede 16" in errado.stdout and "https://" not in errado.stdout
+    assert rodar("gerar_link.py", "-", "--parte", "B", "--retocados", "3", entrada=json.dumps(parte)).returncode == 1
+
+
 # ---------------------------------------------------------------- compatível com o app (JavaScript)
 
 pulando_sem_node = pytest.mark.skipif(NODE is None, reason="Node.js não instalado")

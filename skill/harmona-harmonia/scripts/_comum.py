@@ -158,3 +158,19 @@ def link_compacto(projeto: dict, base: str = BASE_PADRAO) -> str:
         acordes.append(":".join(campos))
     partes.append("p=" + ";".join(acordes))
     return f"{base}#" + "&".join(partes)
+
+
+def link_parte(projeto: dict, parte: str, retocados: int = 0, explicacao: str = "", base: str = BASE_PADRAO) -> str:
+    """Link de UMA PARTE (#cont=B&ret=K&p=...): leva só os acordes novos. O app encaixa na parte e mantém o resto da música."""
+    acordes = link_compacto({"chords": projeto.get("chords", [])}, base).split("#p=", 1)[1]
+    texto = lambda t: _codificar(str(t).strip().replace(" ", "_"))  # noqa: E731
+    partes = [f"cont={texto(parte)}", f"ret={int(retocados)}"]
+    if explicacao.strip():
+        partes.append(f"x={texto(explicacao)}")
+    partes.append(f"p={acordes}")
+    return f"{base}#" + "&".join(partes)
+
+
+def tempos_da_parte(projeto: dict, retocados: int = 0) -> float:
+    """A soma das durações dos acordes da parte (sem os reescritos do fim da parte anterior)."""
+    return sum(float(a.get("duration_beats") or 0) for a in projeto.get("chords", [])[max(0, int(retocados)):])

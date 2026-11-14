@@ -158,7 +158,7 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   O clique soa de propósito **entre dois semitons**, então, mesmo vazando para o microfone (e com eco), o
   app o reconhece e não confunde com a voz; os cliques da contagem também medem o atraso entre o som e o microfone, para
   alinhar a voz com o pulso. No resultado: o desenho das notas, o texto, tom e avisos, e ajustes (oitava da melodia inteira,
-  meio tom de uma nota, apagar nota). **Usar como Voz** põe a melodia no projeto (campo "Voz", em "Sobre esta progressão"),
+  meio tom de uma nota, apagar nota). **Usar como Voz** põe a melodia no projeto (campo `voice` do JSON),
   com o BPM e o compasso do canto e compassos vazios se ela não couber. A Voz toca na escuta (com o som da frase, no banco de
   sons) e sai no MIDI numa faixa própria, **"Voz"** (canal 4). O **Mixer** (acima do botão Ouvir, quando a música tem mais de uma parte sonora) liga, desliga e acerta o volume de cada camada só para a escuta: acordes, voz, solo, baixo, pad, bateria e percussão. Desligue a Voz ali para ouvir só o solo do app; ela continua guardada no projeto. **Gerar MIDI** abre uma lista com as partes que o projeto tem (Acordes, Voz cantada, Solo, Baixo, Bateria, Percussão): marque qualquer combinação, ou todas; cada parte sai numa faixa e o BPM, o compasso e os nomes dos acordes vão sempre. A escolha fica lembrada no aparelho e o nome do arquivo diz as partes (ex.: `minha-musica-voz-baixo.mid`). O pedido copiado para a IA leva a melodia (cada nota com compasso, tempo e duração) para ela harmonizar. Próxima fase: o app harmonizar sozinho a partir da Voz.
 

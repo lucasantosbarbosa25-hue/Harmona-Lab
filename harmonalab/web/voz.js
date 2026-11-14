@@ -238,7 +238,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     const d = defaults();
     const text = String(d.voiceText || "").trim();
     const { events, errors } = parsePhrase(text, d.middleC);
-    if (!text || errors.length || !events.length) { toast?.("A melodia do projeto tem um erro de escrita: corrija o texto dela em “Sobre esta progressão”."); return; }
+    if (!text || errors.length || !events.length) { toast?.("A melodia deste projeto tem um erro de escrita: cante-a de novo (em “Música toda”)."); return; }
     open();
     const notes = events.filter((e) => e.voice === 0).map((e) => ({ beat: e.start / TICKS_PER_BEAT, beats: e.length / TICKS_PER_BEAT, midi: e.note.midi }));
     const guess = estimateKey(notes.map((n) => ({ midi: n.midi, start: n.beat, end: n.beat + n.beats })));
