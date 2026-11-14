@@ -456,6 +456,19 @@ export function simplifyNotes(notes, { minSeconds = 0.2, reach = 2, joinGap = 0,
   return list;
 }
 
+/**
+ * A pessoa cantou notas mais rápidas que colcheias? Conta os ataques seguidos a menos de 3/4 de colcheia um do outro
+ * (uma colcheia cantada um pouco adiantada não chega a isso; uma semicolcheia, sim). Bastam dois, ou um em cada oito
+ * ataques numa melodia longa: um escorregão isolado da voz não muda a grade.
+ */
+export function sangQuickNotes(notes, bpm) {
+  const eighth = 30 / bpm;
+  const sorted = notes.slice().sort((a, b) => a.start - b.start);
+  let quick = 0;
+  for (let i = 1; i < sorted.length; i++) if (sorted[i].start - sorted[i - 1].start < 0.75 * eighth) quick += 1;
+  return quick >= Math.max(2, Math.ceil(sorted.length * 0.12));
+}
+
 // ---------------------------------------------------------------- ritmo
 
 /**
@@ -620,7 +633,8 @@ export function transcribe(samples, sampleRate, { bpm, beatsPerBar = 4, clickTim
   tuning.offset = offsets.length ? offsets.reduce((a, b) => a + b, 0) / offsets.length : tuning.offset;
   // a figura mais rápida que a pessoa quer (colcheia, por padrão): pedaço mais curto que ~60% dela não é nota de verdade
   // automático: semicolcheias até 75 BPM (a semicolcheia dura 200 ms ou mais: dá para cantar de propósito), colcheias acima
-  const resolved = fastest === "auto" ? (bpm <= SIXTEENTHS_UP_TO_BPM ? "16" : "8") : fastest;
+  // ... a não ser que a pessoa tenha cantado notas mais rápidas de propósito: aí a grade de colcheias engoliria essas notas
+  const resolved = fastest === "auto" ? (bpm <= SIXTEENTHS_UP_TO_BPM || sangQuickNotes(notes, bpm) ? "16" : "8") : fastest;
   const step = resolved === "16" ? 0.25 : 0.5;
   const simple = simplifyNotes(notes, { minSeconds: 0.6 * step * (60 / bpm), reach: 2 });
   const { events, shift } = quantize(simple, { bpm, beatZero: firstBeat + latency, beatsPerBar, step });

@@ -273,3 +273,32 @@ test("travado na escala, o canto mantém o contorno: subiu, sobe; desceu, desce;
     if (Math.abs(b.midi - a.midi) >= 1) assert.equal(Math.sign(b.note - a.note), Math.sign(b.midi - a.midi), `nota ${i}: cantou ${a.midi.toFixed(1)} → ${b.midi.toFixed(1)}, ficou ${a.note} → ${b.note}`);
   }
 });
+
+test("notas curtas: acima de 75 BPM, a grade automática passa a semicolcheias quando a pessoa canta notas rápidas", async () => {
+  const { sangQuickNotes } = await import("../../harmonalab/web/engine/canto.js");
+  const scale = [69, 71, 72, 74, 76, 74, 72, 71].map((midi, i) => ({ beat: i * 0.25, beats: 0.25, midi }))
+    .concat([{ beat: 2, beats: 1, midi: 69 }, { beat: 3, beats: 0.25, midi: 72 }, { beat: 3.25, beats: 0.25, midi: 74 }, { beat: 3.5, beats: 0.5, midi: 76 }]);
+  const mixed = [{ beat: 0, beats: 0.5, midi: 69 }, { beat: 0.5, beats: 0.25, midi: 72 }, { beat: 0.75, beats: 0.25, midi: 71 }, { beat: 1, beats: 1, midi: 69 },
+    { beat: 2, beats: 0.25, midi: 67 }, { beat: 2.25, beats: 0.25, midi: 69 }, { beat: 2.5, beats: 0.25, midi: 71 }, { beat: 2.75, beats: 0.25, midi: 72 }, { beat: 3, beats: 1, midi: 74 }];
+  const repeated = [69, 69, 69, 69, 72, 72, 72, 72].map((midi, i) => ({ beat: i * 0.25, beats: 0.25, midi })).concat([{ beat: 2, beats: 2, midi: 69 }]);
+  for (const bpm of [90, 100]) {
+    for (const [name, melody, need] of [["escala", scale, scale.length], ["mistas", mixed, mixed.length], ["repetidas", repeated, repeated.length - 1]]) {
+      for (const voice of [{}, { vibrato: 20, jitter: 0.015, glide: 0.02 }]) {
+        const take = singMelody(melody, { bpm, latency: 0.08, ...voice });
+        const out = transcribe(take.samples, RATE, { bpm, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: false });
+        assert.equal(out.fastest, "16", `${name} a ${bpm} BPM: a grade vira semicolcheias`);
+        assert.ok(score(out.events, melody).hits >= need, `${name} a ${bpm} BPM: ${score(out.events, melody).hits} de ${melody.length} notas (${out.text})`);
+      }
+    }
+    // melodia sem notas rápidas, com a voz chegando de baixo e deslizando: continua em colcheias, sem notas a mais
+    const slow = [{ beat: 0, beats: 1, midi: 69 }, { beat: 1, beats: 1, midi: 72 }, { beat: 2, beats: 2, midi: 76 }, { beat: 4, beats: 0.5, midi: 74 }, { beat: 4.5, beats: 0.5, midi: 72 }, { beat: 5, beats: 1, midi: 72 }, { beat: 6, beats: 2, midi: 69 }];
+    const take = singMelody(slow, { bpm, latency: 0.08, scoop: 0.09, glide: 0.06, vibrato: 30 });
+    const out = transcribe(take.samples, RATE, { bpm, clickTimes: take.clickTimes, countInBeats: 4, latencyFallback: 0.08, diatonic: false });
+    assert.equal(out.fastest, "8", `melodia lenta a ${bpm} BPM: continua em colcheias`);
+    assert.equal(out.events.length, slow.length, out.text);
+  }
+  // um escorregão isolado não muda a grade; dois ataques rápidos, sim
+  const at = (starts) => starts.map((start) => ({ start, end: start + 0.1 }));
+  assert.equal(sangQuickNotes(at([0, 0.6, 0.75, 1.2, 1.8]), 100), false);
+  assert.equal(sangQuickNotes(at([0, 0.15, 0.3, 0.9, 1.5]), 100), true);
+});

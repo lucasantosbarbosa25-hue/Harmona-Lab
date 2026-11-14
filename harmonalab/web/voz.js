@@ -190,7 +190,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     document.querySelectorAll("#canto-fastest button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.fastest === state.fastest)));
     const bpm = Number($("#canto-bpm").value);
     $("#canto-fastest-hint").textContent = state.fastest === "auto"
-      ? `Automático: semicolcheias até ${SIXTEENTHS_UP_TO_BPM} BPM, colcheias acima${bpm ? ` (a ${bpm} BPM: ${bpm <= SIXTEENTHS_UP_TO_BPM ? "semicolcheias" : "colcheias"})` : ""}.`
+      ? `Automático: semicolcheias até ${SIXTEENTHS_UP_TO_BPM} BPM; acima disso, colcheias, a não ser que você cante notas mais rápidas (aí o app percebe e usa semicolcheias)${bpm ? `. A ${bpm} BPM: ${bpm <= SIXTEENTHS_UP_TO_BPM ? "semicolcheias" : "colcheias, ou semicolcheias se houver notas curtas"}` : ""}.`
       : state.fastest === "8" ? "Colcheias: o melhor para melodias simples." : "Semicolcheias: para melodias com notas rápidas.";
     $("#canto-mode-hint").textContent = MODES[state.mode].hint;
     const d = defaults();

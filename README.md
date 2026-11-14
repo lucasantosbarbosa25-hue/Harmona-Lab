@@ -294,6 +294,11 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **Notas curtas no canto.** A grade automática do ritmo é de semicolcheias até 75 BPM e de colcheias acima. Só que, em
+  colcheias, quem cantava notas rápidas de propósito perdia notas (duas semicolcheias caíam na mesma casa). Agora o app
+  percebe as notas rápidas (dois ou mais ataques seguidos a menos de 3/4 de colcheia um do outro) e passa a grade para
+  semicolcheias. Melodias sem notas rápidas continuam em colcheias, e a voz chegando de baixo ou deslizando não vira nota.
+
   **Escolha a escala do canto.** Na janela de cantar, em "Mais opções", com **Ajustar à escala** ligado, o menu **Escolha
   a escala** trava as notas cantadas numa escala a partir da tônica do tom (o que o app identifica no canto, ou o da
   música): **Diatônica do tom** (o padrão), **Pentatônica** (maior ou menor, conforme o tom), **Blues**, **Menor
