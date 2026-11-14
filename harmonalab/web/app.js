@@ -7,7 +7,7 @@ import { initAssistant } from "./ai/ui.js";
 import { Player } from "./audio.js";
 import { setupCanto } from "./voz.js";
 import { estimateKey } from "./engine/canto.js";
-import { addPitchWeights, bestShift, describeShift, makeKey, parseKey, readShift, shiftKey, transposeChord, transposeNotes, wrapShift } from "./tom.js";
+import { addPitchWeights, makeKey, parseKey } from "./tom.js";
 import {
   appendSection, joinSection, moveSection, nextSectionName, removeSection, renameSection, repeatSection,
   sectionBlocks, splitSection, voiceNotes, voiceTextOf,
@@ -154,7 +154,7 @@ function blankChord(extra = {}) {
   return {
     id: nextId++, symbol: "", duration_beats: beatsPerBar(),
     right_hand: "", left_hand: "", bass: "", notes: "",
-    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", request: "", shift: 0, ...extra,
+    top_note: "", velocity: "", strum: "", function: "", scale: "", omitted: "", comment: "", phrase: "", phrase_scale: "", phrase_color: "", comp: "", bass_line: "", riff: "", section: "", request: "", ...extra,
   };
 }
 
@@ -200,7 +200,6 @@ function toEditable(data) {
       comp: Array.isArray(c.comp) ? c.comp.join(" ; ") : text(c.comp),
       section: text(c.section).trim(),
       request: text(c.request),
-      shift: c.shift === "ia" ? "ia" : readShift(c.shift), // a modulação da parte, em semitons a partir do tom da música ("ia": a IA decide)
     };
   });
   // strum do projeto: objeto {direction, delay_ms} ou só a direção ("up")
@@ -232,8 +231,8 @@ function toEditable(data) {
 function toPayload(project = state.project, { draft = false } = {}) {
   const { chords, example, ...rest } = project;
   if (draft && example) rest.example = true;
-  // "request" (o pedido de cada parte) e "shift" (a modulação dela) são só do app: fica no rascunho, não vai para o JSON nem para a análise
-  return { ...rest, chords: chords.map(({ id, request, shift, ...chord }) => (draft ? { ...chord, ...(request ? { request } : {}), ...(shift ? { shift } : {}) } : chord)) };
+  // "request" (o pedido de cada parte) é só do app: fica no rascunho, não vai para o JSON nem para a análise
+  return { ...rest, chords: chords.map(({ id, request, shift, ...chord }) => (draft && request ? { ...chord, request } : chord)) };
 }
 
 // ---------------------------------------------------------------- análise (motor local)
@@ -2262,7 +2261,7 @@ function prerollNotes({ bpm, bars, part = null }) {
  * dela, e compassos vazios no fim se não couber. target "nova": vira uma parte nova, no fim (o BPM e o compasso do projeto
  * não mudam; a anacruse entra por cima do fim da parte anterior).
  */
-function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [], pickup = 0, spell = null, part = -1, keyShift = 0 }) {
+function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [], pickup = 0, spell = null, part = -1 }) {
   const undo = snapshot();
   stopPlayback();
   const p = state.project;
@@ -2304,7 +2303,6 @@ function useVoice({ text, bpm, timeSignature, beats, target = "toda", events = [
     p.voice = result.voice;
     refreshSecondVoice();
     formSelected = sectionBlocks(p.chords).length - 1;
-    p.chords[sectionBlocks(p.chords).at(-1).from].shift = readShift(keyShift); // o tom em que a parte foi cantada
     renderAll();
     validateNow();
     saveDraftSoon();
@@ -2386,9 +2384,6 @@ function getParts() {
     const from = Math.round(b.startBeat * TICKS_PER_BEAT);
     const to = Math.round((b.startBeat + b.beats) * TICKS_PER_BEAT);
     const melody = notes.some((n) => n.start >= from && n.start < to);
-    const first = chords[b.from] || {};
-    const auto = first.shift === "ia";
-    const shift = auto ? 0 : readShift(first.shift);
     const names = chords.slice(b.from, b.to).filter((c) => !(report?.chords?.[chords.indexOf(c)]?.is_rest ?? true)).map((c) => String(c.symbol || "").trim()).filter(Boolean);
     // "new": a música ainda não tem harmonia nenhuma e só tem uma parte (ou é o exemplo): o pedido cria a música inteira
     const kind = state.project.example || (empty && !harmony && blocks.length === 1) ? "new" : empty ? "create" : "adjust";
@@ -2400,8 +2395,8 @@ function getParts() {
       fixed: !(empty && !melody),
       request: String(chords[b.from]?.request || ""),
       startBeat: b.startBeat,
-      // o tom: o da música mais a modulação da parte (auto: a IA decide; só em parte criada pelo pedido)
-      shift, auto: auto && empty && !melody, key: song ? shiftKey(song, shift) : null, keyText: song ? describeShift(song, shift) : "", songKey: song,
+      // o tom: todas as partes ficam no tom da música (o da parte A)
+      shift: 0, auto: false, key: song, songKey: song,
       firstSymbol: names[0] || "", lastSymbols: names.slice(-2),
     };
   });
@@ -2441,61 +2436,6 @@ function songKey() {
   if (!weights.some((w) => w > 0)) return null;
   const guess = estimateKey(weights.map((w, pc) => ({ midi: 60 + pc, start: 0, end: w })).filter((n) => n.end > 0));
   return makeKey(guess.tonic, guess.mode);
-}
-
-/**
- * A modulação de uma parte (semitons a partir do tom da música, ou "ia": a IA decide). Numa parte vazia, só fica guardada
- * (vai para o pedido e para o canto). Numa parte que já tem harmonia, o app transpõe na hora os acordes e a melodia dela.
- */
-function setPartShift(index, value) {
-  const part = getParts()[index];
-  if (!part) return;
-  const chord = state.project.chords[part.from];
-  if (value === "ia" || part.empty) {
-    chord.shift = value === "ia" ? "ia" : readShift(value);
-    saveDraftSoon();
-    assistant?.refresh();
-    return;
-  }
-  const delta = readShift(value) - part.shift;
-  if (delta) transposePart(index, delta);
-  else assistant?.refresh();
-}
-
-/** Transpõe uma parte pronta `delta` semitons: os acordes (com frases, baixo e riff) e a melodia que está em cima dela. */
-function transposePart(index, delta) {
-  const parts = getParts();
-  const part = parts[index];
-  if (!part || !delta) return;
-  const undo = snapshot();
-  stopPlayback();
-  const p = state.project;
-  const song = part.songKey;
-  const target = song ? shiftKey(song, part.shift + delta) : null;
-  const flats = target?.flats ?? false;
-  p.chords = p.chords.map((c, i) => (i >= part.from && i < part.to ? transposeChord(c, delta, flats) : c));
-  const notes = voiceNotes(p.voice, p.middle_c);
-  if (notes?.length) {
-    const from = Math.round(part.startBeat * TICKS_PER_BEAT);
-    const to = part.hasNext ? Math.round((part.startBeat + part.beats) * TICKS_PER_BEAT) : Infinity;
-    p.voice = voiceTextOf(notes.map((n) => (n.start >= from && n.start < to ? { ...n, name: transposeNotes(n.name, delta, flats) } : n)));
-  }
-  if (index === 0 && song) {
-    // a parte A dá o tom da música: ele muda, e as outras partes ficam onde estavam (a distância delas é que muda)
-    p.key = target.name;
-    for (const other of parts) if (other.index > 0 && p.chords[other.from].shift !== "ia") p.chords[other.from].shift = wrapShift(other.shift - delta);
-    p.chords[part.from].shift = 0;
-  } else {
-    p.chords[part.from].shift = wrapShift(part.shift + delta);
-  }
-  p.example = false;
-  refreshSecondVoice();
-  renderAll();
-  validateNow();
-  saveDraftSoon();
-  const n = Math.abs(delta);
-  toast(`Parte ${part.name} transposta ${n} semitom${n > 1 ? "s" : ""} ${delta > 0 ? "acima" : "abaixo"}${song ? `: agora em ${target.long}` : ""} (acordes e melodia).`.replace("semitoms", "semitons"),
-    { action: { label: "Desfazer", run: undo }, timeout: 8000 });
 }
 
 /** O pedido de cada parte fica guardado no primeiro acorde dela (campo "request", só do app). */
@@ -2549,15 +2489,9 @@ function applyContinuation(data, { explanation = "", request = "", index: asked 
   const undo = snapshot();
   stopPlayback();
   // as marcas das partes ficam onde estavam: a do começo da parte anterior (se o 1º acorde dela foi reescrito) e a desta
-  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; c.request = i === 0 ? String(replaced[0]?.request || "") : ""; c.shift = i === 0 ? replaced[0]?.shift ?? 0 : 0; });
+  retouched.forEach((c, i) => { c.section = i === 0 ? String(replaced[0]?.section || "").trim() : ""; c.request = i === 0 ? String(replaced[0]?.request || "") : ""; });
   fresh.forEach((c, i) => { c.section = i === 0 ? target.name : ""; });
   fresh[0].request = request || target.request;
-  // o tom da parte continua guardado nela; se a IA decidiu, o app descobre qual foi pelas notas
-  if (target.auto && target.songKey) {
-    const weights = new Array(12).fill(0);
-    for (const c of fresh) for (const field of ["bass", "left_hand", "right_hand", "notes"]) addPitchWeights(weights, c[field], toNumber(c.duration_beats) || 1);
-    fresh[0].shift = wrapShift(bestShift(target.songKey, weights));
-  } else fresh[0].shift = target.auto ? 0 : target.shift;
   const start = target.from - count;
   const after = p.chords.slice(target.to);
   // parte criada só pelo pedido: se o tamanho mudou, a melodia das partes seguintes se desloca junto
@@ -2651,7 +2585,7 @@ async function init() {
   state.project = toEditable(data || { title: "Nova progressão", chords: [{}] });
   renderAll();
   assistant = initAssistant({
-    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, setPartShift, describeNewSection, hasProgression, applyGenerated, applyContinuation,
+    $, h, icon, toast, getProjectJson: currentProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation,
   });
   window.addEventListener("hashchange", () => handleHash(true));
   await handleHash(hadDraft);

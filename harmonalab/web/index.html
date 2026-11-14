@@ -47,18 +47,6 @@
         <div class="ai-parts-list" id="ai-parts-list" role="group" aria-labelledby="ai-parts-label"></div>
       </div>
       <p class="ai-task" id="ai-task" hidden></p>
-      <div class="ai-key" id="ai-key" hidden>
-        <label class="field ai-shift-field" for="ai-shift">
-          <span class="label">Modular (semitons)</span>
-          <input type="number" id="ai-shift" inputmode="numeric" min="-11" max="11" step="1" value="0">
-        </label>
-        <p class="ai-key-text" id="ai-key-text" aria-live="polite"></p>
-        <label class="switch" for="ai-key-auto" id="ai-key-auto-box" hidden>
-          <input type="checkbox" id="ai-key-auto" role="switch">
-          <span class="switch-track" aria-hidden="true"></span>
-          <span class="switch-text">A IA decide o tom <small>ela pode ficar no tom da música ou modular</small></span>
-        </label>
-      </div>
       <div class="ai-input">
         <label class="sr-only" for="ai-prompt">Pedido</label>
         <textarea id="ai-prompt" rows="4" maxlength="4000" placeholder="Ex.: 8 acordes, 76 BPM, estilo Jesús Molina, ponta descendo de F# até C e baixo em pedal de E"></textarea>
@@ -288,7 +276,7 @@
         </div>
       </div>
       <details class="more sound-tools" id="sound-tools">
-        <summary>Som da pré-escuta: <span id="sound-summary">timbre simples</span></summary>
+        <summary><span class="sound-row-label">Sons para ouvir</span><span id="sound-summary">timbre simples</span><span class="sound-row-action">Trocar</span></summary>
         <div class="more-body">
           <label class="field wide" for="sound-chords"><span class="label">Som dos acordes</span><select id="sound-chords"></select></label>
           <label class="field wide" for="sound-phrase" id="sound-phrase-field" hidden><span class="label">Som da frase</span><select id="sound-phrase"></select></label>
@@ -422,13 +410,6 @@
           <button type="button" data-target="toda" aria-pressed="false">Música toda</button>
         </div>
         <p class="canto-hint" id="canto-target-hint"></p>
-        <div class="canto-shift-row" id="canto-shift-box" hidden>
-          <label class="field" for="canto-shift">
-            <span class="label">Modular (semitons)</span>
-            <input type="number" id="canto-shift" inputmode="numeric" min="-11" max="11" step="1" value="0">
-          </label>
-          <p class="canto-key-text" id="canto-key-text" aria-live="polite"></p>
-        </div>
       </div>
       <div class="canto-settings">
         <label class="field">

@@ -193,15 +193,9 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   (pede confirmação). A progressão de exemplo, que abre na primeira vez, é a exceção: o primeiro pedido cria a sua música
   no lugar dela.
 
-  **O tom de cada parte.** O tom da música é o da parte A. Em cada parte há um campo **Modular (semitons)**: você digita
-  só o número (`2`, `-3`; o sinal de menos modula para baixo) e o app escreve o tom por extenso ("Lá menor → Si menor (2
-  semitons acima)"). A distância é sempre contada a partir do tom da música, então "+2" quer dizer a mesma coisa em
-  qualquer ordem dos blocos. O que o número faz depende da parte:
-  - **parte a criar:** o tom vai para o pedido (a IA usa predominantemente a escala dele e prepara a modulação no fim da
-    parte anterior) e, ao cantar a parte nova, as notas cantadas ficam presas à escala desse tom;
-  - **parte pronta:** o próprio app **transpõe** a parte na hora (acordes, frases, baixo, riff e a melodia dela), com
-    Desfazer. Transpor a parte A muda o tom da música; as outras partes ficam onde estavam;
-  - **"A IA decide o tom"** (só em parte criada pelo pedido): a IA escolhe, e o app descobre pelas notas qual foi.
+  **O tom das partes.** Todas as partes ficam no tom da música (o da parte A). O pedido de cada parte diz esse tom à IA
+  (use predominantemente a escala dele) e, ao cantar uma parte nova, as notas ficam presas a essa escala. Não há comando
+  de modulação: se quiser outra região numa parte, escreva isso no texto do pedido.
 
   **Cantar por cima da harmonia.** Numa parte que já tem acordes e ainda não tem melodia, a janela de cantar oferece **Na
   parte X**: a harmonia da parte toca enquanto você canta (use fone, para ela não vazar no microfone), a gravação para
@@ -214,7 +208,7 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 
   O pedido de uma parte é **completo toda vez** (dá para colar na mesma conversa ou numa conversa nova): além da tarefa,
   leva o **mapa da música** (as partes na ordem atual, com o tamanho, o tom e o pedido que criou cada uma), o **ponto de
-  ligação** (os dois últimos acordes da parte anterior e o primeiro da seguinte), o **tom da parte** e o aviso de que a
+  ligação** (os dois últimos acordes da parte anterior e o primeiro da seguinte), o **tom da música** e o aviso de que a
   harmonia enviada é a versão atual e vale mais do que a memória da conversa.
 
   O pedido de uma parte leva só a **harmonia** da música (sem frases, levadas, baixo, bateria nem voz, que são do app), a

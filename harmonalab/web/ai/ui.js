@@ -26,7 +26,7 @@ const loadResearch = () => { try { return localStorage.getItem(RESEARCH_KEY) ===
 const saveResearch = (on) => { try { localStorage.setItem(RESEARCH_KEY, on ? "1" : "0"); } catch { /* sem armazenamento */ } };
 
 export function initAssistant(api) {
-  const { $, h, icon, toast, getProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, setPartShift, describeNewSection, hasProgression, applyGenerated, applyContinuation } = api;
+  const { $, h, icon, toast, getProjectJson, getVoice, getParts, getTarget, selectPart, setPartRequest, describeNewSection, hasProgression, applyGenerated, applyContinuation } = api;
   const els = {
     prompt: $("#ai-prompt"), generate: $("#ai-generate"), status: $("#ai-status"), result: $("#ai-result"),
     mic: $("#ai-mic"), parts: $("#ai-parts"), partsList: $("#ai-parts-list"), task: $("#ai-task"), examples: $("#ai-examples"), chatStep: $("#ai-chat-step"),
@@ -53,17 +53,6 @@ export function initAssistant(api) {
   $("#ai-chat-links").replaceChildren(...CHATS.map((c) => h("a", { class: "btn secondary small", href: c.url, target: "_blank", rel: "noopener noreferrer" }, c.name)));
   els.generate.addEventListener("click", copyForChat);
   $("#ai-load-answer").addEventListener("click", loadAnswer);
-  // o tom da parte: a pessoa digita só o número; o nome do tom é o app que escreve
-  const shiftInput = $("#ai-shift");
-  const autoKey = $("#ai-key-auto");
-  shiftInput.addEventListener("change", () => {
-    const t = getTarget();
-    if (!t) return;
-    setPartShift(t.index, shiftInput.value);
-    shiftInput.value = String(getTarget()?.shift ?? 0); // o campo mostra o que ficou valendo (a parte A, transposta, volta a 0: ela é o tom da música)
-  });
-  autoKey.addEventListener("change", () => { const t = getTarget(); if (t) setPartShift(t.index, autoKey.checked ? "ia" : shiftInput.value); });
-
   const bars = (t) => { const n = t.toBar - t.fromBar + 1; return `${n} compasso${n === 1 ? "" : "s"}`; };
   /** O que o assistente vai fazer na parte escolhida, em uma frase. */
   function taskText(t) {
@@ -95,18 +84,6 @@ export function initAssistant(api) {
       }
       els.partsList.querySelectorAll(".ai-part[data-index]").forEach((b) => b.setAttribute("aria-pressed", String(Number(b.dataset.index) === t.index)));
       els.task.textContent = taskText(t);
-    }
-    // o tom: aparece quando a música tem tom; numa parte pronta, mudar o número transpõe a parte na hora
-    const keyed = !fresh && Boolean(t.songKey);
-    $("#ai-key").hidden = !keyed;
-    if (keyed) {
-      const free = t.kind === "create" && !t.melody; // só parte criada pelo pedido pode deixar o tom com a IA
-      $("#ai-key-auto-box").hidden = !free;
-      autoKey.checked = free && t.auto;
-      shiftInput.disabled = free && t.auto;
-      if (document.activeElement !== shiftInput) shiftInput.value = String(t.shift);
-      $("#ai-key-text").textContent = free && t.auto ? `Tom da parte ${t.name}: a IA decide (a música está em ${t.songKey.long}).`
-        : `Tom da parte ${t.name}: ${t.keyText}.${t.kind === "adjust" ? " Mudar o número transpõe a parte (acordes e melodia)." : ""}`;
     }
     // o texto da caixa só troca quando a parte muda
     const key = fresh ? "new" : `${t.index}:${t.name}`;

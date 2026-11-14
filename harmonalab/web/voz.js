@@ -2,7 +2,6 @@
 // ouviu, para conferir, ajustar e usar como a camada Voz do projeto. A análise está em engine/canto.js.
 import { SIXTEENTHS_UP_TO_BPM, estimateKey, hatTickSamples, hzFromMidi, speller, transcribe, voiceText, woodblockSamples } from "./engine/canto.js";
 import { TICKS_PER_BEAT, parsePhrase } from "./engine/phrase.js";
-import { describeShift, readShift, shiftKey } from "./tom.js";
 import { melodyFromMidi, melodyTracks, parseMidi } from "./engine/midi-read.js";
 
 const COUNT_IN_BARS = 1; // 2 quando há anacruse ou quando o fim da parte anterior toca antes (parte nova)
@@ -203,9 +202,6 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     document.querySelectorAll("#canto-target button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.target === state.target)));
     const fresh = asNewPart();
     const over = overPart();
-    // o tom da parte nova: a pessoa digita os semitons, o app escreve o nome; o canto fica na escala desse tom
-    $("#canto-shift-box").hidden = !(fresh && d.song) || state.result?.target === "editar";
-    if (fresh && d.song) $("#canto-key-text").textContent = `Tom da parte ${d.nextSection}: ${describeShift(d.song, readShift($("#canto-shift").value))}. As notas cantadas ficam nessa escala.`;
     $("#canto-target-hint").textContent = over
       ? `Você canta por cima da harmonia da parte ${over.name} (${over.bars} compasso${over.bars === 1 ? "" : "s"}), que toca enquanto você canta. Use fone, para a música não vazar no microfone.${over.key ? ` As notas ficam na escala de ${over.key.long}.` : ""}`
       : fresh
@@ -227,7 +223,6 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     $("#canto-signature").value = ["2/4", "3/4", "4/4", "6/8"].includes(d.timeSignature) ? d.timeSignature : "4/4";
     $("#canto-volume").value = MODES[state.mode].volume;
     state.target = d.canAppend && d.hasVoice ? "nova" : "toda"; // já há melodia: o natural é continuar a música
-    $("#canto-shift").value = "0";
     if (state.result?.target === "parte") state.result = null;
     if (state.result && state.result.target === "nova" && !d.canAppend) state.result = null;
     if (state.result?.target === "editar") state.result = null; // a edição da melodia do projeto não fica de um dia para o outro
@@ -288,10 +283,9 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     const withMusic = over ? true : newPart && !(pickup && state.mode !== "fone"); // sem fone, o trecho vazaria por cima da anacruse
     const countInBars = pickup || withMusic ? PREROLL_BARS : COUNT_IN_BARS;
     const song = defaults().song;
-    const keyShift = newPart ? readShift($("#canto-shift").value) : 0;
     state.take = {
-      pickup, withMusic, target: over ? "parte" : newPart ? "nova" : "toda", countInBeats: beatsPerBar * countInBars, over, keyShift,
-      key: over ? over.key : newPart && song ? shiftKey(song, keyShift) : null, // o tom da parte prende as notas à escala dele
+      pickup, withMusic, target: over ? "parte" : newPart ? "nova" : "toda", countInBeats: beatsPerBar * countInBars, over,
+      key: over ? over.key : newPart && song ? song : null, // parte nova ou por cima da harmonia: as notas ficam na escala do tom da música
     };
     try {
       await state.recorder.start({
@@ -330,7 +324,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     if (!take) { status("A gravação veio vazia. Tente de novo.", true); return; }
     await new Promise((resolve) => setTimeout(resolve, 30)); // deixa a tela mostrar "Analisando" antes da conta
     const bar = beatsPerBarOf(state.signature);
-    const { pickup, withMusic, target, over, keyShift, key } = state.take;
+    const { pickup, withMusic, target, over, key } = state.take;
     const result = transcribe(take.samples, take.sampleRate, {
       bpm: state.bpm, beatsPerBar: bar, clickTimes: take.clickTimes, tickTimes: take.tickTimes, countInBeats: take.countInBeats,
       // com anacruse, o atraso do clique é medido só no 1º compasso da contagem (no 2º a pessoa já pode estar cantando)
@@ -346,7 +340,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     state.midi = null;
     state.history = []; // melodia nova no desenho: o Desfazer e o zoom começam do zero
     state.zoom = 1;
-    state.result = { ...result, bpm: state.bpm, signature: state.signature, target, over, keyShift, ...(over ? { maxBeats: over.beats } : {}) };
+    state.result = { ...result, bpm: state.bpm, signature: state.signature, target, over, ...(over ? { maxBeats: over.beats } : {}) };
     state.selected = -1;
     status("Pronto! Confira as notas: toque numa nota do desenho para ajustá-la.");
     renderResult();
@@ -365,7 +359,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
       ? `${r.events.length} notas da melodia do projeto · grade em ${grid}.`
       : r.source === "midi"
       ? `${r.events.length} notas do arquivo MIDI · tom provável: ${r.key?.name ?? "?"} · ${r.bpm} BPM, compasso ${r.signature}.`
-      : `${r.events.length} notas · ${r.target === "parte" || (r.target === "nova" && defaults().song) ? "tom da parte" : "tom provável"}: ${r.key?.name ?? "?"}${scale} · ${r.bpm} BPM, ritmo em ${grid} · ${leak}.`;
+      : `${r.events.length} notas · ${r.target === "parte" || (r.target === "nova" && defaults().song) ? "tom da música" : "tom provável"}: ${r.key?.name ?? "?"}${scale} · ${r.bpm} BPM, ritmo em ${grid} · ${leak}.`;
     $("#canto-track-box").hidden = !(r.source === "midi" && state.midi && state.midi.tracks.length > 1);
     $("#canto-again").hidden = r.source === "midi" || r.source === "projeto";
     renderMode();
@@ -824,7 +818,7 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     onUse({
       text: text(), bpm: r.bpm, timeSignature: r.signature, beats: totalBeats(),
       target: r.target === "editar" ? "editar" : r.target === "parte" ? "parte" : r.target === "nova" && defaults().canAppend ? "nova" : "toda",
-      part: r.over?.index ?? -1, keyShift: r.target === "nova" ? r.keyShift ?? readShift($("#canto-shift").value) : 0,
+      part: r.over?.index ?? -1,
       events: r.events.map((e) => ({ ...e })), pickup: r.shift || 0, spell: speller(r.key, defaults().middleC), source: r.source || "canto",
     });
     state.result = null; // já foi para o projeto: a próxima vez começa limpa
@@ -878,7 +872,6 @@ export function setupCanto({ defaults, onUse, play, stop, toast, preroll }) {
     renderMode();
   }));
   $("#canto-pickup").addEventListener("change", () => renderMode());
-  $("#canto-shift").addEventListener("input", () => renderMode());
   $("#canto-again").addEventListener("click", () => { halt(); state.result = null; $("#canto-result").hidden = true; record(); });
   return { edit };
 }
