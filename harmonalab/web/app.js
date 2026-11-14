@@ -41,7 +41,6 @@ const TIME_SIGNATURES = ["2/4", "3/4", "4/4", "5/4", "6/4", "3/8", "5/8", "6/8",
 const PART_CLASS = { right_hand: "rh", left_hand: "lh", bass: "bass", notes: "free" };
 const PART_LABEL = { right_hand: "Mão direita", left_hand: "Mão esquerda", bass: "Baixo / pedal", notes: "Notas sem mão" };
 const CHORD_FIELDS = ["right_hand", "left_hand", "bass", "notes", "top_note", "velocity", "duration_beats", "strum", "omitted", "phrase", "phrase_scale", "comp", "bass_line"];
-const PHRASE_MODES = ["both", "line", "chords"];
 const COLORS = [["", "Estilo"], ["dentro", "Dentro"], ["cromatico", "Cromático"], ["outside", "Outside"]]; // acorde + frase · mão esquerda + frase · só acorde
 const STRUM_LABEL = { up: "grave → agudo", down: "agudo → grave" };
 const DEFAULT_STRUM_DELAY_MS = 20;
@@ -117,7 +116,7 @@ const state = {
   playing: false,
   mix: {}, // mixer da escuta: { parte: { on, gain } } (parte que não está aqui = ligada, volume normal)
   clock: null, // enquanto toca: { start (ms), secondsPerBeat, fromBeat, beats } para a linha que corre na melodia
-  phraseMode: "both", // o que ouvir e exportar: acorde + frase, mão esquerda + frase ou só acorde
+  phraseMode: "both", // acorde + frase (o seletor "ouvir e exportar" saiu: o mixer e a lista de partes do MIDI fazem esse papel)
   // som da pré-escuta de cada camada: um instrumento do app ("kb:id"), do banco do aparelho ("sf:MSB:LSB:programa"), ou
   // o timbre simples (acordes), o mesmo dos acordes (frase, baixo), o pad sintético do app (pad), sem bateria
   shape: {}, // os controles de timbre de cada som (bindSound lê os guardados)
@@ -1119,13 +1118,10 @@ function renderAnalysis() {
   assistant?.refresh();
 }
 
-/** O seletor "ouvir e exportar" só aparece quando alguma frase tem notas. */
+/** O que depende de haver frases e Voz: o mixer e o botão de editar a melodia. */
 function renderPhraseMode() {
-  const any = (state.report?.chords || []).some((c) => c.phrase);
-  $("#phrase-mode-box").hidden = !any;
   renderMixer();
   $("#voice-edit").hidden = !String(state.project.voice || "").trim();
-  document.querySelectorAll("#phrase-mode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === state.phraseMode)));
 }
 
 function renderSummary() {
@@ -2473,12 +2469,6 @@ function bindUi() {
   window.addEventListener("resize", () => drawSongRoll());
   $("#export-all").addEventListener("click", () => { document.querySelectorAll("#export-parts input, #export-perc-list input").forEach((i) => (i.checked = true)); renderExportNote(); });
   $("#export-none").addEventListener("click", () => { document.querySelectorAll("#export-parts input").forEach((i) => (i.checked = false)); renderExportNote(); });
-  document.querySelectorAll("#phrase-mode button").forEach((b) => b.addEventListener("click", () => {
-    if (!PHRASE_MODES.includes(b.dataset.mode)) return;
-    state.phraseMode = b.dataset.mode;
-    if (state.playing) stopPlayback();
-    renderPhraseMode();
-  }));
 
   const menu = $("#menu");
   $("#menu-button").addEventListener("click", () => menu.showModal());

@@ -122,20 +122,7 @@
         <div class="form-actions" id="form-actions" hidden></div>
       </div>
       <div class="song-listen">
-        <span class="label">Para ouvir <small>o botão Ouvir fica na barra de baixo</small></span>
-      <div class="phrase-mode" id="phrase-mode-box" hidden>
-        <span class="label">Ouvir e exportar</span>
-        <div class="segmented" id="phrase-mode" role="group" aria-label="O que ouvir e exportar">
-          <button type="button" data-mode="both" aria-pressed="true">Acorde + frase</button>
-          <button type="button" data-mode="line" aria-pressed="false">Mão esquerda + frase</button>
-          <button type="button" data-mode="chords" aria-pressed="false">Só acorde</button>
-        </div>
-      </div>
-      <details class="mixer" id="mixer" hidden>
-        <summary>Mixer <small id="mixer-summary"></small></summary>
-        <p class="ai-help">Liga, desliga e acerta o volume de cada parte, só para ouvir. No MIDI, você escolhe as partes ao gerar.</p>
-        <div class="mixer-rows" id="mixer-rows"></div>
-      </details>
+        <span class="label">Para ouvir <small>o play fica na barra do topo</small></span>
       <div class="listen-row" id="listen-row">
         <label class="switch" for="listen-loop">
           <input type="checkbox" id="listen-loop" role="switch">
@@ -337,6 +324,13 @@
             <input type="file" id="slot-file" accept=".sf2,.sf3,.dls" hidden>
           </div>
           <p class="ai-help wide" id="sound-info">O botão <strong>SF2</strong> ao lado de cada som carrega do aparelho um banco só para aquele som (a percussão usa o banco da bateria). O botão abaixo carrega um banco geral, que oferece os instrumentos dele a todos os sons. Os bancos do aparelho ficam só nele; vários bancos grandes juntos podem pesar no navegador.</p>
+        </div>
+      </details>
+      <details class="more panel mixer" id="mixer" hidden>
+        <summary><span class="panel-title">Mixer <small id="mixer-summary"></small></span></summary>
+        <div class="more-body">
+          <p class="ai-help wide">Liga, desliga e acerta o volume de cada parte. Vale para ouvir e para o áudio exportado; no MIDI, você escolhe as partes ao gerar.</p>
+          <div class="mixer-rows wide" id="mixer-rows"></div>
         </div>
       </details>
       <details class="more panel voicing-tools" id="voicing-tools">

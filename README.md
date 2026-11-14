@@ -462,8 +462,8 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
 Tudo vem da **base de conhecimento** em [`kb/estilos.js`](harmonalab/web/kb/estilos.js): células rítmicas, levadas, costumes e
 influências de cada estilo, destilados de aulas e artigos abertos (as fontes estão no próprio arquivo), sem transcrição de
 música nenhuma. O que o app escreve passa pela mesma conferência das frases escritas à mão: o alvo cai num tempo e é nota do
-acorde, a aproximação resolve por semitom, as notas são da escala. Em **ouvir e exportar** você escolhe *acorde + frase*,
-*mão esquerda + frase* ou *só acorde*; no `.mid`, os acordes (com a levada) ficam no canal 1 e a frase no **canal 2**.
+acorde, a aproximação resolve por semitom, as notas são da escala. O que toca e o que vai para o arquivo você escolhe no **Mixer** (entre Sons e Voicings) e na
+lista de partes ao gerar o MIDI; no `.mid`, os acordes (com a levada) ficam no canal 1 e a frase no **canal 2**.
 Frases e levadas também podem ser escritas ou editadas à mão em *Mais*.
 
 **Banco de sons (.sf2).** Em *Som da pré-escuta* (acima dos acordes), escolha um dos bancos que vêm com o app (lista em

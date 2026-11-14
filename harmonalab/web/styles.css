@@ -569,11 +569,8 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .canto-tools, .canto-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .canto-actions { justify-content: flex-end; }
 .canto-warnings:empty { display: none; }
-.mixer { margin: 0 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; background: var(--surface); }
 .mixer[hidden] { display: none; }
-.mixer summary { cursor: pointer; font-weight: 700; min-height: 32px; display: flex; align-items: center; gap: 8px; }
-.mixer summary small { font-weight: 400; color: var(--muted); }
-.mixer-rows { display: grid; gap: 4px; margin-top: 6px; }
+.mixer-rows { display: grid; gap: 4px; }
 .mixer-row { display: grid; grid-template-columns: minmax(110px, 1fr) 2fr; align-items: center; gap: 10px; min-height: 44px; }
 .mixer-row label { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .mixer-row input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--primary); margin: 0; }
@@ -672,7 +669,7 @@ details.panel > .more-body { padding: 0 14px 14px; }
 .export-perc .export-part { padding: 6px 4px; font-size: .95rem; }
 .song { padding: 16px; display: grid; gap: 14px; }
 .song h2 { margin: 0; font-size: 1.05rem; }
-.song .form-strip, .song .mixer, .song .listen-row, .song .phrase-mode { margin: 0; }
+.song .form-strip, .song .listen-row { margin: 0; }
 .song-listen { display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--border); }
 .canto-roll-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .canto-zoom { display: none; align-items: center; gap: 2px; color: var(--muted); font-size: .85rem; }
