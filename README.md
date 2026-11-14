@@ -294,6 +294,11 @@ Com a harmonia aberta, o painel **Ritmo e frases** faz o resto na hora, sem IA e
   3 ou 4 notas que andam um grau de cada vez). As instruções da IA ganharam "Harmonia por estilo": nesses estilos, harmonia
   diatônica e simples (tríades, power chords, sus, add9), em laço e **sem modulação, a menos que o pedido peça**.
 
+  **A tela acompanha a música.** Ao apertar o play do topo, a tela rola sozinha até o acorde que está soando, que
+  **acende** (borda, brilho em volta e fundo tingido), no celular e no computador. Se o acorde está numa parte recolhida, a
+  tela vai até a divisória dela. Rolar a tela à mão no meio da música (dedo, roda do mouse ou teclas) pausa o
+  acompanhamento, para não brigar com quem está mexendo nos sons, e ele volta no próximo play.
+
   **Pelo menos 16 baterias em cada estilo.** Além das que cada estilo já tinha, as baterias novas ficam em
   `web/kb/baterias.js`, numa notação de grade bem mais curta (uma linha por peça, um caractere por passo:
   `"K x--x--x---x-x---"`), que o app expande para a notação da bateria do projeto. A grade de 12 passos é a de tercinas

@@ -1328,8 +1328,23 @@ function stopClock() {
   drawSongRoll();
 }
 
+/**
+ * Acende o acorde que está soando. Tocando a música (o play do topo), a tela acompanha: rola até o acorde, no celular e
+ * no computador. Se a pessoa rolar a tela com o dedo ou com o mouse no meio da música, o acompanhamento para (para não
+ * brigar com ela, por exemplo ao mexer nos sons) e volta no próximo play.
+ */
+const follow = { on: true, last: -1 };
 function setPlaying(index) {
   state.project.chords.forEach((c, i) => refs.get(c)?.card.classList.toggle("is-playing", i === index));
+  if (index < 0) { follow.last = -1; return; }
+  if (!state.playing || !follow.on || index === follow.last) return;
+  follow.last = index;
+  const chords = state.project.chords;
+  let target = refs.get(chords[index])?.card;
+  // acorde de uma parte recolhida na lista: a tela vai até a divisória da parte
+  if (!target || !target.offsetParent) target = $(`.section-divider[data-section="${sectionBlocks(chords).findIndex((b) => index >= b.from && index < b.to)}"]`);
+  const calm = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  target?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
 }
 
 function renderPlayButton() {
@@ -1352,6 +1367,8 @@ function stopPlayback() {
 
 async function playAll() {
   if (state.playing) return stopPlayback();
+  follow.on = true; // cada play volta a acompanhar o acorde que soa
+  follow.last = -1;
   if (usingSoundFont()) soundFont.unlock(); // no toque, antes de esperar qualquer coisa (exigência do iPhone)
   await validateNow();
   state.playing = true;
@@ -2425,6 +2442,11 @@ function bindUi() {
     revoiceChords({ pedal });
   });
   $("#export").addEventListener("click", exportMidi);
+  // rolar a tela à mão no meio da música (dedo, roda do mouse, teclas) pausa o acompanhamento até o próximo play
+  const release = () => { if (state.playing) follow.on = false; };
+  window.addEventListener("wheel", release, { passive: true });
+  window.addEventListener("touchmove", release, { passive: true });
+  window.addEventListener("keydown", (event) => { if (["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "].includes(event.key)) release(); });
   // o guia do topo acompanha a rolagem; quando fica preso no alto da tela, encolhe (classe "stuck")
   {
     // O guia do topo acompanha a rolagem; quando fica preso no alto da tela, encolhe (classe "stuck"). Preso, ele fica
